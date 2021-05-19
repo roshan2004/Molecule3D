@@ -34,6 +34,15 @@ class Molecule:
         ax.scatter(x,y,z)
         plt.show()
 
+class Pdb(Molecule):
+    def coordinates(self):
+        with open(self.file) as f:
+            for i in f.readlines():
+                if i.startswith('ATOM'):
+                    self.coords.append((float(i.split()[6]),float(i.split()[7]),float(i.split()[8])))
+                elif i.startswith('TER'):
+                    break
+
 
 
 def main():
