@@ -101,7 +101,7 @@ def _by_residue(molecule: Molecule, mapping, weighted: bool, bonds) -> Molecule:
     residue_beads: list[list[int]] = []
     assigned: set[int] = set()
 
-    for atom_idx, resname, resid, chain in _iter_residues(molecule):
+    for atom_idx, resname, resid, chain in molecule.residue_groups():
         local = []
         for bead_name, members in _residue_beads(molecule, atom_idx, resname, mapping):
             if not members:
@@ -167,23 +167,6 @@ def _backbone_sidechain(molecule: Molecule, atom_idx):
     if sc:
         beads.append(("SC", sc))
     return beads
-
-
-def _iter_residues(molecule: Molecule):
-    """Yield ``(atom_indices, resname, resid, chain)`` for each residue, in order."""
-    chains = molecule.chains or [""] * len(molecule)
-    resnames = molecule.resnames or [""] * len(molecule)
-    key_prev = object()
-    start = 0
-    for i in range(len(molecule) + 1):
-        key = (chains[i], int(molecule.resids[i])) if i < len(molecule) else None
-        if i == 0:
-            key_prev = key
-            continue
-        if key != key_prev or i == len(molecule):
-            yield list(range(start, i)), resnames[start], int(molecule.resids[start]), chains[start]
-            start = i
-            key_prev = key
 
 
 def _reduce(molecule: Molecule, members, use_mass: bool) -> np.ndarray:

@@ -104,6 +104,35 @@ def spin_gif(molecule, path: str, frames: int = 36, fps: int = 15, **plot_kwargs
     return path
 
 
+def plot_contact_map(contact_map, ax=None, cmap=None, show: bool = True):
+    """Draw a :class:`~molecule3d.contactmap.ContactMap` as a heatmap.
+
+    Booleans render as a binary map; ensemble frequencies render with a colour
+    scale and a colourbar. Returns the matplotlib ``Axes``.
+    """
+    import matplotlib.pyplot as plt
+
+    mat = contact_map.matrix
+    freq = contact_map.is_frequency
+    if ax is None:
+        _, ax = plt.subplots(figsize=(5, 4))
+    im = ax.imshow(
+        mat, origin="lower", interpolation="nearest", vmin=0, vmax=1,
+        cmap=cmap or ("viridis" if freq else "Greys"),
+    )
+
+    unit = "residue" if contact_map.level == "residue" else "atom"
+    ax.set_xlabel(f"{unit} index")
+    ax.set_ylabel(f"{unit} index")
+    label = "contact frequency" if freq else f"contact (< {contact_map.cutoff} Å)"
+    ax.figure.colorbar(im, ax=ax, label=label, fraction=0.046, pad=0.04)
+    ax.set_title(f"{unit} contact map ({contact_map.cutoff} Å)")
+
+    if show:
+        plt.show()
+    return ax
+
+
 def _colors(molecule, color_by: str):
     if color_by == "element":
         return [elements.color(e) for e in molecule.elements]

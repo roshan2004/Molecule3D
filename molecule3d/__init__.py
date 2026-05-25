@@ -1,6 +1,8 @@
 """molecule3d: read, analyse, and plot molecular structures in 3D."""
 
 from . import coarsegrain, ensemble
+from .contactmap import ContactMap
+from .ensemble import contact_frequency as ensemble_contact_frequency
 from .graph import MolecularGraph
 from .io import (
     fetch,
@@ -17,10 +19,12 @@ from .io import (
 from .molecule import Molecule
 
 __all__ = [
+    "ContactMap",
     "Molecule",
     "MolecularGraph",
     "coarsegrain",
     "ensemble",
+    "ensemble_contact_frequency",
     "fetch",
     "read",
     "read_cif",
@@ -32,4 +36,4 @@ __all__ = [
     "write_pdb",
     "write_xyz",
 ]
-__version__ = "0.4.0"
+__version__ = "0.5.0"

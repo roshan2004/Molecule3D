@@ -84,6 +84,18 @@ mol.dihedral(a, b, c, d)            # torsion angle (degrees)
 a.alpha_carbons().rmsd(b.alpha_carbons(), align=True)   # CA-RMSD after Kabsch fit
 ```
 
+### Contact maps
+
+```python
+cmap = mol.contact_map(cutoff=8.0, level="residue")   # CA-CA contacts -> ContactMap
+cmap.matrix                                           # (R, R) array
+mol.plot_contact_map(cutoff=8.0)                      # heatmap
+
+mol.contact_map(level="atom")                         # atom-level map
+mol.contact_map(level="residue", method="min")        # closest inter-residue atom
+mol.contact_map(level="residue", method="com")        # residue centre of mass
+```
+
 ### NMR ensembles
 
 ```python
@@ -94,6 +106,10 @@ ensemble.rmsd_matrix(models)                 # pairwise RMSD matrix
 ensemble.rmsf(models)                        # per-atom fluctuation
 ensemble.average(models)                     # mean structure
 ensemble.align_all(models)                   # superpose every model onto the first
+
+# Per-residue-pair contact probability across the ensemble (NMR variability)
+freq = m3d.ensemble_contact_frequency(models, cutoff=8.0)
+freq.plot()                                  # heatmap of contact frequencies in [0, 1]
 ```
 
 ### Writing and viewing

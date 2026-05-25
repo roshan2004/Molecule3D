@@ -30,6 +30,14 @@ def show_or_save(molecule, filename, **kwargs):
         print(f"  saved plot -> {filename}")
 
 
+def _save_contact_map(contact_map, filename):
+    """Plot a contact map, saving to a PNG when running headless."""
+    ax = contact_map.plot(show=not HEADLESS)
+    if HEADLESS:
+        ax.figure.savefig(filename, dpi=150, bbox_inches="tight")
+        print(f"  saved contact map -> {filename}")
+
+
 def main():
     print("== 1. Read and inspect an .xyz file ==")
     helix = m3d.read("helix_201.xyz")
@@ -73,19 +81,28 @@ def main():
     except ImportError:
         print("  (install networkx / torch_geometric / dgl to export to those)")
 
-    print("\n== 7. Coarse-grain to one bead per residue ==")
+    print("\n== 7. Contact maps and ensemble variability ==")
+    cmap = aqp.contact_map(cutoff=8.0, level="residue")
+    print(f"  residue contact map: {cmap.matrix.shape}, "
+          f"~{cmap.matrix.sum(1).mean():.1f} contacts/residue")
+    freq = m3d.ensemble_contact_frequency(models, cutoff=8.0)
+    variable = ((freq.matrix > 0) & (freq.matrix < 1)).sum() // 2
+    print(f"  NMR ensemble: {variable} residue pairs in contact in only some models")
+
+    print("\n== 8. Coarse-grain to one bead per residue ==")
     cg = aqp.coarse_grain("residue_com")
     print(f"  atomistic {len(aqp)} atoms -> CG {len(cg)} beads, {len(cg.bonds())} bonds")
     martini = aqp.coarse_grain("martini")
     print(f"  martini-like BB/SC model: {len(martini)} beads")
 
-    print("\n== 8. Write a transformed structure back to disk ==")
+    print("\n== 9. Write a transformed structure back to disk ==")
     m3d.write_xyz(aqp.centered(), "aqp_centered.xyz")
     print("  wrote aqp_centered.xyz")
 
-    print("\n== 9. Plot (colour by chain) ==")
+    print("\n== 10. Plot (colour by chain) and the contact map ==")
     show_or_save(aqp.centered(), "example_aquaporin.png", color_by="chain")
-    print("\n== 10. Plot the coarse-grained bead network ==")
+    _save_contact_map(cmap, "example_contactmap.png")
+    print("\n== 11. Plot the coarse-grained bead network ==")
     show_or_save(cg, "example_cg.png", scale=200)
 
 

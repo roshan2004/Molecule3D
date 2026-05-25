@@ -163,6 +163,27 @@ class Molecule:
         wanted = [resid] if isinstance(resid, int) else list(resid)
         return np.isin(self.resids, wanted)
 
+    def residue_groups(self):
+        """Yield ``(atom_indices, resname, resid, chain)`` per residue, in order.
+
+        Residues are runs of atoms sharing ``(chain, resid)``. Yields nothing if
+        the molecule has no residue information.
+        """
+        n = len(self)
+        if len(self.resids) == 0 or n == 0:
+            return
+        chains = self.chains or [""] * n
+        resnames = self.resnames or [""] * n
+        resids = self.resids
+        start = 0
+        for i in range(1, n + 1):
+            if i == n or chains[i] != chains[i - 1] or resids[i] != resids[i - 1]:
+                yield (
+                    list(range(start, i)), resnames[start],
+                    int(resids[start]), chains[start],
+                )
+                start = i
+
     # -- geometry -----------------------------------------------------------
 
     @property
@@ -298,6 +319,22 @@ class Molecule:
             dist = self.distance_matrix()
             i, j = np.where(np.triu(dist < cutoff, k=1))
             return np.stack([i, j], axis=1)
+
+    def contact_map(self, cutoff: float = 8.0, level: str = "residue", method: str = "ca"):
+        """Build a contact map. See :func:`molecule3d.contactmap.contact_map`.
+
+        ``level`` is ``"atom"`` or ``"residue"``; for residue level ``method`` is
+        ``"ca"`` (CA-CA distance), ``"com"`` (centre of mass) or ``"min"``
+        (closest inter-residue atom). Returns a :class:`ContactMap`.
+        """
+        from .contactmap import contact_map
+
+        return contact_map(self, cutoff=cutoff, level=level, method=method)
+
+    def plot_contact_map(self, cutoff: float = 8.0, level: str = "residue",
+                         method: str = "ca", **kwargs):
+        """Shortcut for ``self.contact_map(...).plot()``."""
+        return self.contact_map(cutoff, level, method).plot(**kwargs)
 
     def rmsd(self, other: Molecule, align: bool = False) -> float:
         """Root-mean-square deviation from ``other`` (matched by index).
