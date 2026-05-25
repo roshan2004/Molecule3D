@@ -4,9 +4,22 @@ Read molecular coordinate files (`.xyz`, `.pdb`) and plot the atoms in 3D.
 
 ## Install
 
+With [uv](https://docs.astral.sh/uv/) (recommended):
+
+```bash
+uv sync                     # creates .venv, installs deps + dev tools from the lockfile
+uv run molecule3d 1fqy.pdb  # run the CLI
+uv run pytest               # run the tests
+```
+
+`uv sync` pins the interpreter from `.python-version` and resolves against
+`uv.lock` for reproducible installs. Use `uv sync --no-dev` to skip the test tools.
+
+With plain pip:
+
 ```bash
 python -m venv .venv && source .venv/bin/activate
-pip install -e .            # or: pip install -r requirements.txt
+pip install -e ".[test]"    # or: pip install -r requirements.txt
 ```
 
 ## Library
@@ -50,6 +63,5 @@ python -m molecule3d 1aml.pdb          # equivalent if not pip-installed
 ## Tests
 
 ```bash
-pip install pytest
-pytest
+uv run pytest      # or, with pip: pip install pytest && pytest
 ```

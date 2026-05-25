@@ -16,5 +16,9 @@ test = ["pytest>=7"]
 [project.scripts]
 molecule3d = "molecule3d.cli:main"
 
+# Dev tooling for `uv sync` (installed by default; PEP 735 dependency group).
+[dependency-groups]
+dev = ["pytest>=7"]
+
 [tool.setuptools]
 packages = ["molecule3d"]
