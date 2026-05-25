@@ -46,6 +46,8 @@ molecule3d = "molecule3d.cli:main"
 [dependency-groups]
 dev = ["pytest>=7", "scipy>=1.7", "ruff>=0.6", "py3Dmol>=2.0", "networkx>=2.6"]
 docs = ["mkdocs-material>=9.5"]
+# Tooling to open and re-execute Notebook.ipynb (jupyter lab + headless nbconvert).
+notebook = ["jupyterlab>=4", "ipykernel>=6", "nbconvert>=7"]
 
 [tool.setuptools]
 packages = ["molecule3d"]
