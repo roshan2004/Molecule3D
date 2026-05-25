@@ -106,6 +106,45 @@ def test_coarse_grain_requires_residues():
         xyz.coarse_grain()
 
 
+def test_index_mapping_works_without_residues():
+    helix = m3d.read(os.path.join(DATA, "helix_201.xyz"))  # no residue/atom names
+    cg = helix.coarse_grain({"A": list(range(100)), "B": list(range(100, 201))})
+    assert len(cg) == 2
+    assert cg.atom_names == ["A", "B"]
+    # bead A sits at the centroid of the first 100 atoms (equal masses here)
+    np.testing.assert_allclose(cg.coords[0], helix.coords[:100].mean(axis=0))
+
+
+def test_user_defined_bonds_by_name_and_index():
+    helix = m3d.read(os.path.join(DATA, "helix_201.xyz"))
+    by_name = helix.coarse_grain(
+        {"A": [0, 1], "B": [2, 3], "C": [4, 5]}, bonds=[("A", "B"), ("B", "C")]
+    )
+    np.testing.assert_array_equal(by_name.bonds(), [[0, 1], [1, 2]])
+    by_index = helix.coarse_grain(
+        {"A": [0, 1], "B": [2, 3], "C": [4, 5]}, bonds=[(0, 2)]
+    )
+    np.testing.assert_array_equal(by_index.bonds(), [[0, 2]])
+
+
+def test_index_mapping_rejects_atom_names():
+    helix = m3d.read(os.path.join(DATA, "helix_201.xyz"))
+    with pytest.raises(ValueError):
+        helix.coarse_grain({"BB": ["N", "CA"]})  # names, not indices
+
+
+def test_warns_on_unassigned_atoms():
+    # The mapping omits CB, so one atom per residue is dropped.
+    with pytest.warns(UserWarning, match="not assigned"):
+        cg = two_alanines().coarse_grain({"ALA": {"BB": ["N", "CA", "C", "O"]}})
+    assert len(cg) == 2
+
+
+def test_user_defined_bonds_override_residue_topology():
+    cg = two_alanines().coarse_grain("residue_com", bonds=[(0, 1)])
+    np.testing.assert_array_equal(cg.bonds(), [[0, 1]])
+
+
 def test_cg_result_is_a_usable_molecule():
     mol = m3d.read_pdb(os.path.join(DATA, "1fqy.pdb"))
     cg = mol.coarse_grain("residue_com")

@@ -366,16 +366,19 @@ class Molecule:
 
     # -- coarse-graining ----------------------------------------------------
 
-    def coarse_grain(self, mapping="residue_com", weighted: bool = True) -> Molecule:
+    def coarse_grain(self, mapping="residue_com", weighted: bool = True,
+                     bonds=None) -> Molecule:
         """Map this structure onto CG beads. See :mod:`molecule3d.coarsegrain`.
 
         ``mapping`` is ``"residue_com"``, ``"residue_centroid"``, ``"martini"``,
-        or a ``{resname: {bead_name: [atom_names]}}`` dict. Returns a new
-        ``Molecule`` of beads with explicit CG bonds attached.
+        a ``{resname: {bead: [atom_names]}}`` dict (by residue), or a
+        ``{bead: [atom_indices]}`` dict (by index, works on any structure).
+        ``bonds`` optionally defines the bead network as pairs of bead names or
+        indices. Returns a new ``Molecule`` of beads with CG bonds attached.
         """
         from .coarsegrain import coarse_grain
 
-        return coarse_grain(self, mapping=mapping, weighted=weighted)
+        return coarse_grain(self, mapping=mapping, weighted=weighted, bonds=bonds)
 
     # -- graph export -------------------------------------------------------
 
