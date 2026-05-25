@@ -31,6 +31,33 @@ coordinate loops, not a full mmCIF syntax implementation.
 - **Visualise** with 3D matplotlib plots, an interactive py3Dmol viewer, spin
   GIFs, and a command-line interface.
 
+## Why MolScope?
+
+MolScope is **not** intended to replace full molecular-simulation or
+cheminformatics frameworks. It is a lightweight **educational and prototyping**
+toolkit for reading common molecular structure files, performing simple
+structural analysis, exporting graph representations for ML workflows, and
+experimenting with coarse-grained mappings. Its core depends only on NumPy and
+Matplotlib, and the API is Python-first and scriptable.
+
+In particular, the coarse-graining tools are for **educational CG mapping and
+bead-graph prototyping**: useful for exploring mappings before moving to a
+production Martini workflow. They are not a validated Martini force-field
+generator.
+
+| Tool | Main focus | How MolScope differs |
+| --- | --- | --- |
+| RDKit | Cheminformatics | MolScope leans toward structure visualisation, protein/PDB-style metadata, and CG prototyping |
+| MDAnalysis | MD trajectories | MolScope is lighter and easier for static structures and teaching |
+| MDTraj | Trajectory analysis | MolScope is simpler and graph/CG oriented |
+| Biopython | Structure parsing / bioinformatics | MolScope adds 3D analysis, ML-graph export, and coarse-graining |
+| PyMOL / VMD | Interactive visualisation | MolScope is Python-first, scriptable, and ML-export friendly |
+| nglview | Notebook structure viewer | MolScope also does analysis, descriptors, graphs and CG, not just viewing |
+
+Reach for those tools when you need their depth and validation. Reach for
+MolScope when you want something small, readable, and quick to teach or
+prototype with.
+
 ## Install
 
 With [uv](https://docs.astral.sh/uv/) (recommended):
@@ -273,6 +300,10 @@ molscope 1fqy.pdb --select atom_name=CA --color-by residue --save ca.png
 molscope --fetch 1aml --center --gif amyloid.gif
 python -m molscope 1fqy.pdb          # equivalent if not pip-installed
 ```
+
+The second command renders the C-alpha atoms of Aquaporin-1, coloured by residue:
+
+![Aquaporin-1 C-alpha atoms coloured by residue, rendered by the molscope CLI](https://raw.githubusercontent.com/roshan2004/molscope/main/docs/assets/readme/cli-ca-residue.png)
 
 ## Sample structures
 
