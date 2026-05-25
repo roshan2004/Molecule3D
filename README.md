@@ -5,6 +5,16 @@ gzip-compressed), select and analyse atoms, and visualise them in 3D.
 The `.cif` reader is a basic mmCIF parser for standard `_atom_site` coordinate
 loops, not a full mmCIF syntax implementation.
 
+## Suggested README visuals
+
+These images show the three most useful views to include in the project README:
+a 3D protein rendering, a residue contact-map analysis, and a coarse-grained
+bead representation.
+
+| 3D structure rendering | Residue contact map | Coarse-grained beads |
+| --- | --- | --- |
+| ![Aquaporin-1 rendered as a 3D chain-coloured molecular structure](docs/assets/readme/aquaporin-structure.png) | ![Residue-level contact map heatmap for Aquaporin-1](docs/assets/readme/residue-contact-map.png) | ![Coarse-grained bead model of Aquaporin-1](docs/assets/readme/coarse-grained-beads.png) |
+
 ## Install
 
 With [uv](https://docs.astral.sh/uv/) (recommended):
