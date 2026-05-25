@@ -45,3 +45,7 @@ target-version = "py39"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
+
+[tool.ruff.lint.per-file-ignores]
+# Notebook cells legitimately re-import and import mid-file across cells.
+"*.ipynb" = ["E402", "F811", "I001"]
