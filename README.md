@@ -326,10 +326,6 @@ molscope --fetch 1aml --center --gif amyloid.gif
 python -m molscope 1fqy.pdb          # equivalent if not pip-installed
 ```
 
-The second command renders the C-alpha atoms of Aquaporin-1, coloured by residue:
-
-![Aquaporin-1 C-alpha atoms coloured by residue, rendered by the molscope CLI](https://raw.githubusercontent.com/roshan2004/molscope/main/docs/assets/readme/cli-ca-residue.png)
-
 ## Sample structures
 
 | File | Contents |
