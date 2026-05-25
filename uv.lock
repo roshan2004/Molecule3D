@@ -831,9 +831,13 @@ test = [
     { name = "pytest", version = "8.4.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.10'" },
     { name = "pytest", version = "9.0.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.10'" },
 ]
+viz = [
+    { name = "py3dmol" },
+]
 
 [package.dev-dependencies]
 dev = [
+    { name = "py3dmol" },
     { name = "pytest", version = "8.4.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.10'" },
     { name = "pytest", version = "9.0.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.10'" },
     { name = "ruff" },
@@ -846,13 +850,15 @@ dev = [
 requires-dist = [
     { name = "matplotlib", specifier = ">=3.5" },
     { name = "numpy", specifier = ">=1.21" },
+    { name = "py3dmol", marker = "extra == 'viz'", specifier = ">=2.0" },
     { name = "pytest", marker = "extra == 'test'", specifier = ">=7" },
     { name = "scipy", marker = "extra == 'fast'", specifier = ">=1.7" },
 ]
-provides-extras = ["test", "fast"]
+provides-extras = ["test", "fast", "viz"]
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "py3dmol", specifier = ">=2.0" },
     { name = "pytest", specifier = ">=7" },
     { name = "ruff", specifier = ">=0.6" },
     { name = "scipy", specifier = ">=1.7" },
@@ -1294,6 +1300,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/f9/e2/3e91f31a7d2b083fe6ef3fa267035b518369d9511ffab804f839851d2779/pluggy-1.6.0.tar.gz", hash = "sha256:7dcc130b76258d33b90f61b658791dede3486c3e6bfb003ee5c9bfb396dd22f3", size = 69412, upload-time = "2025-05-15T12:30:07.975Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/54/20/4d324d65cc6d9205fabedc306948156824eb9f0ee1633355a8f7ec5c66bf/pluggy-1.6.0-py3-none-any.whl", hash = "sha256:e920276dd6813095e9377c0bc5566d94c932c33b27a3e3945d8389c374dd4746", size = 20538, upload-time = "2025-05-15T12:30:06.134Z" },
+]
+
+[[package]]
+name = "py3dmol"
+version = "2.5.5"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/8f/ce/8fa27aa0fcf37a99df16f72d59300040dec61f3a5126c28d6b625bcb7f9e/py3dmol-2.5.5.tar.gz", hash = "sha256:cb102cc3370800a9ca7679774759f008e34a0f3a283778d85b0410849d370298", size = 7832, upload-time = "2026-05-23T14:08:08.553Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/8e/5a/7fd1b784a87e96e0078f49a0a13a98b4c5f644ba5597a4a3b70a2ba3e613/py3dmol-2.5.5-py2.py3-none-any.whl", hash = "sha256:9717ea9a899ec641b458f53de538e5bae758281f5053be78bc2db0706ae60bcb", size = 7153, upload-time = "2026-05-23T14:08:07.733Z" },
 ]
 
 [[package]]

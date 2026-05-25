@@ -1,7 +1,8 @@
-"""3D plotting of molecules with matplotlib."""
+"""3D visualization of molecules: matplotlib, py3Dmol, and GIF export."""
 
 from __future__ import annotations
 
+import itertools
 import warnings
 
 import numpy as np
@@ -13,16 +14,18 @@ def plot(
     molecule,
     show_bonds: bool | None = None,
     bond_tolerance: float = 1.2,
+    color_by: str = "element",
+    scale: float = 60.0,
     ax=None,
     show: bool = True,
 ):
-    """Scatter-plot atoms in 3D, coloured by element with an equal aspect ratio.
+    """Scatter-plot atoms in 3D with an equal aspect ratio.
 
-    Bonds are drawn when ``show_bonds`` is true, or, when left as ``None``,
-    automatically for molecules small enough to infer bonds cheaply.
-
-    Returns the matplotlib ``Axes3D``. Pass ``show=False`` to suppress
-    ``plt.show()`` (useful for tests or saving to a file).
+    ``color_by`` selects the colouring: ``"element"`` (CPK), ``"chain"`` or
+    ``"residue"`` (categorical palette). Atom sizes scale with covalent radius.
+    Bonds are drawn when ``show_bonds`` is true, or, when ``None``, automatically
+    for molecules small enough to infer bonds cheaply. Returns the ``Axes3D``;
+    pass ``show=False`` to suppress ``plt.show()``.
     """
     import matplotlib.pyplot as plt  # imported lazily so the core has no GUI dep
 
@@ -31,8 +34,9 @@ def plot(
         fig = plt.figure()
         ax = fig.add_subplot(1, 1, 1, projection="3d")
 
-    colors = [elements.color(e) for e in molecule.elements]
-    ax.scatter(coords[:, 0], coords[:, 1], coords[:, 2], c=colors, s=20, depthshade=True)
+    colors = _colors(molecule, color_by)
+    sizes = np.array([elements.covalent_radius(e) for e in molecule.elements]) * scale
+    ax.scatter(coords[:, 0], coords[:, 1], coords[:, 2], c=colors, s=sizes, depthshade=True)
 
     if show_bonds is None:
         show_bonds = len(molecule) <= 2000
@@ -54,6 +58,73 @@ def plot(
     if show:
         plt.show()
     return ax
+
+
+def view(molecule, style: str = "stick", width: int = 480, height: int = 360):
+    """Return an interactive py3Dmol viewer (for Jupyter notebooks).
+
+    Requires py3Dmol (``pip install py3Dmol``). ``style`` is any py3Dmol style
+    name such as ``"stick"``, ``"sphere"``, ``"line"`` or ``"cartoon"``.
+    """
+    try:
+        import py3Dmol
+    except ImportError as exc:  # pragma: no cover - exercised only without py3Dmol
+        raise ImportError(
+            "view() needs py3Dmol; install it with: pip install py3Dmol"
+        ) from exc
+    from .io import _molecule_to_pdb_string
+
+    viewer = py3Dmol.view(width=width, height=height)
+    viewer.addModel(_molecule_to_pdb_string(molecule), "pdb")
+    viewer.setStyle({style: {"colorscheme": "default"}})
+    viewer.zoomTo()
+    return viewer
+
+
+def spin_gif(molecule, path: str, frames: int = 36, fps: int = 15, **plot_kwargs):
+    """Render a spinning 3D view and save it as an animated GIF.
+
+    Rotates a full turn about the vertical axis over ``frames`` steps. Requires
+    Pillow (already a matplotlib dependency).
+    """
+    import matplotlib.pyplot as plt
+    from matplotlib import animation
+
+    fig = plt.figure()
+    ax = fig.add_subplot(1, 1, 1, projection="3d")
+    plot(molecule, ax=ax, show=False, **plot_kwargs)
+
+    def update(i):
+        ax.view_init(elev=20, azim=i * 360 / frames)
+        return ()
+
+    anim = animation.FuncAnimation(fig, update, frames=frames, blit=False)
+    anim.save(path, writer=animation.PillowWriter(fps=fps))
+    plt.close(fig)
+    return path
+
+
+def _colors(molecule, color_by: str):
+    if color_by == "element":
+        return [elements.color(e) for e in molecule.elements]
+    if color_by == "chain":
+        keys = molecule.chains
+    elif color_by == "residue":
+        keys = [str(r) for r in molecule.resids] if len(molecule.resids) else []
+    else:
+        raise ValueError(f"unknown color_by {color_by!r}")
+    if not keys:
+        raise ValueError(f"no {color_by} information to colour by")
+    return _categorical_colors(keys)
+
+
+def _categorical_colors(keys):
+    import matplotlib.pyplot as plt
+
+    palette = plt.get_cmap("tab20").colors
+    cycle = {}
+    wheel = itertools.cycle(palette)
+    return [cycle.setdefault(k, next(wheel)) for k in keys]
 
 
 def _set_equal_aspect(ax, coords: np.ndarray) -> None:

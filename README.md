@@ -1,7 +1,7 @@
 # Molecule3D
 
-Read molecular coordinate files (`.xyz`, `.pdb`), analyse them, and plot the
-atoms in 3D.
+Read molecular structure files (`.xyz`, `.pdb`, `.cif`, `.sdf`, optionally
+gzip-compressed), select and analyse atoms, and visualise them in 3D.
 
 ## Install
 
@@ -42,7 +42,8 @@ models of `1aml`, writes a transformed structure back out, and renders a plot.
 import molecule3d as m3d
 
 mol = m3d.read("1fqy.pdb")          # parser chosen from the extension
-print(len(mol), "atoms")
+mol = m3d.fetch("1fqy")             # ...or download straight from RCSB by id
+print(mol.summary())                # atoms, formula, chains, bounding box
 
 mol = mol.centered().rotate("z", 90).translate((1, 2, -1))
 mol.plot()                          # CPK colours, inferred bonds, equal aspect
@@ -52,36 +53,68 @@ mol.plot()                          # CPK colours, inferred bonds, equal aspect
 molecule, so transformations chain cleanly without aliasing. Equality is by
 value (`np.array_equal` on coordinates).
 
-### Analysis
+### Selections
+
+PDB/mmCIF files carry per-atom metadata (atom name, residue, chain), so you can
+slice a structure:
 
 ```python
-mol.centroid             # geometric centre
-mol.center_of_mass       # mass-weighted centre
-mol.radius_of_gyration   # compactness (angstrom)
-mol.bonds()              # inferred bond index pairs (KD-tree if scipy installed)
-
-# Compare structures (matched by atom index)
-a.rmsd(b)                # root-mean-square deviation
-a.rmsd(b, align=True)    # minimum RMSD after Kabsch superposition
-a.superpose(b)           # a rigidly fitted onto b
+mol.select(chain="A")               # one chain
+mol.select(element="C")             # all carbons
+mol.select(resname="HOH")           # waters
+mol.select(resid=(10, 20))          # an inclusive residue range
+mol.alpha_carbons()                 # CA atoms (the usual basis for protein RMSD)
+mol.backbone()                      # N, CA, C, O
+mol[mask_or_indices]                # subset by numpy mask / index array
 ```
 
-### NMR ensembles and writing
+### Analysis and measurements
 
 ```python
-models = m3d.read_pdb_models("1aml.pdb")     # all 20 models as a list
-models[0].rmsd(models[1], align=True)
+mol.centroid, mol.center_of_mass    # geometric / mass-weighted centre
+mol.radius_of_gyration              # compactness (angstrom)
+mol.dimensions, mol.formula         # bounding box, Hill-order formula
+mol.bonds()                         # inferred bond index pairs (KD-tree if scipy)
+mol.contacts(cutoff=5.0)            # atom pairs within a distance
 
-m3d.write_xyz(mol.centered(), "out.xyz")      # write transformed coordinates back
+mol.distance(i, j)                  # bond length
+mol.angle(i, j, k)                  # bond angle (degrees)
+mol.dihedral(a, b, c, d)            # torsion angle (degrees)
+
+a.alpha_carbons().rmsd(b.alpha_carbons(), align=True)   # CA-RMSD after Kabsch fit
+```
+
+### NMR ensembles
+
+```python
+from molecule3d import ensemble
+
+models = m3d.read_pdb_models("1aml.pdb")     # all 20 models
+ensemble.rmsd_matrix(models)                 # pairwise RMSD matrix
+ensemble.rmsf(models)                        # per-atom fluctuation
+ensemble.average(models)                     # mean structure
+ensemble.align_all(models)                   # superpose every model onto the first
+```
+
+### Writing and viewing
+
+```python
+m3d.write_xyz(mol.centered(), "out.xyz")     # write transformed coordinates back
 m3d.write_pdb(mol, "out.pdb")
+
+mol.plot(color_by="chain")                   # colour by element / chain / residue
+mol.view(style="cartoon")                    # interactive py3Dmol viewer (notebooks)
+from molecule3d.plotting import spin_gif
+spin_gif(mol, "spin.gif")                    # rotating animation
 ```
 
 ## Command line
 
 ```bash
 molecule3d helix_201.xyz --translate 1 2 -1
-molecule3d 1fqy.pdb --center --rotate z 90 --save aquaporin.png
-python -m molecule3d 1aml.pdb          # equivalent if not pip-installed
+molecule3d 1fqy.pdb --select atom_name=CA --color-by residue --save ca.png
+molecule3d --fetch 1aml --center --gif amyloid.gif
+python -m molecule3d 1fqy.pdb          # equivalent if not pip-installed
 ```
 
 ## Sample structures
@@ -101,12 +134,13 @@ python -m molecule3d 1aml.pdb          # equivalent if not pip-installed
   for the whole ensemble.
 - Bond inference uses a `scipy.spatial.cKDTree` when available; without scipy it
   falls back to a dense `O(n^2)` search that is refused above ~8000 atoms.
-  Install the accelerator with `pip install "molecule3d[fast]"`.
+- Optional extras: `pip install "molecule3d[fast]"` (scipy, faster bonds/contacts)
+  and `"molecule3d[viz]"` (py3Dmol, for `Molecule.view`).
 
 ## Tests and linting
 
 ```bash
-uv run pytest          # 28 tests
+uv run pytest          # 46 tests
 uv run ruff check .    # lint
 ```
 

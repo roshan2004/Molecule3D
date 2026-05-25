@@ -21,6 +21,7 @@ dependencies = ["numpy>=1.21", "matplotlib>=3.5"]
 [project.optional-dependencies]
 test = ["pytest>=7"]
 fast = ["scipy>=1.7"]          # enables the KD-tree bond search for large structures
+viz = ["py3Dmol>=2.0"]         # interactive notebook viewer (Molecule.view)
 
 [project.urls]
 Homepage = "https://github.com/roshan2004/Molecule3D"
@@ -32,7 +33,7 @@ molecule3d = "molecule3d.cli:main"
 # Dev tooling for `uv sync` (installed by default; PEP 735 dependency group).
 # scipy is included so the KD-tree bond path is exercised by the test suite.
 [dependency-groups]
-dev = ["pytest>=7", "scipy>=1.7", "ruff>=0.6"]
+dev = ["pytest>=7", "scipy>=1.7", "ruff>=0.6", "py3Dmol>=2.0"]
 
 [tool.setuptools]
 packages = ["molecule3d"]
