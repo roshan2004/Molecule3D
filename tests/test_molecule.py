@@ -1,3 +1,5 @@
+import sys
+
 import numpy as np
 import pytest
 
@@ -9,22 +11,49 @@ def water():
     return Molecule(np.array(coords), ["O", "H", "H"], name="water")
 
 
+@pytest.fixture
+def no_scipy(monkeypatch):
+    """Force the dense bond path by making scipy.spatial unimportable."""
+    monkeypatch.setitem(sys.modules, "scipy.spatial", None)
+
+
 def test_construction_validates_element_count():
     with pytest.raises(ValueError):
         Molecule(np.zeros((3, 3)), ["O", "H"])
+
+
+def test_equality_by_value():
+    a = Molecule(np.zeros((3, 3)), ["O", "H", "H"])
+    b = Molecule(np.zeros((3, 3)), ["O", "H", "H"])
+    c = Molecule(np.ones((3, 3)), ["O", "H", "H"])
+    assert a == b
+    assert a != c
+    assert a != "not a molecule"
+
+
+def test_instances_are_unhashable():
+    with pytest.raises(TypeError):
+        hash(water())
 
 
 def test_translate_is_pure():
     mol = water()
     moved = mol.translate((1, 2, -1))
     np.testing.assert_allclose(moved.coords[0], [1, 2, -1])
-    # original is untouched
-    np.testing.assert_allclose(mol.coords[0], [0, 0, 0])
+    np.testing.assert_allclose(mol.coords[0], [0, 0, 0])  # original untouched
 
 
 def test_centered_puts_centroid_at_origin():
-    mol = water().centered()
-    np.testing.assert_allclose(mol.centroid, [0, 0, 0], atol=1e-12)
+    np.testing.assert_allclose(water().centered().centroid, [0, 0, 0], atol=1e-12)
+
+
+def test_center_of_mass_pulled_toward_heavy_atom():
+    mol = water()  # O sits at the origin, both H at y = 0.59
+    assert mol.center_of_mass[1] < mol.centroid[1]
+
+
+def test_radius_of_gyration_is_positive():
+    assert water().radius_of_gyration > 0
 
 
 def test_rotation_preserves_distances():
@@ -40,14 +69,40 @@ def test_full_turn_is_identity():
     np.testing.assert_allclose(mol.rotate("y", 360).coords, mol.coords, atol=1e-9)
 
 
+def test_rmsd_zero_for_identical():
+    assert water().rmsd(water()) == pytest.approx(0.0)
+
+
+def test_rmsd_align_recovers_rigid_motion():
+    mol = water()
+    moved = mol.translate((10, 5, -3)).rotate("y", 73)
+    assert mol.rmsd(moved) > 1e-6                       # plain RMSD sees the motion
+    assert mol.rmsd(moved, align=True) == pytest.approx(0.0, abs=1e-9)
+
+
+def test_superpose_aligns_onto_reference():
+    mol = water()
+    moved = mol.translate((10, 5, -3)).rotate("y", 90)
+    np.testing.assert_allclose(moved.superpose(mol).coords, mol.coords, atol=1e-9)
+
+
+def test_rmsd_atom_count_mismatch():
+    with pytest.raises(ValueError):
+        water().rmsd(Molecule(np.zeros((2, 3)), ["H", "H"]))
+
+
 def test_bonds_finds_the_two_oh_bonds():
     bonds = water().bonds()
-    assert len(bonds) == 2
-    assert {0, 1} in [set(b) for b in bonds]
-    assert {0, 2} in [set(b) for b in bonds]
+    pairs = {frozenset(b) for b in bonds}
+    assert pairs == {frozenset({0, 1}), frozenset({0, 2})}
 
 
-def test_bonds_guards_against_huge_molecules():
-    big = Molecule(np.random.rand(10, 3), ["C"] * 10)
+def test_bonds_dense_path_matches(no_scipy):
+    pairs = {frozenset(b) for b in water().bonds()}
+    assert pairs == {frozenset({0, 1}), frozenset({0, 2})}
+
+
+def test_bonds_dense_guard_refuses_huge_molecules(no_scipy):
+    big = Molecule(np.zeros((9000, 3)), ["C"] * 9000)
     with pytest.raises(ValueError):
-        big.bonds(max_atoms=5)
+        big.bonds()

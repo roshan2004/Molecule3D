@@ -33,6 +33,16 @@ COVALENT_RADII = {
 DEFAULT_RADIUS = 0.75
 
 
+# Standard atomic weights (g/mol). Unknown atoms fall back to 1.0 so that a
+# mass-weighted centre over all-unknown elements reduces to the geometric mean.
+ATOMIC_MASSES = {
+    "H": 1.008, "C": 12.011, "N": 14.007, "O": 15.999, "S": 32.06,
+    "P": 30.974, "F": 18.998, "CL": 35.45, "BR": 79.904, "I": 126.904,
+    "FE": 55.845, "CA": 40.078, "NA": 22.990, "MG": 24.305, "ZN": 65.38,
+}
+DEFAULT_MASS = 1.0
+
+
 def color(element: str):
     """CPK colour for an element symbol (case-insensitive)."""
     return CPK_COLORS.get(element.upper(), DEFAULT_COLOR)
@@ -41,3 +51,8 @@ def color(element: str):
 def covalent_radius(element: str) -> float:
     """Covalent radius in angstrom for an element symbol (case-insensitive)."""
     return COVALENT_RADII.get(element.upper(), DEFAULT_RADIUS)
+
+
+def mass(element: str) -> float:
+    """Atomic weight in g/mol for an element symbol (case-insensitive)."""
+    return ATOMIC_MASSES.get(element.upper(), DEFAULT_MASS)

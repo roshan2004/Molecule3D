@@ -8,17 +8,38 @@ version = "0.1.0"
 description = "Read molecular coordinate files (.xyz, .pdb) and plot atoms in 3D."
 readme = "README.md"
 requires-python = ">=3.9"
+license = "MIT"
+authors = [{ name = "Roshan Shrestha", email = "roshanpra@gmail.com" }]
+keywords = ["chemistry", "molecule", "pdb", "xyz", "visualization"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering :: Chemistry",
+    "Topic :: Scientific/Engineering :: Visualization",
+]
 dependencies = ["numpy>=1.21", "matplotlib>=3.5"]
 
 [project.optional-dependencies]
 test = ["pytest>=7"]
+fast = ["scipy>=1.7"]          # enables the KD-tree bond search for large structures
+
+[project.urls]
+Homepage = "https://github.com/roshan2004/Molecule3D"
+Repository = "https://github.com/roshan2004/Molecule3D"
 
 [project.scripts]
 molecule3d = "molecule3d.cli:main"
 
 # Dev tooling for `uv sync` (installed by default; PEP 735 dependency group).
+# scipy is included so the KD-tree bond path is exercised by the test suite.
 [dependency-groups]
-dev = ["pytest>=7"]
+dev = ["pytest>=7", "scipy>=1.7", "ruff>=0.6"]
 
 [tool.setuptools]
 packages = ["molecule3d"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]

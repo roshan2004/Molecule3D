@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import warnings
+
 import numpy as np
 
 from . import elements
@@ -39,8 +41,8 @@ def plot(
             for i, j in molecule.bonds(tolerance=bond_tolerance):
                 seg = coords[[i, j]]
                 ax.plot(seg[:, 0], seg[:, 1], seg[:, 2], color="0.5", linewidth=1.0)
-        except ValueError:
-            pass  # too large to infer bonds; show atoms only
+        except ValueError as exc:
+            warnings.warn(f"skipping bonds: {exc}", stacklevel=2)
 
     ax.set_xlabel("X")
     ax.set_ylabel("Y")

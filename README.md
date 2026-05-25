@@ -1,6 +1,7 @@
 # Molecule3D
 
-Read molecular coordinate files (`.xyz`, `.pdb`) and plot the atoms in 3D.
+Read molecular coordinate files (`.xyz`, `.pdb`), analyse them, and plot the
+atoms in 3D.
 
 ## Install
 
@@ -35,7 +36,32 @@ mol.plot()                          # CPK colours, inferred bonds, equal aspect
 ```
 
 `Molecule` is immutable: `translate`, `centered` and `rotate` each return a new
-molecule, so transformations chain cleanly without aliasing.
+molecule, so transformations chain cleanly without aliasing. Equality is by
+value (`np.array_equal` on coordinates).
+
+### Analysis
+
+```python
+mol.centroid             # geometric centre
+mol.center_of_mass       # mass-weighted centre
+mol.radius_of_gyration   # compactness (angstrom)
+mol.bonds()              # inferred bond index pairs (KD-tree if scipy installed)
+
+# Compare structures (matched by atom index)
+a.rmsd(b)                # root-mean-square deviation
+a.rmsd(b, align=True)    # minimum RMSD after Kabsch superposition
+a.superpose(b)           # a rigidly fitted onto b
+```
+
+### NMR ensembles and writing
+
+```python
+models = m3d.read_pdb_models("1aml.pdb")     # all 20 models as a list
+models[0].rmsd(models[1], align=True)
+
+m3d.write_xyz(mol.centered(), "out.xyz")      # write transformed coordinates back
+m3d.write_pdb(mol, "out.pdb")
+```
 
 ## Command line
 
@@ -57,11 +83,22 @@ python -m molecule3d 1aml.pdb          # equivalent if not pip-installed
 
 - PDB files are parsed by **fixed columns**, not whitespace splitting, so atoms
   with touching coordinate fields (large or negative values) read correctly.
-- Multi-model PDB files return a single model (`model=1` by default).
-- Bond inference is `O(n^2)`; it is skipped automatically for large structures.
+- Alternate conformations (altLoc) other than the primary one are skipped.
+- `read_pdb` returns a single model (`model=1` by default); use `read_pdb_models`
+  for the whole ensemble.
+- Bond inference uses a `scipy.spatial.cKDTree` when available; without scipy it
+  falls back to a dense `O(n^2)` search that is refused above ~8000 atoms.
+  Install the accelerator with `pip install "molecule3d[fast]"`.
 
-## Tests
+## Tests and linting
 
 ```bash
-uv run pytest      # or, with pip: pip install pytest && pytest
+uv run pytest          # 28 tests
+uv run ruff check .    # lint
 ```
+
+CI (GitHub Actions) runs both across Python 3.9 / 3.11 / 3.13 on every push and PR.
+
+## License
+
+[MIT](LICENSE)
