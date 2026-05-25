@@ -112,6 +112,24 @@ freq = m3d.ensemble_contact_frequency(models, cutoff=8.0)
 freq.plot()                                  # heatmap of contact frequencies in [0, 1]
 ```
 
+### Comparing and clustering conformers
+
+Cluster an ensemble (NMR models, conformer sets, docking poses, MD snapshots) by
+pairwise RMSD:
+
+```python
+matrix = m3d.rmsd_matrix(models, align=True)        # (M, M) RMSD matrix
+m3d.plot_rmsd_heatmap(matrix)                        # heatmap
+
+clusters = m3d.cluster(models, method="hierarchical")   # data-driven cutoff
+clusters = m3d.cluster(models, n_clusters=3)            # ...or a fixed count
+clusters.n_clusters                                  # how many clusters
+clusters.groups()                                    # {cluster_id: [model indices]}
+clusters.representatives()                            # {cluster_id: medoid model index}
+
+m3d.plot_rmsd_heatmap(matrix, order=clusters.order)  # reorder into diagonal blocks
+```
+
 ### Writing and viewing
 
 ```python

@@ -89,20 +89,26 @@ def main():
     variable = ((freq.matrix > 0) & (freq.matrix < 1)).sum() // 2
     print(f"  NMR ensemble: {variable} residue pairs in contact in only some models")
 
-    print("\n== 8. Coarse-grain to one bead per residue ==")
+    print("\n== 8. Cluster the NMR ensemble by RMSD ==")
+    clusters = m3d.cluster(models, n_clusters=3)
+    print(f"  {len(models)} models -> {clusters.n_clusters} clusters, "
+          f"sizes {[len(v) for v in clusters.groups().values()]}")
+    print(f"  representative model per cluster: {clusters.representatives()}")
+
+    print("\n== 9. Coarse-grain to one bead per residue ==")
     cg = aqp.coarse_grain("residue_com")
     print(f"  atomistic {len(aqp)} atoms -> CG {len(cg)} beads, {len(cg.bonds())} bonds")
     martini = aqp.coarse_grain("martini")
     print(f"  martini-like BB/SC model: {len(martini)} beads")
 
-    print("\n== 9. Write a transformed structure back to disk ==")
+    print("\n== 10. Write a transformed structure back to disk ==")
     m3d.write_xyz(aqp.centered(), "aqp_centered.xyz")
     print("  wrote aqp_centered.xyz")
 
-    print("\n== 10. Plot (colour by chain) and the contact map ==")
+    print("\n== 11. Plot (colour by chain) and the contact map ==")
     show_or_save(aqp.centered(), "example_aquaporin.png", color_by="chain")
     _save_contact_map(cmap, "example_contactmap.png")
-    print("\n== 11. Plot the coarse-grained bead network ==")
+    print("\n== 12. Plot the coarse-grained bead network ==")
     show_or_save(cg, "example_cg.png", scale=200)
 
 

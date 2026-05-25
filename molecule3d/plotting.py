@@ -133,6 +133,30 @@ def plot_contact_map(contact_map, ax=None, cmap=None, show: bool = True):
     return ax
 
 
+def plot_rmsd_heatmap(matrix, order=None, ax=None, cmap="viridis", show: bool = True):
+    """Draw a pairwise-RMSD matrix as a heatmap (angstrom).
+
+    Pass ``order`` (e.g. ``clustering.order``) to reorder rows/columns so
+    clusters appear as blocks along the diagonal. Returns the matplotlib ``Axes``.
+    """
+    import matplotlib.pyplot as plt
+
+    matrix = np.asarray(matrix, dtype=float)
+    if order is not None:
+        order = np.asarray(order)
+        matrix = matrix[np.ix_(order, order)]
+    if ax is None:
+        _, ax = plt.subplots(figsize=(5, 4))
+    im = ax.imshow(matrix, origin="lower", interpolation="nearest", cmap=cmap)
+    ax.set_xlabel("model")
+    ax.set_ylabel("model")
+    ax.figure.colorbar(im, ax=ax, label="RMSD (Å)", fraction=0.046, pad=0.04)
+    ax.set_title("pairwise RMSD")
+    if show:
+        plt.show()
+    return ax
+
+
 def _colors(molecule, color_by: str):
     if color_by == "element":
         return [elements.color(e) for e in molecule.elements]

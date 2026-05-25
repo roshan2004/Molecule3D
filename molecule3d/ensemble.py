@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import replace
+from dataclasses import dataclass, field, replace
 
 import numpy as np
 
@@ -67,3 +67,76 @@ def _check_consistent(models: list[Molecule]) -> None:
     sizes = {len(m) for m in models}
     if len(sizes) != 1:
         raise ValueError(f"models have differing atom counts: {sorted(sizes)}")
+
+
+@dataclass
+class Clustering:
+    """Result of clustering structures by RMSD.
+
+    ``labels`` gives the 1-based cluster id of each model (same order as the
+    input). ``matrix`` is the RMSD matrix used and ``linkage`` the scipy linkage.
+    """
+
+    labels: np.ndarray
+    matrix: np.ndarray
+    linkage: np.ndarray | None = field(default=None)
+
+    @property
+    def n_clusters(self) -> int:
+        return int(len(np.unique(self.labels)))
+
+    @property
+    def order(self) -> np.ndarray:
+        """Model indices sorted by cluster (for a block-diagonal heatmap)."""
+        return np.argsort(self.labels, kind="stable")
+
+    def groups(self) -> dict[int, list[int]]:
+        """Map each cluster id to the list of model indices it contains."""
+        return {int(c): np.where(self.labels == c)[0].tolist()
+                for c in np.unique(self.labels)}
+
+    def medoid(self, cluster_id: int) -> int:
+        """Index of the most central model of a cluster (min total RMSD)."""
+        members = np.where(self.labels == cluster_id)[0]
+        sub = self.matrix[np.ix_(members, members)]
+        return int(members[sub.sum(axis=1).argmin()])
+
+    def representatives(self) -> dict[int, int]:
+        """Map each cluster id to its medoid model index."""
+        return {int(c): self.medoid(int(c)) for c in np.unique(self.labels)}
+
+
+def cluster(models, method: str = "hierarchical", cutoff: float | None = None,
+            n_clusters: int | None = None, linkage: str = "average",
+            align: bool = True, matrix=None) -> Clustering:
+    """Cluster structures by pairwise RMSD.
+
+    Pass ``n_clusters`` to cut the tree into a fixed number of clusters, or
+    ``cutoff`` (an RMSD threshold in angstrom). With neither, a data-driven
+    cutoff (the mean pairwise RMSD) is used. Reuses ``matrix`` if given, else
+    computes :func:`rmsd_matrix`. Requires scipy.
+    """
+    if method != "hierarchical":
+        raise ValueError(f"unknown method {method!r}; only 'hierarchical' is supported")
+
+    dm = np.asarray(matrix, dtype=float) if matrix is not None else rmsd_matrix(models, align=align)
+    if len(dm) < 2:
+        return Clustering(labels=np.ones(len(dm), dtype=int), matrix=dm)
+
+    try:
+        from scipy.cluster.hierarchy import fcluster
+        from scipy.cluster.hierarchy import linkage as _linkage
+        from scipy.spatial.distance import squareform
+    except ImportError as exc:  # pragma: no cover - exercised only without scipy
+        raise ImportError(
+            "clustering needs scipy; install it with: pip install 'molecule3d[fast]'"
+        ) from exc
+
+    z = _linkage(squareform(dm, checks=False), method=linkage)
+    if n_clusters is not None:
+        labels = fcluster(z, t=n_clusters, criterion="maxclust")
+    else:
+        if cutoff is None:
+            cutoff = float(dm[np.triu_indices_from(dm, k=1)].mean())
+        labels = fcluster(z, t=cutoff, criterion="distance")
+    return Clustering(labels=labels, matrix=dm, linkage=z)
