@@ -23,6 +23,19 @@ python -m venv .venv && source .venv/bin/activate
 pip install -e ".[test]"    # or: pip install -r requirements.txt
 ```
 
+## Quickstart
+
+A runnable end-to-end tour over the bundled sample structures lives in
+[`example.py`](example.py):
+
+```bash
+uv run python example.py                  # opens 3D plot windows
+MPLBACKEND=Agg uv run python example.py   # headless: saves PNGs instead
+```
+
+It reads an `.xyz` and a `.pdb`, prints derived properties, compares the NMR
+models of `1aml`, writes a transformed structure back out, and renders a plot.
+
 ## Library
 
 ```python
