@@ -11,6 +11,11 @@ coarse-graining in Python. Read `.xyz`, `.pdb`, `.cif` and `.sdf` files
 3D. The `.cif` reader is a basic mmCIF parser for standard `_atom_site`
 coordinate loops, not a full mmCIF syntax implementation.
 
+A spinning 3D view of Aquaporin-1, coloured by element
+(`molscope 1fqy.pdb --center --gif spin.gif`):
+
+![Spinning 3D view of Aquaporin-1 coloured by element](https://raw.githubusercontent.com/roshan2004/molscope/main/docs/assets/readme/spin-aquaporin.gif)
+
 | 3D structure rendering | Residue contact map | Coarse-grained beads |
 | --- | --- | --- |
 | ![Aquaporin-1 rendered as a 3D element-coloured molecular structure](https://raw.githubusercontent.com/roshan2004/molscope/main/docs/assets/readme/aquaporin-structure-v2.png) | ![Residue-level contact map heatmap for Aquaporin-1](https://raw.githubusercontent.com/roshan2004/molscope/main/docs/assets/readme/residue-contact-map.png) | ![Coarse-grained bead model of Aquaporin-1](https://raw.githubusercontent.com/roshan2004/molscope/main/docs/assets/readme/coarse-grained-beads-v2.png) |
