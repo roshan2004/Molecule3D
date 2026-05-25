@@ -22,4 +22,6 @@ jobs:
         run: uv build
 
       - name: Publish to PyPI
-        run: uv publish --trusted-publishing always
+        # --check-url makes re-runs idempotent: already-uploaded files are
+        # skipped instead of failing the job with "File already exists".
+        run: uv publish --trusted-publishing always --check-url https://pypi.org/simple/
