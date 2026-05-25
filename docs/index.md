@@ -1,6 +1,6 @@
-# Molecule3D documentation
+# MolScope documentation
 
-Molecule3D is a lightweight Python toolkit for molecular coordinate analysis,
+MolScope is a lightweight Python toolkit for molecular coordinate analysis,
 visualization, coarse-graining prototypes, and graph-based molecular
 representations.
 
@@ -9,9 +9,9 @@ machine-learning workflows where users want a simple path from PDB, XYZ, CIF, or
 SDF files to geometric descriptors, coarse-grained beads, and graph-ready data.
 
 ```python
-import molecule3d as m3d
+import molscope as ms
 
-mol = m3d.read("1fqy.pdb")
+mol = ms.read("1fqy.pdb")
 print(mol.summary())
 
 cg = mol.coarse_grain("residue_com")
@@ -30,7 +30,7 @@ G = cg.to_networkx()
 ## Install
 
 ```bash
-pip install molecule3d
+pip install molscope
 ```
 
 For development from the repository:

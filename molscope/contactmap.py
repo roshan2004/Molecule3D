@@ -41,7 +41,7 @@ class ContactMap:
         return not np.all(np.isin(vals, (0.0, 1.0)))
 
     def plot(self, **kwargs):
-        """Draw the contact map as a heatmap. See :func:`molecule3d.plotting.plot_contact_map`."""
+        """Draw the contact map as a heatmap. See :func:`molscope.plotting.plot_contact_map`."""
         from .plotting import plot_contact_map
 
         return plot_contact_map(self, **kwargs)

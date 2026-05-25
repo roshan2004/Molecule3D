@@ -13,7 +13,7 @@ features["distance_histogram"]
 Batch featurization:
 
 ```python
-X, names = m3d.featurize_many(
+X, names = ms.featurize_many(
     ["a.pdb", "b.pdb", "c.xyz"],
     return_names=True,
 )

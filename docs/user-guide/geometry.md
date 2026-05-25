@@ -32,5 +32,5 @@ rmsd = a.rmsd(b, align=True)
 aligned = a.superpose(b)
 ```
 
-Bond inference uses covalent radii. If SciPy is installed, Molecule3D uses a
+Bond inference uses covalent radii. If SciPy is installed, MolScope uses a
 KD-tree path for larger structures.

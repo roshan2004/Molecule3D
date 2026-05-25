@@ -43,13 +43,13 @@ def fetch(pdb_id: str, fmt: str = "pdb", cache_dir: Optional[str] = None) -> Mol
     """Download a structure from RCSB by its PDB id and read it.
 
     ``fmt`` is ``"pdb"`` or ``"cif"``. Files are cached (default: the system temp
-    directory) so repeat calls don't re-download. Example: ``m3d.fetch("1fqy")``.
+    directory) so repeat calls don't re-download. Example: ``ms.fetch("1fqy")``.
     """
     fmt = fmt.lower()
     if fmt not in ("pdb", "cif"):
         raise ValueError("fmt must be 'pdb' or 'cif'")
     pdb_id = pdb_id.lower()
-    cache_dir = cache_dir or os.path.join(tempfile.gettempdir(), "molecule3d_cache")
+    cache_dir = cache_dir or os.path.join(tempfile.gettempdir(), "molscope_cache")
     os.makedirs(cache_dir, exist_ok=True)
     dest = os.path.join(cache_dir, f"{pdb_id}.{fmt}")
     if not os.path.exists(dest):

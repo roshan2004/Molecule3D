@@ -22,7 +22,7 @@ Build a PDF copy of the user guide with Pandoc and a LaTeX engine:
 python scripts/build_user_guide_pdf.py
 ```
 
-The generated file is written to `docs/_build/molecule3d-user-guide.pdf`.
+The generated file is written to `docs/_build/molscope-user-guide.pdf`.
 
 ## Guidelines
 

@@ -3,14 +3,14 @@
 ## From PyPI
 
 ```bash
-pip install molecule3d
+pip install molscope
 ```
 
 ## From a local checkout
 
 ```bash
-git clone https://github.com/roshan2004/Molecule3D
-cd Molecule3D
+git clone https://github.com/roshan2004/molscope
+cd molscope
 uv sync
 uv run pytest
 ```
@@ -18,9 +18,9 @@ uv run pytest
 ## Optional dependencies
 
 ```bash
-pip install "molecule3d[fast]"   # scipy KD-tree bond search
-pip install "molecule3d[viz]"    # py3Dmol notebook viewer
-pip install "molecule3d[graph]"  # NetworkX exporter only
+pip install "molscope[fast]"   # scipy KD-tree bond search
+pip install "molscope[viz]"    # py3Dmol notebook viewer
+pip install "molscope[graph]"  # NetworkX exporter only
 ```
 
 PyTorch Geometric and DGL are optional manual installs because PyTorch builds

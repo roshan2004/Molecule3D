@@ -3,9 +3,9 @@ import os
 import numpy as np
 import pytest
 
-import molecule3d as m3d
-from molecule3d import Molecule
-from molecule3d.io import read_pdb, read_pdb_models, read_xyz, write_pdb, write_xyz
+import molscope as ms
+from molscope import Molecule
+from molscope.io import read_pdb, read_pdb_models, read_xyz, write_pdb, write_xyz
 
 DATA = os.path.dirname(os.path.dirname(__file__))
 
@@ -78,9 +78,9 @@ def test_read_pdb_single_model_from_multimodel():
 
 
 def test_read_dispatches_on_extension():
-    assert len(m3d.read(os.path.join(DATA, "1fqy.pdb"))) == 1661
+    assert len(ms.read(os.path.join(DATA, "1fqy.pdb"))) == 1661
     with pytest.raises(ValueError):
-        m3d.read("structure.mol2")
+        ms.read("structure.mol2")
 
 
 def test_pdb_skips_alternate_conformations(tmp_path):

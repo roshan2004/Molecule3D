@@ -5,8 +5,8 @@ import os
 import numpy as np
 import pytest
 
-import molecule3d as m3d
-from molecule3d import ContactMap, Molecule
+import molscope as ms
+from molscope import ContactMap, Molecule
 
 DATA = os.path.dirname(os.path.dirname(__file__))
 
@@ -40,7 +40,7 @@ def test_residue_ca_contact_map():
 
 
 def test_residue_methods_all_run():
-    mol = m3d.read_pdb(os.path.join(DATA, "1fqy.pdb"))
+    mol = ms.read_pdb(os.path.join(DATA, "1fqy.pdb"))
     for method in ("ca", "com", "min"):
         cutoff = 4.5 if method == "min" else 8.0
         cm = mol.contact_map(cutoff=cutoff, level="residue", method=method)
@@ -50,7 +50,7 @@ def test_residue_methods_all_run():
 
 
 def test_residue_map_requires_residues():
-    xyz = m3d.read(os.path.join(DATA, "helix_201.xyz"))
+    xyz = ms.read(os.path.join(DATA, "helix_201.xyz"))
     with pytest.raises(ValueError):
         xyz.contact_map(level="residue")
 
@@ -63,8 +63,8 @@ def test_invalid_level_and_method():
 
 
 def test_ensemble_contact_frequency():
-    models = m3d.read_pdb_models(os.path.join(DATA, "1aml.pdb"))
-    freq = m3d.ensemble_contact_frequency(models, cutoff=8.0)
+    models = ms.read_pdb_models(os.path.join(DATA, "1aml.pdb"))
+    freq = ms.ensemble_contact_frequency(models, cutoff=8.0)
     n = len(list(models[0].residue_groups()))
     assert freq.matrix.shape == (n, n)
     assert freq.is_frequency
@@ -81,7 +81,7 @@ def test_plot_contact_map(tmp_path):
     matplotlib.use("Agg")
     ax = ca_chain().contact_map(level="residue").plot(show=False)
     assert ax is not None
-    freq = m3d.ensemble_contact_frequency(
-        m3d.read_pdb_models(os.path.join(DATA, "1aml.pdb"))[:5]
+    freq = ms.ensemble_contact_frequency(
+        ms.read_pdb_models(os.path.join(DATA, "1aml.pdb"))[:5]
     )
     assert freq.plot(show=False) is not None

@@ -106,7 +106,7 @@ def spin_gif(molecule, path: str, frames: int = 36, fps: int = 15, **plot_kwargs
 
 
 def plot_contact_map(contact_map, ax=None, cmap=None, show: bool = True):
-    """Draw a :class:`~molecule3d.contactmap.ContactMap` as a heatmap.
+    """Draw a :class:`~molscope.contactmap.ContactMap` as a heatmap.
 
     Booleans render as a binary map; ensemble frequencies render with a colour
     scale and a colourbar. Returns the matplotlib ``Axes``.

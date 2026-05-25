@@ -1,9 +1,9 @@
 import numpy as np
 import pytest
 
-import molecule3d as m3d
-from molecule3d import Molecule
-from molecule3d.descriptors import flatten_descriptors, inertia_tensor
+import molscope as ms
+from molscope import Molecule
+from molscope.descriptors import flatten_descriptors, inertia_tensor
 
 
 def water():
@@ -49,10 +49,10 @@ def test_flatten_descriptors_expands_vector_features():
 def test_featurize_many_returns_matrix_and_feature_names(tmp_path):
     water_path = tmp_path / "water.xyz"
     carbon_path = tmp_path / "carbon.xyz"
-    m3d.write_xyz(water(), str(water_path))
-    m3d.write_xyz(Molecule(np.array([[0.0, 0.0, 0.0]]), ["C"], name="carbon"), str(carbon_path))
+    ms.write_xyz(water(), str(water_path))
+    ms.write_xyz(Molecule(np.array([[0.0, 0.0, 0.0]]), ["C"], name="carbon"), str(carbon_path))
 
-    x, names = m3d.featurize_many(
+    x, names = ms.featurize_many(
         [str(water_path), str(carbon_path)],
         return_names=True,
         distance_bins=3,
@@ -68,6 +68,6 @@ def test_featurize_many_returns_matrix_and_feature_names(tmp_path):
 
 def test_featurize_many_accepts_explicit_feature_names(tmp_path):
     path = tmp_path / "water.xyz"
-    m3d.write_xyz(water(), str(path))
-    x = m3d.featurize_many([str(path)], feature_names=["n_atoms", "count_O"])
+    ms.write_xyz(water(), str(path))
+    x = ms.featurize_many([str(path)], feature_names=["n_atoms", "count_O"])
     np.testing.assert_allclose(x, [[3.0, 1.0]])

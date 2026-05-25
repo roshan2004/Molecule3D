@@ -1,4 +1,4 @@
-"""molecule3d: read, analyse, and plot molecular structures in 3D."""
+"""molscope: read, analyse, and plot molecular structures in 3D."""
 
 from . import coarsegrain, ensemble
 from .coarsegrain import BeadMapping, BondMapping, CoarseGrainReport, DroppedAtom

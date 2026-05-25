@@ -3,7 +3,7 @@ requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "molecule3d"
+name = "molscope"
 version = "0.6.0"
 description = "Lightweight molecular structure analysis, visualisation, graph export, and coarse-graining in Python."
 readme = "README.md"
@@ -35,11 +35,11 @@ viz = ["py3Dmol>=2.0"]         # interactive notebook viewer (Molecule.view)
 graph = ["networkx>=2.6"]      # NetworkX exporter only; PyG/DGL installed separately
 
 [project.urls]
-Homepage = "https://github.com/roshan2004/Molecule3D"
-Repository = "https://github.com/roshan2004/Molecule3D"
+Homepage = "https://github.com/roshan2004/molscope"
+Repository = "https://github.com/roshan2004/molscope"
 
 [project.scripts]
-molecule3d = "molecule3d.cli:main"
+molscope = "molscope.cli:main"
 
 # Dev tooling for `uv sync` (installed by default; PEP 735 dependency group).
 # scipy is included so the KD-tree bond path is exercised by the test suite.
@@ -50,7 +50,7 @@ docs = ["mkdocs-material>=9.5"]
 notebook = ["jupyterlab>=4", "ipykernel>=6", "nbconvert>=7"]
 
 [tool.setuptools]
-packages = ["molecule3d"]
+packages = ["molscope"]
 
 [tool.ruff]
 line-length = 100

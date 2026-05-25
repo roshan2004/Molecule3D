@@ -8,7 +8,7 @@ import subprocess
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-DEFAULT_OUTPUT = ROOT / "docs" / "_build" / "molecule3d-user-guide.pdf"
+DEFAULT_OUTPUT = ROOT / "docs" / "_build" / "molscope-user-guide.pdf"
 USER_GUIDE_FILES = [
     ROOT / "docs" / "user-guide" / "reading-files.md",
     ROOT / "docs" / "user-guide" / "selections.md",
@@ -44,9 +44,9 @@ def main() -> int:
         "--pdf-engine",
         engine,
         "--metadata",
-        "title=Molecule3D User Guide",
+        "title=MolScope User Guide",
         "--metadata",
-        "author=Molecule3D",
+        "author=MolScope",
         "--metadata",
         "geometry=margin=1in",
         "-o",

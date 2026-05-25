@@ -1,18 +1,18 @@
 """Backward-compatible shim for the original ``utils`` API.
 
-The implementation now lives in the :mod:`molecule3d` package. This module
+The implementation now lives in the :mod:`molscope` package. This module
 keeps the old ``Molecule`` / ``Pdb`` classes working so existing scripts and
-notebooks don't break, but new code should use ``molecule3d`` directly::
+notebooks don't break, but new code should use ``molscope`` directly::
 
-    import molecule3d as m3d
-    m3d.read("helix_201.xyz").translate((1, 2, -1)).plot()
+    import molscope as ms
+    ms.read("helix_201.xyz").translate((1, 2, -1)).plot()
 """
 
-from molecule3d import io
+from molscope import io
 
 
 class Molecule:
-    """Deprecated. Use ``molecule3d.read`` / ``molecule3d.Molecule`` instead."""
+    """Deprecated. Use ``molscope.read`` / ``molscope.Molecule`` instead."""
 
     _reader = staticmethod(io.read_xyz)
 
@@ -36,7 +36,7 @@ class Molecule:
 
 
 class Pdb(Molecule):
-    """Deprecated. Use ``molecule3d.read_pdb`` instead."""
+    """Deprecated. Use ``molscope.read_pdb`` instead."""
 
     _reader = staticmethod(io.read_pdb)
 

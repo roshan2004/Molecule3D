@@ -5,8 +5,8 @@ import os
 import numpy as np
 import pytest
 
-import molecule3d as m3d
-from molecule3d import Molecule
+import molscope as ms
+from molscope import Molecule
 
 DATA = os.path.dirname(os.path.dirname(__file__))
 
@@ -73,7 +73,7 @@ def test_residue_com_one_bead_per_residue():
 
 
 def test_com_is_mass_weighted_centroid_is_not():
-    from molecule3d import elements
+    from molscope import elements
 
     mol = Molecule(
         np.array([[0.0, 0, 0], [2.0, 0, 0]]), ["O", "H"],
@@ -119,7 +119,7 @@ def test_return_report_gives_structured_report_object():
     with pytest.warns(UserWarning, match="not assigned"):
         cg, report = alanine_with_hydrogens().coarse_grain(mapping, return_report=True)
     assert isinstance(cg, Molecule)
-    assert isinstance(report, m3d.CoarseGrainReport)
+    assert isinstance(report, ms.CoarseGrainReport)
     assert report.beads[0].name == "BB"
     assert report.beads[0].atom_names == ["N", "CA", "C", "O"]
     assert [atom.name for atom in report.dropped_atoms] == ["H", "HA", "CB", "HB1", "HB2", "HB3"]
@@ -149,13 +149,13 @@ def test_separate_chains_not_linked():
 
 
 def test_coarse_grain_requires_residues():
-    xyz = m3d.read(os.path.join(DATA, "helix_201.xyz"))
+    xyz = ms.read(os.path.join(DATA, "helix_201.xyz"))
     with pytest.raises(ValueError):
         xyz.coarse_grain()
 
 
 def test_index_mapping_works_without_residues():
-    helix = m3d.read(os.path.join(DATA, "helix_201.xyz"))  # no residue/atom names
+    helix = ms.read(os.path.join(DATA, "helix_201.xyz"))  # no residue/atom names
     cg = helix.coarse_grain({"A": list(range(100)), "B": list(range(100, 201))})
     assert len(cg) == 2
     assert cg.atom_names == ["A", "B"]
@@ -164,7 +164,7 @@ def test_index_mapping_works_without_residues():
 
 
 def test_user_defined_bonds_by_name_and_index():
-    helix = m3d.read(os.path.join(DATA, "helix_201.xyz"))
+    helix = ms.read(os.path.join(DATA, "helix_201.xyz"))
     by_name = helix.coarse_grain(
         {"A": [0, 1], "B": [2, 3], "C": [4, 5]}, bonds=[("A", "B"), ("B", "C")]
     )
@@ -181,13 +181,13 @@ def test_user_defined_bonds_reject_repeated_bead_names():
 
 
 def test_user_defined_bonds_reject_unknown_bead_name():
-    helix = m3d.read(os.path.join(DATA, "helix_201.xyz"))
+    helix = ms.read(os.path.join(DATA, "helix_201.xyz"))
     with pytest.raises(ValueError, match="unknown bead name"):
         helix.coarse_grain({"A": [0, 1], "B": [2, 3]}, bonds=[("A", "missing")])
 
 
 def test_index_mapping_rejects_atom_names():
-    helix = m3d.read(os.path.join(DATA, "helix_201.xyz"))
+    helix = ms.read(os.path.join(DATA, "helix_201.xyz"))
     with pytest.raises(ValueError):
         helix.coarse_grain({"BB": ["N", "CA"]})  # names, not indices
 
@@ -205,7 +205,7 @@ def test_user_defined_bonds_override_residue_topology():
 
 
 def test_cg_result_is_a_usable_molecule():
-    mol = m3d.read_pdb(os.path.join(DATA, "1fqy.pdb"))
+    mol = ms.read_pdb(os.path.join(DATA, "1fqy.pdb"))
     cg = mol.coarse_grain("residue_com")
     assert isinstance(cg, Molecule)
     assert len(cg) == 226              # one bead per residue

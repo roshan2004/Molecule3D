@@ -3,13 +3,13 @@
 Read all models from an NMR PDB file:
 
 ```python
-models = m3d.read_pdb_models("1aml.pdb")
+models = ms.read_pdb_models("1aml.pdb")
 ```
 
 Compute ensemble descriptors:
 
 ```python
-from molecule3d import ensemble
+from molscope import ensemble
 
 aligned = ensemble.align_all(models)
 avg = ensemble.average(models)
@@ -28,6 +28,6 @@ result.representatives()
 Contact frequency across models:
 
 ```python
-freq = m3d.ensemble_contact_frequency(models, cutoff=8.0)
+freq = ms.ensemble_contact_frequency(models, cutoff=8.0)
 freq.plot()
 ```

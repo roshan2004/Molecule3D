@@ -39,6 +39,6 @@ print(cg.mapping_report())
 cg, report = mol.coarse_grain(mapping, return_report=True)
 ```
 
-Molecule3D is useful for interpretable coarse-graining prototypes and teaching.
+MolScope is useful for interpretable coarse-graining prototypes and teaching.
 It is not a complete force-field engine with bonded, nonbonded, angle, dihedral,
 charge, exclusion, or topology export parameter handling.

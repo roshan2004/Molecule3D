@@ -1,7 +1,7 @@
-site_name: Molecule3D
+site_name: MolScope
 site_description: Lightweight molecular structure analysis, visualization, graph export, and coarse-graining in Python.
-repo_url: https://github.com/roshan2004/Molecule3D
-repo_name: roshan2004/Molecule3D
+repo_url: https://github.com/roshan2004/molscope
+repo_name: roshan2004/molscope
 
 theme:
   name: material

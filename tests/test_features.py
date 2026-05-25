@@ -6,8 +6,8 @@ import os
 import numpy as np
 import pytest
 
-import molecule3d as m3d
-from molecule3d import Molecule, ensemble
+import molscope as ms
+from molscope import Molecule, ensemble
 
 DATA = os.path.dirname(os.path.dirname(__file__))
 
@@ -16,7 +16,7 @@ DATA = os.path.dirname(os.path.dirname(__file__))
 
 
 def test_pdb_carries_metadata():
-    mol = m3d.read_pdb(os.path.join(DATA, "1fqy.pdb"))
+    mol = ms.read_pdb(os.path.join(DATA, "1fqy.pdb"))
     assert mol.has_topology
     assert mol.atom_names[0] == "N"
     assert mol.resnames[0] == "LYS"
@@ -25,7 +25,7 @@ def test_pdb_carries_metadata():
 
 
 def test_select_by_element_and_atom_name():
-    mol = m3d.read_pdb(os.path.join(DATA, "1fqy.pdb"))
+    mol = ms.read_pdb(os.path.join(DATA, "1fqy.pdb"))
     carbons = mol.select(element="C")
     assert all(e == "C" for e in carbons.elements)
     assert 0 < len(carbons) < len(mol)
@@ -36,20 +36,20 @@ def test_select_by_element_and_atom_name():
 
 
 def test_select_without_metadata_raises():
-    xyz = m3d.read(os.path.join(DATA, "helix_201.xyz"))
+    xyz = ms.read(os.path.join(DATA, "helix_201.xyz"))
     with pytest.raises(ValueError):
         xyz.select(chain="A")
 
 
 def test_getitem_subsets():
-    mol = m3d.read_pdb(os.path.join(DATA, "1fqy.pdb"))
+    mol = ms.read_pdb(os.path.join(DATA, "1fqy.pdb"))
     first10 = mol[np.arange(10)]
     assert len(first10) == 10
     assert first10.atom_names == mol.atom_names[:10]
 
 
 def test_ca_rmsd_smaller_atom_count_than_all_atom():
-    models = m3d.read_pdb_models(os.path.join(DATA, "1aml.pdb"))
+    models = ms.read_pdb_models(os.path.join(DATA, "1aml.pdb"))
     ca0, ca1 = models[0].alpha_carbons(), models[1].alpha_carbons()
     assert len(ca0) < len(models[0])
     assert ca0.rmsd(ca1, align=True) >= 0.0
@@ -91,14 +91,14 @@ def test_dimensions_and_formula():
 
 
 def test_summary_runs():
-    assert "atoms" in m3d.read_pdb(os.path.join(DATA, "1fqy.pdb")).summary()
+    assert "atoms" in ms.read_pdb(os.path.join(DATA, "1fqy.pdb")).summary()
 
 
 # -- ensemble ---------------------------------------------------------------
 
 
 def test_ensemble_average_and_rmsf():
-    models = m3d.read_pdb_models(os.path.join(DATA, "1aml.pdb"))[:5]
+    models = ms.read_pdb_models(os.path.join(DATA, "1aml.pdb"))[:5]
     avg = ensemble.average(models)
     assert len(avg) == len(models[0])
     fluct = ensemble.rmsf(models)
@@ -107,7 +107,7 @@ def test_ensemble_average_and_rmsf():
 
 
 def test_ensemble_rmsd_matrix():
-    models = m3d.read_pdb_models(os.path.join(DATA, "1aml.pdb"))[:4]
+    models = ms.read_pdb_models(os.path.join(DATA, "1aml.pdb"))[:4]
     mat = ensemble.rmsd_matrix(models)
     assert mat.shape == (4, 4)
     assert np.allclose(np.diag(mat), 0)
@@ -122,7 +122,7 @@ def test_gzip_transparent_read(tmp_path):
     gz = tmp_path / "1fqy.pdb.gz"
     with open(src, "rb") as fin, gzip.open(gz, "wb") as fout:
         fout.write(fin.read())
-    assert len(m3d.read(str(gz))) == 1661
+    assert len(ms.read(str(gz))) == 1661
 
 
 CIF = """\
@@ -147,7 +147,7 @@ ATOM 2 C CA ALA A 1 4.000 5.000 6.000
 def test_read_cif(tmp_path):
     f = tmp_path / "t.cif"
     f.write_text(CIF)
-    mol = m3d.read(str(f))
+    mol = ms.read(str(f))
     assert len(mol) == 2
     assert mol.elements == ["N", "C"]
     assert mol.atom_names == ["N", "CA"]
@@ -172,7 +172,7 @@ $$$$
 def test_read_sdf(tmp_path):
     f = tmp_path / "w.sdf"
     f.write_text(SDF)
-    mol = m3d.read(str(f))
+    mol = ms.read(str(f))
     assert mol.elements == ["O", "H", "H"]
     np.testing.assert_allclose(mol.coords[1], [0.96, 0.0, 0.0])
 
@@ -181,13 +181,13 @@ def test_multi_frame_xyz(tmp_path):
     frame = "2\nframe\nH 0 0 0\nH 0 0 1\n"
     f = tmp_path / "traj.xyz"
     f.write_text(frame * 3)
-    frames = m3d.read_xyz_frames(str(f))
+    frames = ms.read_xyz_frames(str(f))
     assert len(frames) == 3
     assert all(len(fr) == 2 for fr in frames)
 
 
 def test_fetch_uses_downloader(tmp_path, monkeypatch):
-    import molecule3d.io as mio
+    import molscope.io as mio
 
     with open(os.path.join(DATA, "1fqy.pdb"), "rb") as fh:
         sample = fh.read()
@@ -203,7 +203,7 @@ def test_fetch_uses_downloader(tmp_path, monkeypatch):
             return sample
 
     monkeypatch.setattr(mio, "urlopen", lambda url: FakeResp())
-    mol = m3d.fetch("1fqy", cache_dir=str(tmp_path))
+    mol = ms.fetch("1fqy", cache_dir=str(tmp_path))
     assert len(mol) == 1661
 
 
@@ -220,7 +220,7 @@ def test_spin_gif(tmp_path):
     import matplotlib
 
     matplotlib.use("Agg")
-    from molecule3d.plotting import spin_gif
+    from molscope.plotting import spin_gif
 
     out = str(tmp_path / "spin.gif")
     spin_gif(water(), out, frames=4, fps=5)

@@ -1,4 +1,4 @@
-"""Command-line entry point: ``python -m molecule3d FILE [options]``."""
+"""Command-line entry point: ``python -m molscope FILE [options]``."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from .io import fetch, read
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(
-        prog="molecule3d",
+        prog="molscope",
         description="Read a structure (.xyz/.pdb/.cif/.sdf), transform it, and plot in 3D.",
     )
     src = parser.add_mutually_exclusive_group(required=True)

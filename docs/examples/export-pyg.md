@@ -3,9 +3,9 @@
 Install PyTorch and PyTorch Geometric manually for your platform first.
 
 ```python
-import molecule3d as m3d
+import molscope as ms
 
-mol = m3d.read("1fqy.pdb")
+mol = ms.read("1fqy.pdb")
 data = mol.to_pyg_data()
 
 print(data.x.shape)

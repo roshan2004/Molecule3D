@@ -3,7 +3,7 @@ import sys
 import numpy as np
 import pytest
 
-from molecule3d import Molecule
+from molscope import Molecule
 
 
 def water():

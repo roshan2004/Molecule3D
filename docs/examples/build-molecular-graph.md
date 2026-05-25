@@ -1,9 +1,9 @@
 # Build A Molecular Graph
 
 ```python
-import molecule3d as m3d
+import molscope as ms
 
-mol = m3d.read("1fqy.pdb")
+mol = ms.read("1fqy.pdb")
 graph = mol.to_graph()
 
 print(graph.n_atoms, graph.n_bonds)

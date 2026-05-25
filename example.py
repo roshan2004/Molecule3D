@@ -1,4 +1,4 @@
-"""Worked example of the molecule3d API on the bundled sample structures.
+"""Worked example of the molscope API on the bundled sample structures.
 
 Run it from the repo root:
 
@@ -13,8 +13,8 @@ import os
 
 import matplotlib
 
-import molecule3d as m3d
-from molecule3d import ensemble
+import molscope as ms
+from molscope import ensemble
 
 # Use a non-interactive backend (save to file) when there's no display.
 HEADLESS = matplotlib.get_backend().lower() == "agg" or not os.environ.get("DISPLAY")
@@ -40,12 +40,12 @@ def _save_contact_map(contact_map, filename):
 
 def main():
     print("== 1. Read and inspect an .xyz file ==")
-    helix = m3d.read("helix_201.xyz")
+    helix = ms.read("helix_201.xyz")
     print(f"  {helix.name}: {len(helix)} atoms")
     print(f"  centroid: {helix.centroid.round(3)}")
 
     print("\n== 2. Read a protein (.pdb) and derive properties ==")
-    aqp = m3d.read("1fqy.pdb")  # Aquaporin-1
+    aqp = ms.read("1fqy.pdb")  # Aquaporin-1
     print(f"  {aqp.summary()}")
     print(f"  centre of mass:      {aqp.center_of_mass.round(2)}")
     print(f"  radius of gyration:  {aqp.radius_of_gyration:.2f} A")
@@ -61,7 +61,7 @@ def main():
     print(f"  centroid after centre+rotate+translate: {view.centroid.round(3)}")
 
     print("\n== 5. Compare NMR ensemble models (1aml), CA-based ==")
-    models = m3d.read_pdb_models("1aml.pdb")
+    models = ms.read_pdb_models("1aml.pdb")
     ca_models = [m.alpha_carbons() for m in models]
     print(f"  {len(models)} models, {len(ca_models[0])} CA atoms each")
     raw = ca_models[0].rmsd(ca_models[1])
@@ -85,12 +85,12 @@ def main():
     cmap = aqp.contact_map(cutoff=8.0, level="residue")
     print(f"  residue contact map: {cmap.matrix.shape}, "
           f"~{cmap.matrix.sum(1).mean():.1f} contacts/residue")
-    freq = m3d.ensemble_contact_frequency(models, cutoff=8.0)
+    freq = ms.ensemble_contact_frequency(models, cutoff=8.0)
     variable = ((freq.matrix > 0) & (freq.matrix < 1)).sum() // 2
     print(f"  NMR ensemble: {variable} residue pairs in contact in only some models")
 
     print("\n== 8. Cluster the NMR ensemble by RMSD ==")
-    clusters = m3d.cluster(models, n_clusters=3)
+    clusters = ms.cluster(models, n_clusters=3)
     print(f"  {len(models)} models -> {clusters.n_clusters} clusters, "
           f"sizes {[len(v) for v in clusters.groups().values()]}")
     print(f"  representative model per cluster: {clusters.representatives()}")
@@ -102,7 +102,7 @@ def main():
     print(f"  martini-like BB/SC model: {len(martini)} beads")
 
     print("\n== 10. Write a transformed structure back to disk ==")
-    m3d.write_xyz(aqp.centered(), "aqp_centered.xyz")
+    ms.write_xyz(aqp.centered(), "aqp_centered.xyz")
     print("  wrote aqp_centered.xyz")
 
     print("\n== 11. Plot (colour by chain) and the contact map ==")

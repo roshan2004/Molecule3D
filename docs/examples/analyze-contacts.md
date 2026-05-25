@@ -1,9 +1,9 @@
 # Analyze Contacts
 
 ```python
-import molecule3d as m3d
+import molscope as ms
 
-mol = m3d.read("1fqy.pdb")
+mol = ms.read("1fqy.pdb")
 
 pairs = mol.contacts(cutoff=5.0)
 print(len(pairs))
@@ -16,7 +16,7 @@ cmap.plot()
 For ensembles:
 
 ```python
-models = m3d.read_pdb_models("1aml.pdb")
-freq = m3d.ensemble_contact_frequency(models, cutoff=8.0)
+models = ms.read_pdb_models("1aml.pdb")
+freq = ms.ensemble_contact_frequency(models, cutoff=8.0)
 freq.plot()
 ```

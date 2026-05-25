@@ -5,8 +5,8 @@ import os
 import numpy as np
 import pytest
 
-import molecule3d as m3d
-from molecule3d import Molecule
+import molscope as ms
+from molscope import Molecule
 
 DATA = os.path.dirname(os.path.dirname(__file__))
 
@@ -28,14 +28,14 @@ def two_conformer_set():
 
 
 def test_rmsd_matrix_top_level_matches_ensemble():
-    models = m3d.read_pdb_models(os.path.join(DATA, "1aml.pdb"))[:4]
-    a = m3d.rmsd_matrix(models, align=True)
-    b = m3d.ensemble.rmsd_matrix(models, align=True)
+    models = ms.read_pdb_models(os.path.join(DATA, "1aml.pdb"))[:4]
+    a = ms.rmsd_matrix(models, align=True)
+    b = ms.ensemble.rmsd_matrix(models, align=True)
     np.testing.assert_array_equal(a, b)
 
 
 def test_cluster_separates_two_conformers():
-    cl = m3d.cluster(two_conformer_set(), n_clusters=2)
+    cl = ms.cluster(two_conformer_set(), n_clusters=2)
     assert cl.n_clusters == 2
     # models 0,1 together; 2,3 together; the two groups differ
     assert cl.labels[0] == cl.labels[1]
@@ -44,44 +44,44 @@ def test_cluster_separates_two_conformers():
 
 
 def test_groups_partition_all_models():
-    cl = m3d.cluster(two_conformer_set(), n_clusters=2)
+    cl = ms.cluster(two_conformer_set(), n_clusters=2)
     members = sorted(i for ids in cl.groups().values() for i in ids)
     assert members == [0, 1, 2, 3]
 
 
 def test_representatives_are_valid_members():
-    cl = m3d.cluster(two_conformer_set(), n_clusters=2)
+    cl = ms.cluster(two_conformer_set(), n_clusters=2)
     for cid, idx in cl.representatives().items():
         assert idx in cl.groups()[cid]
 
 
 def test_order_is_a_permutation():
-    cl = m3d.cluster(two_conformer_set(), n_clusters=2)
+    cl = ms.cluster(two_conformer_set(), n_clusters=2)
     assert sorted(cl.order.tolist()) == [0, 1, 2, 3]
 
 
 def test_cutoff_controls_granularity():
-    models = m3d.read_pdb_models(os.path.join(DATA, "1aml.pdb"))
-    coarse = m3d.cluster(models, cutoff=100.0)   # everything in one cluster
-    fine = m3d.cluster(models, cutoff=0.1)        # almost every model separate
+    models = ms.read_pdb_models(os.path.join(DATA, "1aml.pdb"))
+    coarse = ms.cluster(models, cutoff=100.0)   # everything in one cluster
+    fine = ms.cluster(models, cutoff=0.1)        # almost every model separate
     assert coarse.n_clusters == 1
     assert fine.n_clusters > coarse.n_clusters
 
 
 def test_reuses_supplied_matrix():
     models = two_conformer_set()
-    mat = m3d.rmsd_matrix(models)
-    cl = m3d.cluster(models, matrix=mat, n_clusters=2)
+    mat = ms.rmsd_matrix(models)
+    cl = ms.cluster(models, matrix=mat, n_clusters=2)
     np.testing.assert_array_equal(cl.matrix, mat)
 
 
 def test_unknown_method_raises():
     with pytest.raises(ValueError):
-        m3d.cluster(two_conformer_set(), method="kmeans")
+        ms.cluster(two_conformer_set(), method="kmeans")
 
 
 def test_single_model_is_one_cluster():
-    cl = m3d.cluster([Molecule(np.zeros((3, 3)), ["C", "C", "C"])])
+    cl = ms.cluster([Molecule(np.zeros((3, 3)), ["C", "C", "C"])])
     assert cl.n_clusters == 1
 
 
@@ -89,6 +89,6 @@ def test_plot_rmsd_heatmap(tmp_path):
     import matplotlib
 
     matplotlib.use("Agg")
-    cl = m3d.cluster(two_conformer_set(), n_clusters=2)
-    ax = m3d.plot_rmsd_heatmap(cl.matrix, order=cl.order, show=False)
+    cl = ms.cluster(two_conformer_set(), n_clusters=2)
+    ax = ms.plot_rmsd_heatmap(cl.matrix, order=cl.order, show=False)
     assert ax is not None

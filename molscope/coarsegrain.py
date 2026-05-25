@@ -1,6 +1,6 @@
 """Coarse-graining: map an atomistic structure onto a smaller set of beads.
 
-The result is an ordinary :class:`~molecule3d.molecule.Molecule` whose "atoms"
+The result is an ordinary :class:`~molscope.molecule.Molecule` whose "atoms"
 are beads, so it plots, transforms and exports to a graph like any other. Bead
 positions are the mass-weighted centre (or geometric centroid) of their member
 atoms, and explicit CG bonds are attached.

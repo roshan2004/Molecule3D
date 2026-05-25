@@ -1,6 +1,6 @@
-# Molecule3D
+# MolScope
 
-[![CI](https://github.com/roshan2004/Molecule3D/actions/workflows/ci.yml/badge.svg)](https://github.com/roshan2004/Molecule3D/actions/workflows/ci.yml)
+[![CI](https://github.com/roshan2004/molscope/actions/workflows/ci.yml/badge.svg)](https://github.com/roshan2004/molscope/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/python-3.9%20%7C%203.11%20%7C%203.13-blue)](pyproject.toml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](LICENSE)
 [![Code style: Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
@@ -37,7 +37,7 @@ With [uv](https://docs.astral.sh/uv/) (recommended):
 
 ```bash
 uv sync                     # creates .venv, installs deps + dev tools from the lockfile
-uv run molecule3d 1fqy.pdb  # run the CLI
+uv run molscope 1fqy.pdb  # run the CLI
 uv run pytest               # run the tests
 ```
 
@@ -80,10 +80,10 @@ models of `1aml`, writes a transformed structure back out, and renders a plot.
 ## Library
 
 ```python
-import molecule3d as m3d
+import molscope as ms
 
-mol = m3d.read("1fqy.pdb")          # parser chosen from the extension
-mol = m3d.fetch("1fqy")             # ...or download straight from RCSB by id
+mol = ms.read("1fqy.pdb")          # parser chosen from the extension
+mol = ms.fetch("1fqy")             # ...or download straight from RCSB by id
 print(mol.summary())                # atoms, formula, chains, bounding box
 
 mol = mol.centered().rotate("z", 90).translate((1, 2, -1))
@@ -133,7 +133,7 @@ features["radius_of_gyration"]
 features["principal_moments"]                # 3 values
 features["distance_histogram"]               # fixed-size histogram
 
-X, names = m3d.featurize_many(
+X, names = ms.featurize_many(
     ["a.pdb", "b.pdb", "c.xyz"],
     return_names=True,
 )                                            # numeric matrix + column names
@@ -160,16 +160,16 @@ mol.contact_map(level="residue", method="com")        # residue centre of mass
 ### NMR ensembles
 
 ```python
-from molecule3d import ensemble
+from molscope import ensemble
 
-models = m3d.read_pdb_models("1aml.pdb")     # all 20 models
+models = ms.read_pdb_models("1aml.pdb")     # all 20 models
 ensemble.rmsd_matrix(models)                 # pairwise RMSD matrix
 ensemble.rmsf(models)                        # per-atom fluctuation
 ensemble.average(models)                     # mean structure
 ensemble.align_all(models)                   # superpose every model onto the first
 
 # Per-residue-pair contact probability across the ensemble (NMR variability)
-freq = m3d.ensemble_contact_frequency(models, cutoff=8.0)
+freq = ms.ensemble_contact_frequency(models, cutoff=8.0)
 freq.plot()                                  # heatmap of contact frequencies in [0, 1]
 ```
 
@@ -179,27 +179,27 @@ Cluster an ensemble (NMR models, conformer sets, docking poses, MD snapshots) by
 pairwise RMSD:
 
 ```python
-matrix = m3d.rmsd_matrix(models, align=True)        # (M, M) RMSD matrix
-m3d.plot_rmsd_heatmap(matrix)                        # heatmap
+matrix = ms.rmsd_matrix(models, align=True)        # (M, M) RMSD matrix
+ms.plot_rmsd_heatmap(matrix)                        # heatmap
 
-clusters = m3d.cluster(models, method="hierarchical")   # data-driven cutoff
-clusters = m3d.cluster(models, n_clusters=3)            # ...or a fixed count
+clusters = ms.cluster(models, method="hierarchical")   # data-driven cutoff
+clusters = ms.cluster(models, n_clusters=3)            # ...or a fixed count
 clusters.n_clusters                                  # how many clusters
 clusters.groups()                                    # {cluster_id: [model indices]}
 clusters.representatives()                            # {cluster_id: medoid model index}
 
-m3d.plot_rmsd_heatmap(matrix, order=clusters.order)  # reorder into diagonal blocks
+ms.plot_rmsd_heatmap(matrix, order=clusters.order)  # reorder into diagonal blocks
 ```
 
 ### Writing and viewing
 
 ```python
-m3d.write_xyz(mol.centered(), "out.xyz")     # write transformed coordinates back
-m3d.write_pdb(mol, "out.pdb")
+ms.write_xyz(mol.centered(), "out.xyz")     # write transformed coordinates back
+ms.write_pdb(mol, "out.pdb")
 
 mol.plot(color_by="chain")                   # colour by element / chain / residue
 mol.view(style="cartoon")                    # interactive py3Dmol viewer (notebooks)
-from molecule3d.plotting import spin_gif
+from molscope.plotting import spin_gif
 spin_gif(mol, "spin.gif")                    # rotating animation
 ```
 
@@ -210,7 +210,7 @@ ML frameworks. The base `to_graph()` needs no extra dependencies; each exporter
 imports its backend lazily.
 
 ```python
-mol = m3d.read("1fqy.pdb")
+mol = ms.read("1fqy.pdb")
 
 g = mol.to_graph()                  # MolecularGraph: nodes + edges, no deps
 g.n_atoms, g.n_bonds                # counts
@@ -225,7 +225,7 @@ dglg = mol.to_dgl_graph()           # dgl.DGLGraph with ndata/edata tensors
 Nodes carry element, atomic number, mass, coordinates and (from PDB/mmCIF) atom
 name, residue and chain. Edges carry the bonded pair, interatomic distance, and
 bond order (`1.0` for geometrically inferred bonds). Install backends as needed:
-`pip install "molecule3d[graph]"` installs only NetworkX. PyTorch Geometric and
+`pip install "molscope[graph]"` installs only NetworkX. PyTorch Geometric and
 DGL are optional manual installs: `pip install torch torch_geometric` or
 `pip install dgl` after choosing the right PyTorch build for your platform.
 
@@ -236,7 +236,7 @@ ordinary `Molecule` (beads as "atoms") with explicit CG bonds attached, so it
 plots, transforms and graphs like anything else.
 
 ```python
-mol = m3d.read("1fqy.pdb")
+mol = ms.read("1fqy.pdb")
 
 cg = mol.coarse_grain("residue_com")        # one bead per residue (centre of mass)
 cg = mol.coarse_grain("residue_centroid")   # ...or geometric centroid
@@ -268,10 +268,10 @@ Martini parameters.
 ## Command line
 
 ```bash
-molecule3d helix_201.xyz --translate 1 2 -1
-molecule3d 1fqy.pdb --select atom_name=CA --color-by residue --save ca.png
-molecule3d --fetch 1aml --center --gif amyloid.gif
-python -m molecule3d 1fqy.pdb          # equivalent if not pip-installed
+molscope helix_201.xyz --translate 1 2 -1
+molscope 1fqy.pdb --select atom_name=CA --color-by residue --save ca.png
+molscope --fetch 1aml --center --gif amyloid.gif
+python -m molscope 1fqy.pdb          # equivalent if not pip-installed
 ```
 
 ## Sample structures
@@ -291,8 +291,8 @@ python -m molecule3d 1fqy.pdb          # equivalent if not pip-installed
   for the whole ensemble.
 - Bond inference uses a `scipy.spatial.cKDTree` when available; without scipy it
   falls back to a dense `O(n^2)` search that is refused above ~8000 atoms.
-- Optional extras: `pip install "molecule3d[fast]"` (scipy, faster bonds/contacts)
-  and `"molecule3d[viz]"` (py3Dmol, for `Molecule.view`).
+- Optional extras: `pip install "molscope[fast]"` (scipy, faster bonds/contacts)
+  and `"molscope[viz]"` (py3Dmol, for `Molecule.view`).
 
 ## Tests and linting
 

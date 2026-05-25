@@ -5,8 +5,8 @@ import os
 import numpy as np
 import pytest
 
-import molecule3d as m3d
-from molecule3d import MolecularGraph, Molecule
+import molscope as ms
+from molscope import MolecularGraph, Molecule
 
 DATA = os.path.dirname(os.path.dirname(__file__))
 
@@ -46,7 +46,7 @@ def test_to_graph_accepts_explicit_bonds():
 
 
 def test_graph_carries_metadata():
-    mol = m3d.read_pdb(os.path.join(DATA, "1fqy.pdb"))
+    mol = ms.read_pdb(os.path.join(DATA, "1fqy.pdb"))
     g = mol.to_graph()
     assert g.n_atoms == 1661
     assert len(g.chains) == 1661 and g.chains[0] == "A"
@@ -70,7 +70,7 @@ def test_to_networkx():
 
 def test_networkx_includes_residue_metadata():
     pytest.importorskip("networkx")
-    G = m3d.read_pdb(os.path.join(DATA, "1fqy.pdb")).to_networkx()
+    G = ms.read_pdb(os.path.join(DATA, "1fqy.pdb")).to_networkx()
     assert G.nodes[0]["chain"] == "A"
     assert G.nodes[0]["resname"] == "LYS"
 

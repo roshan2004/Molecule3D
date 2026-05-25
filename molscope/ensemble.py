@@ -37,7 +37,7 @@ def contact_frequency(models: list[Molecule], cutoff: float = 8.0,
                       level: str = "residue", method: str = "ca"):
     """Fraction of models in which each pair is in contact (an ensemble map).
 
-    Returns a :class:`~molecule3d.contactmap.ContactMap` whose matrix holds
+    Returns a :class:`~molscope.contactmap.ContactMap` whose matrix holds
     values in ``[0, 1]`` — the contact probability for each residue (or atom)
     pair across the ensemble. Useful for NMR variability and folding analysis.
     """
@@ -130,7 +130,7 @@ def cluster(models, method: str = "hierarchical", cutoff: Optional[float] = None
         from scipy.spatial.distance import squareform
     except ImportError as exc:  # pragma: no cover - exercised only without scipy
         raise ImportError(
-            "clustering needs scipy; install it with: pip install 'molecule3d[fast]'"
+            "clustering needs scipy; install it with: pip install 'molscope[fast]'"
         ) from exc
 
     z = _linkage(squareform(dm, checks=False), method=linkage)

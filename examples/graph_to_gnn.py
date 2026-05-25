@@ -15,14 +15,14 @@ locked dependencies. The core graph and networkx parts run without torch.
 
 from pathlib import Path
 
-import molecule3d as m3d
+import molscope as ms
 
 ROOT = Path(__file__).resolve().parent.parent
 STRUCTURE = ROOT / "1fqy.pdb"
 
 
 def main():
-    mol = m3d.read(str(STRUCTURE))
+    mol = ms.read(str(STRUCTURE))
     print(f"Loaded {mol.summary()}\n")
 
     # 1. Dependency-free graph layer.
@@ -30,13 +30,13 @@ def main():
     print(f"to_graph(): {g.n_atoms} nodes, {g.n_bonds} bonds")
     print(f"  node features {g.node_features().shape} = [atomic_number, mass]")
 
-    # 2. networkx (optional: pip install 'molecule3d[graph]').
+    # 2. networkx (optional: pip install 'molscope[graph]').
     try:
         G = mol.to_networkx()
         print(f"to_networkx(): {G.number_of_nodes()} nodes, {G.number_of_edges()} edges")
         print(f"  node 0: {G.nodes[0]}")
     except ImportError:
-        print("to_networkx(): install networkx  ->  pip install 'molecule3d[graph]'")
+        print("to_networkx(): install networkx  ->  pip install 'molscope[graph]'")
 
     # 3. PyTorch Geometric + a real GNN forward pass (optional).
     try:

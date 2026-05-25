@@ -1,6 +1,6 @@
 # Limitations
 
-Molecule3D is intentionally lightweight. It is designed for teaching,
+MolScope is intentionally lightweight. It is designed for teaching,
 exploration, prototyping, and small ML workflows.
 
 Known limitations:

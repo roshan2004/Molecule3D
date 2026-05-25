@@ -19,7 +19,7 @@ import numpy as np
 from . import elements
 
 # Above this size the dense O(n^2) bond search is refused; install scipy for the
-# KD-tree path (pip install 'molecule3d[fast]') to handle larger structures.
+# KD-tree path (pip install 'molscope[fast]') to handle larger structures.
 _DENSE_BOND_LIMIT = 8000
 
 _BACKBONE_ATOMS = ("N", "CA", "C", "O")
@@ -324,7 +324,7 @@ class Molecule:
             return np.stack([i, j], axis=1)
 
     def contact_map(self, cutoff: float = 8.0, level: str = "residue", method: str = "ca"):
-        """Build a contact map. See :func:`molecule3d.contactmap.contact_map`.
+        """Build a contact map. See :func:`molscope.contactmap.contact_map`.
 
         ``level`` is ``"atom"`` or ``"residue"``; for residue level ``method`` is
         ``"ca"`` (CA-CA distance), ``"com"`` (centre of mass) or ``"min"``
@@ -383,7 +383,7 @@ class Molecule:
             if n > _DENSE_BOND_LIMIT:
                 raise ValueError(
                     f"{n} atoms exceeds the dense bond limit ({_DENSE_BOND_LIMIT}); "
-                    "install scipy (pip install 'molecule3d[fast]') for large "
+                    "install scipy (pip install 'molscope[fast]') for large "
                     "structures."
                 )
             i, j = np.triu_indices(n, k=1)
@@ -408,7 +408,7 @@ class Molecule:
 
     def coarse_grain(self, mapping="residue_com", weighted: bool = True,
                      bonds=None, return_report: bool = False):
-        """Map this structure onto CG beads. See :mod:`molecule3d.coarsegrain`.
+        """Map this structure onto CG beads. See :mod:`molscope.coarsegrain`.
 
         ``mapping`` is ``"residue_com"``, ``"residue_centroid"``, ``"martini"``,
         a ``{resname: {bead: [atom_names]}}`` dict (by residue), or a
@@ -443,7 +443,7 @@ class Molecule:
     # -- graph export -------------------------------------------------------
 
     def to_graph(self, tolerance: float = 1.2, bonds=None):
-        """Build a :class:`molecule3d.graph.MolecularGraph` from this molecule.
+        """Build a :class:`molscope.graph.MolecularGraph` from this molecule.
 
         Bonds are inferred from covalent radii (see :meth:`bonds`) unless an
         explicit ``(E, 2)`` array of index pairs is passed. Node and edge
@@ -477,13 +477,13 @@ class Molecule:
         return self.to_graph(**kwargs).to_dgl_graph()
 
     def plot(self, **kwargs):
-        """Render the molecule in 3D. See :func:`molecule3d.plotting.plot`."""
+        """Render the molecule in 3D. See :func:`molscope.plotting.plot`."""
         from .plotting import plot
 
         return plot(self, **kwargs)
 
     def view(self, **kwargs):
-        """Interactive py3Dmol viewer. See :func:`molecule3d.plotting.view`."""
+        """Interactive py3Dmol viewer. See :func:`molscope.plotting.view`."""
         from .plotting import view
 
         return view(self, **kwargs)
