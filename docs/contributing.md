@@ -16,6 +16,14 @@ uv run mkdocs serve
 uv run mkdocs build --strict
 ```
 
+Build a PDF copy of the user guide with Pandoc and a LaTeX engine:
+
+```bash
+python scripts/build_user_guide_pdf.py
+```
+
+The generated file is written to `docs/_build/molecule3d-user-guide.pdf`.
+
 ## Guidelines
 
 - Keep the core package dependency-light.

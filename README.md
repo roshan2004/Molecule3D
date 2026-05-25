@@ -32,9 +32,11 @@ The documentation website is built with MkDocs Material:
 ```bash
 uv sync --group docs
 uv run mkdocs serve
+python scripts/build_user_guide_pdf.py
 ```
 
-Docs source lives in `docs/`; the site configuration is `mkdocs.yml`.
+Docs source lives in `docs/`; the site configuration is `mkdocs.yml`. The PDF
+builder requires Pandoc and a LaTeX engine such as `xelatex`.
 
 ## Quickstart
 
