@@ -133,6 +133,32 @@ bond order (`1.0` for geometrically inferred bonds). Install backends as needed:
 `pip install "molecule3d[graph]"` (networkx), `pip install torch torch_geometric`,
 or `pip install dgl`.
 
+### Coarse-graining
+
+Map an atomistic structure onto a smaller set of beads. The result is an
+ordinary `Molecule` (beads as "atoms") with explicit CG bonds attached, so it
+plots, transforms and graphs like anything else.
+
+```python
+mol = m3d.read("1fqy.pdb")
+
+cg = mol.coarse_grain("residue_com")        # one bead per residue (centre of mass)
+cg = mol.coarse_grain("residue_centroid")   # ...or geometric centroid
+cg = mol.coarse_grain("martini")            # simplified backbone + side-chain beads
+cg.plot(scale=200)                          # beads + backbone topology
+
+# Custom bead definitions ({resname: {bead_name: [atom_names]}})
+mapping = {"ALA": {"BB": ["N", "CA", "C", "O"], "SC": ["CB"]}}
+cg = mol.coarse_grain(mapping)
+
+cg.to_graph()                               # CG bead network, ready for ML
+```
+
+Bead positions are mass-weighted (or centroids); bonds link beads within a
+residue and connect consecutive residues along each chain. This is meant for
+teaching and prototyping CG mappings, not as a replacement for production
+Martini parameters.
+
 ## Command line
 
 ```bash

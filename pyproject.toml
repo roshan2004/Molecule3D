@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "molecule3d"
-version = "0.3.0"
+version = "0.4.0"
 description = "Read molecular coordinate files (.xyz, .pdb) and plot atoms in 3D."
 readme = "README.md"
 requires-python = ">=3.9"

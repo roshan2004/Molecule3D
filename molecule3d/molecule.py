@@ -34,11 +34,18 @@ class Molecule:
     resnames: list[str] = field(default_factory=list)
     resids: np.ndarray = field(default_factory=lambda: np.empty(0, dtype=int))
     chains: list[str] = field(default_factory=list)
+    # Optional explicit bonds as an (E, 2) index array. When set, bonds() returns
+    # these instead of inferring from geometry (used by coarse-graining).
+    bond_index: np.ndarray | None = None
 
     def __post_init__(self):
         coords = np.asarray(self.coords, dtype=float).reshape(-1, 3)
         object.__setattr__(self, "coords", coords)
         object.__setattr__(self, "resids", np.asarray(self.resids, dtype=int))
+        if self.bond_index is not None:
+            object.__setattr__(
+                self, "bond_index", np.asarray(self.bond_index, dtype=int).reshape(-1, 2)
+            )
         if not self.elements:
             object.__setattr__(self, "elements", [""] * len(coords))
         for name in ("elements", "atom_names", "resnames", "chains"):
@@ -90,7 +97,19 @@ class Molecule:
             resnames=sub(self.resnames),
             resids=self.resids[idx] if len(self.resids) else self.resids,
             chains=sub(self.chains),
+            bond_index=self._subset_bonds(idx),
         )
+
+    def _subset_bonds(self, idx):
+        """Restrict explicit bonds to a kept-atom index set and renumber them."""
+        if self.bond_index is None:
+            return None
+        remap = {old: new for new, old in enumerate(idx)}
+        kept = [
+            (remap[i], remap[j]) for i, j in self.bond_index
+            if i in remap and j in remap
+        ]
+        return np.array(kept, dtype=int).reshape(-1, 2)
 
     def select(
         self,
@@ -299,8 +318,11 @@ class Molecule:
 
         Uses ``scipy.spatial.cKDTree`` when available (scales to large
         structures); otherwise falls back to a dense search that is refused
-        above ``_DENSE_BOND_LIMIT`` atoms.
+        above ``_DENSE_BOND_LIMIT`` atoms. If the molecule carries explicit
+        bonds (e.g. a coarse-grained model), those are returned directly.
         """
+        if self.bond_index is not None:
+            return self.bond_index
         n = len(self.coords)
         if n < 2:
             return np.empty((0, 2), dtype=int)
@@ -341,6 +363,19 @@ class Molecule:
         dx, dy, dz = self.dimensions
         parts.append(f"size {dx:.1f}x{dy:.1f}x{dz:.1f} A")
         return " | ".join(parts)
+
+    # -- coarse-graining ----------------------------------------------------
+
+    def coarse_grain(self, mapping="residue_com", weighted: bool = True) -> Molecule:
+        """Map this structure onto CG beads. See :mod:`molecule3d.coarsegrain`.
+
+        ``mapping`` is ``"residue_com"``, ``"residue_centroid"``, ``"martini"``,
+        or a ``{resname: {bead_name: [atom_names]}}`` dict. Returns a new
+        ``Molecule`` of beads with explicit CG bonds attached.
+        """
+        from .coarsegrain import coarse_grain
+
+        return coarse_grain(self, mapping=mapping, weighted=weighted)
 
     # -- graph export -------------------------------------------------------
 

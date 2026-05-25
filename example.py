@@ -73,12 +73,20 @@ def main():
     except ImportError:
         print("  (install networkx / torch_geometric / dgl to export to those)")
 
-    print("\n== 7. Write a transformed structure back to disk ==")
+    print("\n== 7. Coarse-grain to one bead per residue ==")
+    cg = aqp.coarse_grain("residue_com")
+    print(f"  atomistic {len(aqp)} atoms -> CG {len(cg)} beads, {len(cg.bonds())} bonds")
+    martini = aqp.coarse_grain("martini")
+    print(f"  martini-like BB/SC model: {len(martini)} beads")
+
+    print("\n== 8. Write a transformed structure back to disk ==")
     m3d.write_xyz(aqp.centered(), "aqp_centered.xyz")
     print("  wrote aqp_centered.xyz")
 
-    print("\n== 8. Plot (colour by chain) ==")
+    print("\n== 9. Plot (colour by chain) ==")
     show_or_save(aqp.centered(), "example_aquaporin.png", color_by="chain")
+    print("\n== 10. Plot the coarse-grained bead network ==")
+    show_or_save(cg, "example_cg.png", scale=200)
 
 
 if __name__ == "__main__":

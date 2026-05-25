@@ -1,6 +1,6 @@
 """molecule3d: read, analyse, and plot molecular structures in 3D."""
 
-from . import ensemble
+from . import coarsegrain, ensemble
 from .graph import MolecularGraph
 from .io import (
     fetch,
@@ -19,6 +19,7 @@ from .molecule import Molecule
 __all__ = [
     "Molecule",
     "MolecularGraph",
+    "coarsegrain",
     "ensemble",
     "fetch",
     "read",
@@ -31,4 +32,4 @@ __all__ = [
     "write_pdb",
     "write_xyz",
 ]
-__version__ = "0.3.0"
+__version__ = "0.4.0"
