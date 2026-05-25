@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "molecule3d"
+version = "0.1.0"
+description = "Read molecular coordinate files (.xyz, .pdb) and plot atoms in 3D."
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = ["numpy>=1.21", "matplotlib>=3.5"]
+
+[project.optional-dependencies]
+test = ["pytest>=7"]
+
+[project.scripts]
+molecule3d = "molecule3d.cli:main"
+
+[tool.setuptools]
+packages = ["molecule3d"]

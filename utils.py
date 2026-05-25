@@ -1,55 +1,52 @@
-from mpl_toolkits.mplot3d import Axes3D
-import matplotlib.pyplot as plt
+"""Backward-compatible shim for the original ``utils`` API.
+
+The implementation now lives in the :mod:`molecule3d` package. This module
+keeps the old ``Molecule`` / ``Pdb`` classes working so existing scripts and
+notebooks don't break, but new code should use ``molecule3d`` directly::
+
+    import molecule3d as m3d
+    m3d.read("helix_201.xyz").translate((1, 2, -1)).plot()
+"""
+
+from molecule3d import io
+
+
 class Molecule:
+    """Deprecated. Use ``molecule3d.read`` / ``molecule3d.Molecule`` instead."""
+
+    _reader = staticmethod(io.read_xyz)
+
     def __init__(self, file):
         self.file = file
         self.coords = []
+        self._mol = None
 
     def coordinates(self):
-        with open(self.file) as f:
-            for i in f.readlines():
-                if i.startswith('#'):
-                    continue
-                self.coords.append((float(i.split()[0]),float(i.split()[1]), float(i.split()[2])))
+        self._mol = self._reader(self.file)
+        self.coords = [tuple(row) for row in self._mol.coords]
+        return self.coords
 
-    def translate(self,t):
-            translated = []
-            for i in self.coords:
-                translated.append(tuple(x+t1 for x,t1 in zip(i,t)))
-            del self.coords
-            self.coords = translated
-            return self.coords
-
+    def translate(self, t):
+        self._mol = self._mol.translate(t)
+        self.coords = [tuple(row) for row in self._mol.coords]
+        return self.coords
 
     def graph(self):
-        x =[i[0] for i in self.coords]
-        y =[i[1] for i in self.coords]
-        z =[i[2] for i in self.coords]
-        fig_3d = plt.figure()
-        fig_3d.add_subplot(1,1,1,projection="3d")
-        ax = plt.gca()
-        ax.set_xlabel('X')
-        ax.set_ylabel('Y')
-        ax.set_zlabel('Z')
-        ax.scatter(x,y,z)
-        plt.show()
+        self._mol.plot()
+
 
 class Pdb(Molecule):
-    def coordinates(self):
-        with open(self.file) as f:
-            for i in f.readlines():
-                if i.startswith('ATOM'):
-                    self.coords.append((float(i.split()[6]),float(i.split()[7]),float(i.split()[8])))
-                elif i.startswith('TER'):
-                    break
+    """Deprecated. Use ``molecule3d.read_pdb`` instead."""
 
+    _reader = staticmethod(io.read_pdb)
 
 
 def main():
-    molecule = Molecule('helix_201.xyz')
+    molecule = Molecule("helix_201.xyz")
     molecule.coordinates()
-    molecule.translate((1,2,-1))
+    molecule.translate((1, 2, -1))
     molecule.graph()
+
 
 if __name__ == "__main__":
     main()

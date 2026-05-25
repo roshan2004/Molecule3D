@@ -1,2 +1,2 @@
-matplotlib==3.2.2
-ipywidgets==7.4.2
+numpy>=1.21
+matplotlib>=3.5
