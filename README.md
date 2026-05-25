@@ -11,9 +11,9 @@ coarse-graining in Python. Read `.xyz`, `.pdb`, `.cif` and `.sdf` files
 3D. The `.cif` reader is a basic mmCIF parser for standard `_atom_site`
 coordinate loops, not a full mmCIF syntax implementation.
 
-| 3D structure rendering | Residue contact map | Coarse-grained beads |
-| --- | --- | --- |
-| ![Aquaporin-1 rendered as a 3D element-coloured molecular structure](https://raw.githubusercontent.com/roshan2004/molscope/main/docs/assets/readme/aquaporin-structure-v2.png) | ![Residue-level contact map heatmap for Aquaporin-1](https://raw.githubusercontent.com/roshan2004/molscope/main/docs/assets/readme/residue-contact-map.png) | ![Coarse-grained bead model of Aquaporin-1](https://raw.githubusercontent.com/roshan2004/molscope/main/docs/assets/readme/coarse-grained-beads-v2.png) |
+| 3D structure (element) | Secondary structure (DSSP) | Residue contact map | Coarse-grained beads |
+| --- | --- | --- | --- |
+| ![Aquaporin-1 rendered as a 3D element-coloured molecular structure](https://raw.githubusercontent.com/roshan2004/molscope/main/docs/assets/readme/aquaporin-structure-v2.png) | ![Aquaporin-1 coloured by DSSP secondary structure: helices red, turns cyan, coil grey](https://raw.githubusercontent.com/roshan2004/molscope/main/docs/assets/readme/secondary-structure.png) | ![Residue-level contact map heatmap for Aquaporin-1](https://raw.githubusercontent.com/roshan2004/molscope/main/docs/assets/readme/residue-contact-map.png) | ![Coarse-grained bead model of Aquaporin-1](https://raw.githubusercontent.com/roshan2004/molscope/main/docs/assets/readme/coarse-grained-beads-v2.png) |
 
 ## What it does
 
@@ -206,9 +206,8 @@ Codes follow DSSP: `H`/`G`/`I` helices, `E`/`B` strands, `T` turn, `S` bend,
 `-` coil. This is a simplified **educational** implementation: it reproduces the
 main classes from the Kabsch-Sander hydrogen-bond model but is not bit-identical
 to the reference `mkdssp` on every edge case. It needs backbone N/CA/C/O atoms,
-so use PDB/mmCIF input (not a bare `.xyz`).
-
-![Aquaporin-1 coloured by secondary structure: helices red, turns cyan, coil grey](https://raw.githubusercontent.com/roshan2004/molscope/main/docs/assets/readme/secondary-structure.png)
+so use PDB/mmCIF input (not a bare `.xyz`). The secondary-structure render in the
+showcase above (helices red, turns cyan, coil grey) is produced this way.
 
 ### NMR ensembles
 
