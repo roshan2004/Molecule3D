@@ -1,0 +1,45 @@
+site_name: Molecule3D
+site_description: Lightweight molecular structure analysis, visualization, graph export, and coarse-graining in Python.
+repo_url: https://github.com/roshan2004/Molecule3D
+repo_name: roshan2004/Molecule3D
+
+theme:
+  name: material
+  features:
+    - navigation.sections
+    - navigation.indexes
+    - navigation.top
+    - content.code.copy
+
+nav:
+  - Home: index.md
+  - Installation: installation.md
+  - Quickstart: quickstart.md
+  - User Guide:
+      - Reading molecular files: user-guide/reading-files.md
+      - Selections: user-guide/selections.md
+      - Geometry and measurements: user-guide/geometry.md
+      - Plotting and viewing: user-guide/plotting.md
+      - Ensemble analysis: user-guide/ensembles.md
+      - Molecular graphs: user-guide/molecular-graphs.md
+      - Structural descriptors: user-guide/descriptors.md
+      - Coarse-graining: user-guide/coarse-graining.md
+  - Examples:
+      - Overview: examples/index.md
+      - Compare NMR models: examples/compare-nmr-models.md
+      - Build a molecular graph: examples/build-molecular-graph.md
+      - Coarse-grain a protein: examples/coarse-grain-protein.md
+      - Export to PyTorch Geometric: examples/export-pyg.md
+      - Analyze contacts: examples/analyze-contacts.md
+  - API reference: api-reference.md
+  - Limitations: limitations.md
+  - Roadmap: roadmap.md
+  - Contributing: contributing.md
+
+markdown_extensions:
+  - admonition
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.highlight
+  - pymdownx.superfences

@@ -11,6 +11,7 @@ from __future__ import annotations
 import gzip
 import os
 import tempfile
+from typing import Optional
 from urllib.request import urlopen
 
 import numpy as np
@@ -38,7 +39,7 @@ def read(path: str) -> Molecule:
     raise ValueError(f"Unsupported file type {ext!r}; expected .pdb/.xyz/.cif/.sdf")
 
 
-def fetch(pdb_id: str, fmt: str = "pdb", cache_dir: str | None = None) -> Molecule:
+def fetch(pdb_id: str, fmt: str = "pdb", cache_dir: Optional[str] = None) -> Molecule:
     """Download a structure from RCSB by its PDB id and read it.
 
     ``fmt`` is ``"pdb"`` or ``"cif"``. Files are cached (default: the system temp
@@ -124,7 +125,12 @@ def read_pdb_models(path: str) -> list[Molecule]:
 
 
 def read_cif(path: str) -> Molecule:
-    """Read atom positions from an mmCIF / PDBx file (the ``_atom_site`` loop)."""
+    """Basic mmCIF reader for standard ``_atom_site`` coordinate loops.
+
+    This parser handles simple whitespace-separated atom-site rows. It is not a
+    full mmCIF syntax implementation for quoted values, multiline fields, or
+    complex loop constructs.
+    """
     columns: list[str] = []
     rows: list[list[str]] = []
     in_atom_site = False

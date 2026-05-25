@@ -12,6 +12,7 @@ alias state.
 from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
+from typing import Any, Optional
 
 import numpy as np
 
@@ -36,7 +37,8 @@ class Molecule:
     chains: list[str] = field(default_factory=list)
     # Optional explicit bonds as an (E, 2) index array. When set, bonds() returns
     # these instead of inferring from geometry (used by coarse-graining).
-    bond_index: np.ndarray | None = None
+    bond_index: Optional[np.ndarray] = None
+    _mapping_report: Optional[Any] = field(default=None, repr=False, compare=False)
 
     def __post_init__(self):
         coords = np.asarray(self.coords, dtype=float).reshape(-1, 3)
@@ -98,6 +100,7 @@ class Molecule:
             resids=self.resids[idx] if len(self.resids) else self.resids,
             chains=sub(self.chains),
             bond_index=self._subset_bonds(idx),
+            _mapping_report=None,
         )
 
     def _subset_bonds(self, idx):
@@ -404,18 +407,38 @@ class Molecule:
     # -- coarse-graining ----------------------------------------------------
 
     def coarse_grain(self, mapping="residue_com", weighted: bool = True,
-                     bonds=None) -> Molecule:
+                     bonds=None, return_report: bool = False):
         """Map this structure onto CG beads. See :mod:`molecule3d.coarsegrain`.
 
         ``mapping`` is ``"residue_com"``, ``"residue_centroid"``, ``"martini"``,
         a ``{resname: {bead: [atom_names]}}`` dict (by residue), or a
         ``{bead: [atom_indices]}`` dict (by index, works on any structure).
-        ``bonds`` optionally defines the bead network as pairs of bead names or
-        indices. Returns a new ``Molecule`` of beads with CG bonds attached.
+        ``bonds`` optionally defines the bead network as pairs of bead indices,
+        or bead names when those names are unique. Repeated residue bead names
+        such as ``BB``/``SC`` are ambiguous; use indices for those. Returns a
+        new ``Molecule`` of beads with CG bonds attached, or ``(molecule,
+        report)`` when ``return_report=True``.
         """
         from .coarsegrain import coarse_grain
 
-        return coarse_grain(self, mapping=mapping, weighted=weighted, bonds=bonds)
+        return coarse_grain(
+            self, mapping=mapping, weighted=weighted, bonds=bonds,
+            return_report=return_report,
+        )
+
+    def mapping_report(self) -> str:
+        """Explain how this coarse-grained molecule was mapped."""
+        if self._mapping_report is None:
+            raise ValueError("no coarse-graining report is available for this molecule")
+        return self._mapping_report.format()
+
+    # -- ML descriptors -----------------------------------------------------
+
+    def descriptors(self, **kwargs) -> dict:
+        """Return fixed-size molecular descriptors for quick ML features."""
+        from .descriptors import descriptors
+
+        return descriptors(self, **kwargs)
 
     # -- graph export -------------------------------------------------------
 

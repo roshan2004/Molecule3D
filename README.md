@@ -2,6 +2,8 @@
 
 Read molecular structure files (`.xyz`, `.pdb`, `.cif`, `.sdf`, optionally
 gzip-compressed), select and analyse atoms, and visualise them in 3D.
+The `.cif` reader is a basic mmCIF parser for standard `_atom_site` coordinate
+loops, not a full mmCIF syntax implementation.
 
 ## Install
 
@@ -22,6 +24,17 @@ With plain pip:
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[test]"    # or: pip install -r requirements.txt
 ```
+
+## Documentation
+
+The documentation website is built with MkDocs Material:
+
+```bash
+uv sync --group docs
+uv run mkdocs serve
+```
+
+Docs source lives in `docs/`; the site configuration is `mkdocs.yml`.
 
 ## Quickstart
 
@@ -55,8 +68,8 @@ value (`np.array_equal` on coordinates).
 
 ### Selections
 
-PDB/mmCIF files carry per-atom metadata (atom name, residue, chain), so you can
-slice a structure:
+PDB files, and standard mmCIF atom-site loops, carry per-atom metadata (atom
+name, residue, chain), so you can slice a structure:
 
 ```python
 mol.select(chain="A")               # one chain
@@ -83,6 +96,26 @@ mol.dihedral(a, b, c, d)            # torsion angle (degrees)
 
 a.alpha_carbons().rmsd(b.alpha_carbons(), align=True)   # CA-RMSD after Kabsch fit
 ```
+
+### Structural descriptors for ML
+
+```python
+features = mol.descriptors()                 # flat dict of scalar/vector descriptors
+features["radius_of_gyration"]
+features["principal_moments"]                # 3 values
+features["distance_histogram"]               # fixed-size histogram
+
+X, names = m3d.featurize_many(
+    ["a.pdb", "b.pdb", "c.xyz"],
+    return_names=True,
+)                                            # numeric matrix + column names
+```
+
+Descriptors include atom/residue counts, element counts, molecular mass,
+centres, radius of gyration, bounding-box dimensions, inertia tensor, principal
+moments/axes, shape anisotropy, compactness, distance histograms, bond-length
+summary statistics, and atom/residue contact summaries. Full contact maps remain
+available through `mol.contact_map(...)`.
 
 ### Contact maps
 
@@ -164,8 +197,9 @@ dglg = mol.to_dgl_graph()           # dgl.DGLGraph with ndata/edata tensors
 Nodes carry element, atomic number, mass, coordinates and (from PDB/mmCIF) atom
 name, residue and chain. Edges carry the bonded pair, interatomic distance, and
 bond order (`1.0` for geometrically inferred bonds). Install backends as needed:
-`pip install "molecule3d[graph]"` (networkx), `pip install torch torch_geometric`,
-or `pip install dgl`.
+`pip install "molecule3d[graph]"` installs only NetworkX. PyTorch Geometric and
+DGL are optional manual installs: `pip install torch torch_geometric` or
+`pip install dgl` after choosing the right PyTorch build for your platform.
 
 ### Coarse-graining
 
@@ -180,10 +214,12 @@ cg = mol.coarse_grain("residue_com")        # one bead per residue (centre of ma
 cg = mol.coarse_grain("residue_centroid")   # ...or geometric centroid
 cg = mol.coarse_grain("martini")            # simplified backbone + side-chain beads
 cg.plot(scale=200)                          # beads + backbone topology
+print(cg.mapping_report())                  # explain beads, dropped atoms, and bonds
 
 # Custom bead definitions by residue + atom name (needs PDB/mmCIF metadata)
 mapping = {"ALA": {"BB": ["N", "CA", "C", "O"], "SC": ["CB"]}}
 cg = mol.coarse_grain(mapping)
+cg, report = mol.coarse_grain(mapping, return_report=True)
 
 # Custom bead definitions by atom index (works on ANY structure, even .xyz)
 cg = mol.coarse_grain({"head": [0, 1, 2, 3], "tail": [4, 5, 6, 7]},
@@ -194,8 +230,10 @@ cg.to_graph()                               # CG bead network, ready for ML
 
 Bead positions are mass-weighted (or centroids). For residue mappings bonds are
 generated automatically (within a residue, plus a backbone chain between
-residues); pass `bonds=` (pairs of bead names or indices) to define them
-yourself. Atoms you leave unassigned are dropped with a warning. This is meant
+residues); pass `bonds=` to define them yourself. Name-based bonds are intended
+for unique bead names such as `head`/`tail`; repeated names such as `BB`/`SC`
+are ambiguous, so use bead indices for those. Atoms you leave unassigned are
+dropped with a warning. This is meant
 for teaching and prototyping CG mappings, not as a replacement for production
 Martini parameters.
 

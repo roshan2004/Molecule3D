@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
+from typing import Optional
 
 import numpy as np
 
 from .molecule import Molecule
 
 
-def align_all(models: list[Molecule], reference: Molecule | None = None) -> list[Molecule]:
+def align_all(models: list[Molecule], reference: Optional[Molecule] = None) -> list[Molecule]:
     """Kabsch-superpose every model onto ``reference`` (default: the first model)."""
     ref = reference if reference is not None else models[0]
     return [m.superpose(ref) for m in models]
@@ -79,7 +80,7 @@ class Clustering:
 
     labels: np.ndarray
     matrix: np.ndarray
-    linkage: np.ndarray | None = field(default=None)
+    linkage: Optional[np.ndarray] = field(default=None)
 
     @property
     def n_clusters(self) -> int:
@@ -106,8 +107,8 @@ class Clustering:
         return {int(c): self.medoid(int(c)) for c in np.unique(self.labels)}
 
 
-def cluster(models, method: str = "hierarchical", cutoff: float | None = None,
-            n_clusters: int | None = None, linkage: str = "average",
+def cluster(models, method: str = "hierarchical", cutoff: Optional[float] = None,
+            n_clusters: Optional[int] = None, linkage: str = "average",
             align: bool = True, matrix=None) -> Clustering:
     """Cluster structures by pairwise RMSD.
 

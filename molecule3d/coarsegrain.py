@@ -26,8 +26,10 @@ Custom mappings come in two forms:
 
   No bonds are added unless you pass ``bonds=`` (see below).
 
-``bonds`` lets you define the bead network explicitly as pairs of bead names or
-bead indices, e.g. ``bonds=[("head", "tail")]`` or ``bonds=[(0, 1)]``.
+``bonds`` lets you define the bead network explicitly as pairs of bead indices,
+or by bead name when names are unique, e.g. ``bonds=[("head", "tail")]`` or
+``bonds=[(0, 1)]``. Repeated names such as ``BB``/``SC`` in Martini-like residue
+mappings are ambiguous; use bead indices for those.
 
 Intended for teaching and prototyping CG mappings, not as a substitute for
 production Martini parameters.
@@ -36,6 +38,8 @@ production Martini parameters.
 from __future__ import annotations
 
 import warnings
+from dataclasses import dataclass, field
+from typing import Optional
 
 import numpy as np
 
@@ -45,18 +49,93 @@ from .molecule import Molecule
 _BACKBONE = ("N", "CA", "C", "O", "OXT")
 
 
+@dataclass(frozen=True)
+class BeadMapping:
+    """One coarse-grained bead and the atom names assigned to it."""
+
+    name: str
+    atom_names: list[str]
+    reduction: str
+    resname: str = ""
+    resid: Optional[int] = None
+    chain: str = ""
+
+
+@dataclass(frozen=True)
+class DroppedAtom:
+    """An atom omitted by a custom coarse-graining mapping."""
+
+    name: str
+    element: str
+    resname: str = ""
+    resid: Optional[int] = None
+    chain: str = ""
+
+
+@dataclass(frozen=True)
+class BondMapping:
+    """One generated or user-defined CG bond."""
+
+    a: str
+    b: str
+    reason: str
+
+
+@dataclass(frozen=True)
+class CoarseGrainReport:
+    """Human-readable explanation of a coarse-graining operation."""
+
+    mapping: str
+    beads: list[BeadMapping] = field(default_factory=list)
+    dropped_atoms: list[DroppedAtom] = field(default_factory=list)
+    bonds: list[BondMapping] = field(default_factory=list)
+
+    def __str__(self) -> str:
+        return self.format()
+
+    def format(self) -> str:
+        lines = [f"Mapping: {self.mapping}", "", "Beads:"]
+        if self.beads:
+            for bead in self.beads:
+                prefix = _residue_label(bead.resid, bead.resname, bead.chain)
+                atoms = ", ".join(bead.atom_names) if bead.atom_names else "(none)"
+                lines.append(f"  {prefix}:")
+                lines.append(f"    {bead.name} bead: {atoms} -> {bead.reduction}")
+        else:
+            lines.append("  (none)")
+
+        lines.extend(["", "Dropped atoms:"])
+        if self.dropped_atoms:
+            for atom in self.dropped_atoms:
+                label = _residue_label(atom.resid, atom.resname, atom.chain)
+                name = atom.name or atom.element or "(unnamed)"
+                lines.append(f"  {label}: {name}")
+        else:
+            lines.append("  (none)")
+
+        lines.extend(["", "Generated bonds:"])
+        if self.bonds:
+            for bond in self.bonds:
+                lines.append(f"  {bond.a}-{bond.b} {bond.reason}")
+        else:
+            lines.append("  (none)")
+        return "\n".join(lines)
+
+
 def coarse_grain(molecule: Molecule, mapping="residue_com", weighted: bool = True,
-                 bonds=None) -> Molecule:
+                 bonds=None, return_report: bool = False):
     """Coarse-grain ``molecule``; see the module docstring for the options."""
     if _is_index_mapping(mapping):
-        return _by_index(molecule, mapping, weighted, bonds)
+        cg, report = _by_index(molecule, mapping, weighted, bonds)
+        return (cg, report) if return_report else cg
 
     if len(molecule.resids) == 0:
         raise ValueError(
             "coarse-graining by residue needs residue information; for a file "
             "without it (e.g. .xyz) use an index mapping {bead: [atom_indices]}"
         )
-    return _by_residue(molecule, mapping, weighted, bonds)
+    cg, report = _by_residue(molecule, mapping, weighted, bonds)
+    return (cg, report) if return_report else cg
 
 
 def _is_index_mapping(mapping) -> bool:
@@ -69,6 +148,7 @@ def _is_index_mapping(mapping) -> bool:
 def _by_index(molecule: Molecule, mapping: dict, weighted: bool, bonds) -> Molecule:
     bead_names: list[str] = []
     bead_coords: list[np.ndarray] = []
+    bead_report: list[BeadMapping] = []
     assigned: set[int] = set()
     for name, members in mapping.items():
         try:
@@ -83,15 +163,31 @@ def _by_index(molecule: Molecule, mapping: dict, weighted: bool, bonds) -> Molec
         assigned.update(members)
         bead_coords.append(_reduce(molecule, members, weighted))
         bead_names.append(name)
+        bead_report.append(
+            BeadMapping(
+                name=name,
+                atom_names=_atom_names(molecule, members),
+                reduction=_reduction_name(weighted),
+            )
+        )
 
     if not bead_coords:
         raise ValueError("mapping produced no beads")
+    dropped = _dropped_atoms(molecule, assigned)
     _warn_dropped(len(molecule), assigned)
-    return Molecule(
+    bond_index, bond_report = _resolve_bonds(bonds, bead_names)
+    report = CoarseGrainReport(
+        mapping="index",
+        beads=bead_report,
+        dropped_atoms=dropped,
+        bonds=bond_report,
+    )
+    cg = Molecule(
         np.array(bead_coords, dtype=float), elements=[""] * len(bead_coords),
         name=f"{molecule.name} (CG)", atom_names=bead_names,
-        bond_index=_resolve_bonds(bonds, bead_names),
+        bond_index=bond_index, _mapping_report=report,
     )
+    return cg, report
 
 
 def _by_residue(molecule: Molecule, mapping, weighted: bool, bonds) -> Molecule:
@@ -99,6 +195,7 @@ def _by_residue(molecule: Molecule, mapping, weighted: bool, bonds) -> Molecule:
     bead_coords, bead_names = [], []
     bead_resnames, bead_resids, bead_chains = [], [], []
     residue_beads: list[list[int]] = []
+    bead_report: list[BeadMapping] = []
     assigned: set[int] = set()
 
     for atom_idx, resname, resid, chain in molecule.residue_groups():
@@ -113,24 +210,42 @@ def _by_residue(molecule: Molecule, mapping, weighted: bool, bonds) -> Molecule:
             bead_resids.append(resid)
             bead_chains.append(chain)
             local.append(len(bead_coords) - 1)
+            bead_report.append(
+                BeadMapping(
+                    name=bead_name,
+                    atom_names=_atom_names(molecule, members),
+                    reduction=_reduction_name(use_mass),
+                    resname=resname,
+                    resid=resid,
+                    chain=chain,
+                )
+            )
         if local:
             residue_beads.append(local)
 
     if not bead_coords:
         raise ValueError("mapping produced no beads")
+    dropped = _dropped_atoms(molecule, assigned)
     if isinstance(mapping, dict):  # only custom mappings can leave atoms unassigned
         _warn_dropped(len(molecule), assigned)
 
     if bonds is not None:
-        bond_index = _resolve_bonds(bonds, bead_names)
+        bond_index, bond_report = _resolve_bonds(bonds, bead_names)
     else:
-        bond_index = _cg_bonds(residue_beads, bead_chains)
-    return Molecule(
+        bond_index, bond_report = _cg_bonds(residue_beads, bead_chains, bead_names)
+    report = CoarseGrainReport(
+        mapping=_mapping_name(mapping),
+        beads=bead_report,
+        dropped_atoms=dropped if isinstance(mapping, dict) or mapping == "martini" else [],
+        bonds=bond_report,
+    )
+    cg = Molecule(
         np.array(bead_coords, dtype=float), elements=[""] * len(bead_coords),
         name=f"{molecule.name} (CG)", atom_names=bead_names, resnames=bead_resnames,
         resids=np.array(bead_resids, dtype=int), chains=bead_chains,
-        bond_index=bond_index,
+        bond_index=bond_index, _mapping_report=report,
     )
+    return cg, report
 
 
 def _residue_beads(molecule: Molecule, atom_idx, resname, mapping):
@@ -177,30 +292,62 @@ def _reduce(molecule: Molecule, members, use_mass: bool) -> np.ndarray:
     return coords.mean(axis=0)
 
 
-def _resolve_bonds(bonds, bead_names) -> np.ndarray | None:
+def _resolve_bonds(bonds, bead_names):
     """Turn user bond pairs (bead names or indices) into an (E, 2) index array."""
     if bonds is None:
-        return None
-    name_to_idx = {}
-    for i, n in enumerate(bead_names):
-        name_to_idx.setdefault(n, i)
+        return None, []
+    name_to_idx = _unique_name_index(bead_names)
     pairs = []
+    report = []
     for a, b in bonds:
-        ai = name_to_idx[a] if isinstance(a, str) else int(a)
-        bi = name_to_idx[b] if isinstance(b, str) else int(b)
+        ai = _resolve_bond_endpoint(a, bead_names, name_to_idx)
+        bi = _resolve_bond_endpoint(b, bead_names, name_to_idx)
         pairs.append((ai, bi))
-    return np.array(pairs, dtype=int).reshape(-1, 2)
+        report.append(BondMapping(bead_names[ai], bead_names[bi], "(user-defined)"))
+    return np.array(pairs, dtype=int).reshape(-1, 2), report
 
 
-def _cg_bonds(residue_beads, bead_chains) -> np.ndarray:
+def _resolve_bond_endpoint(endpoint, bead_names, name_to_idx) -> int:
+    if not isinstance(endpoint, str):
+        return int(endpoint)
+    if endpoint in name_to_idx:
+        return name_to_idx[endpoint]
+    if endpoint in bead_names:
+        raise ValueError(
+            f"bead name {endpoint!r} is repeated and cannot identify one bead; "
+            "use bead indices for user-defined bonds"
+        )
+    raise ValueError(f"unknown bead name {endpoint!r}")
+
+
+def _unique_name_index(bead_names):
+    """Map unique bead names to indices; repeated names cannot identify one bead."""
+    counts = {}
+    for name in bead_names:
+        counts[name] = counts.get(name, 0) + 1
+
+    name_to_idx = {}
+    for i, name in enumerate(bead_names):
+        if counts[name] == 1:
+            name_to_idx[name] = i
+    return name_to_idx
+
+
+def _cg_bonds(residue_beads, bead_chains, bead_names):
     """Bonds within each residue (sequential) plus a chain between residues."""
     bonds: list[tuple[int, int]] = []
+    report: list[BondMapping] = []
     for beads in residue_beads:
-        bonds.extend(zip(beads, beads[1:]))
+        for a, b in zip(beads, beads[1:]):
+            bonds.append((a, b))
+            report.append(BondMapping(bead_names[a], bead_names[b], "within residue"))
     for prev, curr in zip(residue_beads, residue_beads[1:]):
         if bead_chains[prev[0]] == bead_chains[curr[0]]:
             bonds.append((prev[0], curr[0]))
-    return np.array(bonds, dtype=int).reshape(-1, 2)
+            report.append(
+                BondMapping(bead_names[prev[0]], bead_names[curr[0]], "between residues")
+            )
+    return np.array(bonds, dtype=int).reshape(-1, 2), report
 
 
 def _warn_dropped(n_atoms: int, assigned: set) -> None:
@@ -210,3 +357,55 @@ def _warn_dropped(n_atoms: int, assigned: set) -> None:
             f"{dropped} atom(s) were not assigned to any bead and were dropped",
             stacklevel=3,
         )
+
+
+def _atom_names(molecule: Molecule, atom_indices) -> list[str]:
+    names = []
+    for i in atom_indices:
+        if molecule.atom_names:
+            names.append(molecule.atom_names[i])
+        elif molecule.elements:
+            names.append(molecule.elements[i])
+        else:
+            names.append(str(i))
+    return names
+
+
+def _dropped_atoms(molecule: Molecule, assigned: set) -> list[DroppedAtom]:
+    dropped = []
+    chains = molecule.chains or [""] * len(molecule)
+    resnames = molecule.resnames or [""] * len(molecule)
+    resids = molecule.resids if len(molecule.resids) else [None] * len(molecule)
+    atom_names = molecule.atom_names or [""] * len(molecule)
+    for i in range(len(molecule)):
+        if i in assigned:
+            continue
+        dropped.append(
+            DroppedAtom(
+                name=atom_names[i],
+                element=molecule.elements[i] if molecule.elements else "",
+                resname=resnames[i],
+                resid=None if resids[i] is None else int(resids[i]),
+                chain=chains[i],
+            )
+        )
+    return dropped
+
+
+def _reduction_name(weighted: bool) -> str:
+    return "centre of mass" if weighted else "centroid"
+
+
+def _mapping_name(mapping) -> str:
+    return mapping if isinstance(mapping, str) else "custom residue"
+
+
+def _residue_label(resid: Optional[int], resname: str, chain: str) -> str:
+    parts = ["Residue"]
+    if resid is not None:
+        parts.append(str(resid))
+    if resname:
+        parts.append(resname)
+    if chain:
+        parts.append(chain)
+    return " ".join(parts) if len(parts) > 1 else "Molecule"

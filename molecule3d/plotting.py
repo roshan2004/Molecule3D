@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import itertools
 import warnings
+from typing import Optional
 
 import numpy as np
 
@@ -12,7 +13,7 @@ from . import elements
 
 def plot(
     molecule,
-    show_bonds: bool | None = None,
+    show_bonds: Optional[bool] = None,
     bond_tolerance: float = 1.2,
     color_by: str = "element",
     scale: float = 60.0,

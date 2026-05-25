@@ -16,6 +16,7 @@ are only required if you actually call the matching method.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Optional
 
 import numpy as np
 
@@ -139,7 +140,7 @@ class MolecularGraph:
         return src, dst, dist
 
 
-def _require(module: str, feature: str, hint: str, attr: str | None = None):
+def _require(module: str, feature: str, hint: str, attr: Optional[str] = None):
     """Import a backend module (or attribute), raising a friendly error if absent."""
     import importlib
 
