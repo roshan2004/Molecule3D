@@ -342,6 +342,42 @@ class Molecule:
         parts.append(f"size {dx:.1f}x{dy:.1f}x{dz:.1f} A")
         return " | ".join(parts)
 
+    # -- graph export -------------------------------------------------------
+
+    def to_graph(self, tolerance: float = 1.2, bonds=None):
+        """Build a :class:`molecule3d.graph.MolecularGraph` from this molecule.
+
+        Bonds are inferred from covalent radii (see :meth:`bonds`) unless an
+        explicit ``(E, 2)`` array of index pairs is passed. Node and edge
+        attributes (element, residue, chain, distance, ...) are carried along.
+        """
+        from .graph import MolecularGraph
+
+        edges = self.bonds(tolerance) if bonds is None else np.asarray(bonds, dtype=int)
+        edges = edges.reshape(-1, 2)
+        if len(edges):
+            dist = np.linalg.norm(self.coords[edges[:, 0]] - self.coords[edges[:, 1]], axis=1)
+        else:
+            dist = np.empty(0, dtype=float)
+        return MolecularGraph(
+            coords=self.coords, elements=self.elements, edges=edges,
+            edge_distances=dist, edge_types=np.ones(len(edges)),
+            atom_names=self.atom_names, resnames=self.resnames,
+            resids=self.resids, chains=self.chains, name=self.name,
+        )
+
+    def to_networkx(self, **kwargs):
+        """Shortcut for ``self.to_graph(...).to_networkx()``."""
+        return self.to_graph(**kwargs).to_networkx()
+
+    def to_pyg_data(self, **kwargs):
+        """Shortcut for ``self.to_graph(...).to_pyg_data()`` (PyTorch Geometric)."""
+        return self.to_graph(**kwargs).to_pyg_data()
+
+    def to_dgl_graph(self, **kwargs):
+        """Shortcut for ``self.to_graph(...).to_dgl_graph()`` (DGL)."""
+        return self.to_graph(**kwargs).to_dgl_graph()
+
     def plot(self, **kwargs):
         """Render the molecule in 3D. See :func:`molecule3d.plotting.plot`."""
         from .plotting import plot

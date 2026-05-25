@@ -62,11 +62,22 @@ def main():
     fluct = ensemble.rmsf(ca_models)
     print(f"  most flexible residue: #{fluct.argmax() + 1} (RMSF {fluct.max():.2f} A)")
 
-    print("\n== 6. Write a transformed structure back to disk ==")
+    print("\n== 6. Build a molecular graph (for ML) ==")
+    graph = aqp.to_graph()
+    print(f"  {graph.n_atoms} nodes, {graph.n_bonds} bonds")
+    print(f"  node feature matrix: {graph.node_features().shape} [atomic_number, mass]")
+    try:
+        nxg = aqp.to_networkx()
+        print(f"  networkx graph: {nxg.number_of_nodes()} nodes, "
+              f"{nxg.number_of_edges()} edges")
+    except ImportError:
+        print("  (install networkx / torch_geometric / dgl to export to those)")
+
+    print("\n== 7. Write a transformed structure back to disk ==")
     m3d.write_xyz(aqp.centered(), "aqp_centered.xyz")
     print("  wrote aqp_centered.xyz")
 
-    print("\n== 7. Plot (colour by chain) ==")
+    print("\n== 8. Plot (colour by chain) ==")
     show_or_save(aqp.centered(), "example_aquaporin.png", color_by="chain")
 
 

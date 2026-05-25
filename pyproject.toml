@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "molecule3d"
-version = "0.1.0"
+version = "0.3.0"
 description = "Read molecular coordinate files (.xyz, .pdb) and plot atoms in 3D."
 readme = "README.md"
 requires-python = ">=3.9"
@@ -22,6 +22,7 @@ dependencies = ["numpy>=1.21", "matplotlib>=3.5"]
 test = ["pytest>=7"]
 fast = ["scipy>=1.7"]          # enables the KD-tree bond search for large structures
 viz = ["py3Dmol>=2.0"]         # interactive notebook viewer (Molecule.view)
+graph = ["networkx>=2.6"]      # Molecule.to_networkx (PyG/DGL installed separately)
 
 [project.urls]
 Homepage = "https://github.com/roshan2004/Molecule3D"
@@ -33,7 +34,7 @@ molecule3d = "molecule3d.cli:main"
 # Dev tooling for `uv sync` (installed by default; PEP 735 dependency group).
 # scipy is included so the KD-tree bond path is exercised by the test suite.
 [dependency-groups]
-dev = ["pytest>=7", "scipy>=1.7", "ruff>=0.6", "py3Dmol>=2.0"]
+dev = ["pytest>=7", "scipy>=1.7", "ruff>=0.6", "py3Dmol>=2.0", "networkx>=2.6"]
 
 [tool.setuptools]
 packages = ["molecule3d"]

@@ -56,3 +56,20 @@ def covalent_radius(element: str) -> float:
 def mass(element: str) -> float:
     """Atomic weight in g/mol for an element symbol (case-insensitive)."""
     return ATOMIC_MASSES.get(element.upper(), DEFAULT_MASS)
+
+
+# Atomic numbers for the first four periods (enough for biomolecules and most
+# small molecules); unknown symbols map to 0 so graph code never crashes.
+ATOMIC_NUMBERS = {
+    "H": 1, "HE": 2, "LI": 3, "BE": 4, "B": 5, "C": 6, "N": 7, "O": 8,
+    "F": 9, "NE": 10, "NA": 11, "MG": 12, "AL": 13, "SI": 14, "P": 15,
+    "S": 16, "CL": 17, "AR": 18, "K": 19, "CA": 20, "SC": 21, "TI": 22,
+    "V": 23, "CR": 24, "MN": 25, "FE": 26, "CO": 27, "NI": 28, "CU": 29,
+    "ZN": 30, "GA": 31, "GE": 32, "AS": 33, "SE": 34, "BR": 35, "KR": 36,
+    "I": 53,
+}
+
+
+def atomic_number(element: str) -> int:
+    """Atomic number (Z) for an element symbol (case-insensitive); 0 if unknown."""
+    return ATOMIC_NUMBERS.get(element.upper(), 0)

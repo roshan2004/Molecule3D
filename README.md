@@ -108,6 +108,31 @@ from molecule3d.plotting import spin_gif
 spin_gif(mol, "spin.gif")                    # rotating animation
 ```
 
+### Molecular graphs (for machine learning)
+
+Turn 3D coordinates plus inferred bonds into a graph, then export to the common
+ML frameworks. The base `to_graph()` needs no extra dependencies; each exporter
+imports its backend lazily.
+
+```python
+mol = m3d.read("1fqy.pdb")
+
+g = mol.to_graph()                  # MolecularGraph: nodes + edges, no deps
+g.n_atoms, g.n_bonds                # counts
+g.atomic_numbers, g.masses          # per-node arrays
+g.node_features()                   # (N, 2) default features [atomic_number, mass]
+
+G = mol.to_networkx()               # networkx.Graph with node/edge attributes
+data = mol.to_pyg_data()            # torch_geometric.data.Data (x, pos, edge_index, edge_attr, z)
+dglg = mol.to_dgl_graph()           # dgl.DGLGraph with ndata/edata tensors
+```
+
+Nodes carry element, atomic number, mass, coordinates and (from PDB/mmCIF) atom
+name, residue and chain. Edges carry the bonded pair, interatomic distance, and
+bond order (`1.0` for geometrically inferred bonds). Install backends as needed:
+`pip install "molecule3d[graph]"` (networkx), `pip install torch torch_geometric`,
+or `pip install dgl`.
+
 ## Command line
 
 ```bash
