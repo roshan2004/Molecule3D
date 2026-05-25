@@ -339,6 +339,19 @@ class Molecule:
         """Shortcut for ``self.contact_map(...).plot()``."""
         return self.contact_map(cutoff, level, method).plot(**kwargs)
 
+    def secondary_structure(self):
+        """Assign protein secondary structure with a simplified DSSP.
+
+        Returns a :class:`molscope.dssp.SecondaryStructure` with one code per
+        backbone residue (``H``/``G``/``I`` helices, ``E``/``B`` strands, ``T``
+        turn, ``S`` bend, ``-`` coil). Needs N/CA/C/O backbone atoms and residue
+        metadata, so it works on proteins read from PDB/mmCIF. Colour a 3D plot
+        by the assignment with ``mol.plot(color_by="ss")``.
+        """
+        from .dssp import assign
+
+        return assign(self)
+
     def rmsd(self, other: Molecule, align: bool = False) -> float:
         """Root-mean-square deviation from ``other`` (matched by index).
 

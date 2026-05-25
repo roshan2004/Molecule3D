@@ -11,11 +11,6 @@ coarse-graining in Python. Read `.xyz`, `.pdb`, `.cif` and `.sdf` files
 3D. The `.cif` reader is a basic mmCIF parser for standard `_atom_site`
 coordinate loops, not a full mmCIF syntax implementation.
 
-A spinning 3D view of Aquaporin-1, coloured by element
-(`molscope 1fqy.pdb --center --gif spin.gif`):
-
-![Spinning 3D view of Aquaporin-1 coloured by element](https://raw.githubusercontent.com/roshan2004/molscope/main/docs/assets/readme/spin-aquaporin.gif)
-
 | 3D structure rendering | Residue contact map | Coarse-grained beads |
 | --- | --- | --- |
 | ![Aquaporin-1 rendered as a 3D element-coloured molecular structure](https://raw.githubusercontent.com/roshan2004/molscope/main/docs/assets/readme/aquaporin-structure-v2.png) | ![Residue-level contact map heatmap for Aquaporin-1](https://raw.githubusercontent.com/roshan2004/molscope/main/docs/assets/readme/residue-contact-map.png) | ![Coarse-grained bead model of Aquaporin-1](https://raw.githubusercontent.com/roshan2004/molscope/main/docs/assets/readme/coarse-grained-beads-v2.png) |
@@ -29,6 +24,8 @@ A spinning 3D view of Aquaporin-1, coloured by element
 - **Analyse** centroids, radius of gyration, the inertia tensor, inferred bonds
   and contacts.
 - **Contact maps** at atom or residue level, with heatmap plots.
+- **Secondary structure** via a self-contained, dependency-free DSSP, with
+  `plot(color_by="ss")`.
 - **Ensembles**: pairwise RMSD, RMSF, averaging, and conformer clustering.
 - **Export for ML**: flat structural descriptors and molecular graphs for
   NetworkX, PyTorch Geometric and DGL.
@@ -188,6 +185,30 @@ mol.contact_map(level="atom")                         # atom-level map
 mol.contact_map(level="residue", method="min")        # closest inter-residue atom
 mol.contact_map(level="residue", method="com")        # residue centre of mass
 ```
+
+### Secondary structure (DSSP)
+
+Assign protein secondary structure from backbone hydrogen-bond patterns with a
+self-contained, pure-NumPy DSSP (no external `mkdssp` binary needed):
+
+```python
+mol = ms.read("1fqy.pdb")
+ss = mol.secondary_structure()      # SecondaryStructure, one code per residue
+
+ss.string                           # e.g. '--HHHHHHHH--SS--EEEE--'
+ss.codes                            # per-residue array
+ss.summary()                        # helix/strand/coil counts and fractions
+
+mol.plot(color_by="ss")             # colour the 3D view by secondary structure
+```
+
+Codes follow DSSP: `H`/`G`/`I` helices, `E`/`B` strands, `T` turn, `S` bend,
+`-` coil. This is a simplified **educational** implementation: it reproduces the
+main classes from the Kabsch-Sander hydrogen-bond model but is not bit-identical
+to the reference `mkdssp` on every edge case. It needs backbone N/CA/C/O atoms,
+so use PDB/mmCIF input (not a bare `.xyz`).
+
+![Aquaporin-1 coloured by secondary structure: helices red, turns cyan, coil grey](https://raw.githubusercontent.com/roshan2004/molscope/main/docs/assets/readme/secondary-structure.png)
 
 ### NMR ensembles
 

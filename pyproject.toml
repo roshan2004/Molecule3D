@@ -63,3 +63,5 @@ ignore = ["UP045"]
 [tool.ruff.lint.per-file-ignores]
 # Notebook cells legitimately re-import and import mid-file across cells.
 "*.ipynb" = ["E402", "F811", "I001"]
+# N, CA, C, O are the standard backbone atom names; "O" reads clearly here.
+"molscope/dssp.py" = ["E741"]

@@ -22,8 +22,9 @@ def plot(
 ):
     """Scatter-plot atoms in 3D with an equal aspect ratio.
 
-    ``color_by`` selects the colouring: ``"element"`` (CPK), ``"chain"`` or
-    ``"residue"`` (categorical palette). Atom sizes scale with covalent radius.
+    ``color_by`` selects the colouring: ``"element"`` (CPK), ``"chain"``,
+    ``"residue"`` (categorical palette), or ``"ss"`` (secondary structure, via
+    a simplified DSSP). Atom sizes scale with covalent radius.
     Bonds are drawn when ``show_bonds`` is true, or, when ``None``, automatically
     for molecules small enough to infer bonds cheaply. Returns the ``Axes3D``;
     pass ``show=False`` to suppress ``plt.show()``.
@@ -161,6 +162,10 @@ def plot_rmsd_heatmap(matrix, order=None, ax=None, cmap="viridis", show: bool = 
 def _colors(molecule, color_by: str):
     if color_by == "element":
         return [elements.color(e) for e in molecule.elements]
+    if color_by == "ss":
+        from . import dssp
+
+        return [dssp.SS_COLORS[c] for c in dssp.per_atom_ss(molecule)]
     if color_by == "chain":
         keys = molecule.chains
     elif color_by == "residue":
