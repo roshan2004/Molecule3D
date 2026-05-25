@@ -1,19 +1,35 @@
 # Molecule3D
 
-Read molecular structure files (`.xyz`, `.pdb`, `.cif`, `.sdf`, optionally
-gzip-compressed), select and analyse atoms, and visualise them in 3D.
-The `.cif` reader is a basic mmCIF parser for standard `_atom_site` coordinate
-loops, not a full mmCIF syntax implementation.
+[![CI](https://github.com/roshan2004/Molecule3D/actions/workflows/ci.yml/badge.svg)](https://github.com/roshan2004/Molecule3D/actions/workflows/ci.yml)
+[![Python](https://img.shields.io/badge/python-3.9%20%7C%203.11%20%7C%203.13-blue)](pyproject.toml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](LICENSE)
+[![Code style: Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 
-## Suggested README visuals
-
-These images show the three most useful views to include in the project README:
-a 3D protein rendering, a residue contact-map analysis, and a coarse-grained
-bead representation.
+Lightweight molecular structure analysis, visualisation, graph export, and
+coarse-graining in Python. Read `.xyz`, `.pdb`, `.cif` and `.sdf` files
+(optionally gzip-compressed), select and analyse atoms, and visualise them in
+3D. The `.cif` reader is a basic mmCIF parser for standard `_atom_site`
+coordinate loops, not a full mmCIF syntax implementation.
 
 | 3D structure rendering | Residue contact map | Coarse-grained beads |
 | --- | --- | --- |
 | ![Aquaporin-1 rendered as a 3D element-coloured molecular structure](docs/assets/readme/aquaporin-structure-v2.png) | ![Residue-level contact map heatmap for Aquaporin-1](docs/assets/readme/residue-contact-map.png) | ![Coarse-grained bead model of Aquaporin-1](docs/assets/readme/coarse-grained-beads-v2.png) |
+
+## What it does
+
+- **Read and write** XYZ, PDB, mmCIF and SDF (gzip-aware), fetch structures by
+  id from RCSB, and load multi-model NMR ensembles.
+- **Select and measure** by chain, element or residue; compute distances,
+  angles, dihedrals and Kabsch-aligned RMSD.
+- **Analyse** centroids, radius of gyration, the inertia tensor, inferred bonds
+  and contacts.
+- **Contact maps** at atom or residue level, with heatmap plots.
+- **Ensembles**: pairwise RMSD, RMSF, averaging, and conformer clustering.
+- **Export for ML**: flat structural descriptors and molecular graphs for
+  NetworkX, PyTorch Geometric and DGL.
+- **Coarse-grain** onto residue, Martini-style or custom bead mappings.
+- **Visualise** with 3D matplotlib plots, an interactive py3Dmol viewer, spin
+  GIFs, and a command-line interface.
 
 ## Install
 
@@ -281,7 +297,7 @@ python -m molecule3d 1fqy.pdb          # equivalent if not pip-installed
 ## Tests and linting
 
 ```bash
-uv run pytest          # 46 tests
+uv run pytest          # full test suite
 uv run ruff check .    # lint
 ```
 
