@@ -33,8 +33,14 @@ def rmsf(models: list[Molecule], align: bool = True) -> np.ndarray:
     return np.sqrt(((stack - mean) ** 2).sum(axis=2).mean(axis=0))
 
 
-def contact_frequency(models: list[Molecule], cutoff: float = 8.0,
-                      level: str = "residue", method: str = "ca"):
+def contact_frequency(
+    models: list[Molecule],
+    cutoff: float = 8.0,
+    level: str = "residue",
+    method: str = "ca",
+    backend: str = "numpy",
+    device: str | None = None,
+):
     """Fraction of models in which each pair is in contact (an ensemble map).
 
     Returns a :class:`~molscope.contactmap.ContactMap` whose matrix holds
@@ -44,7 +50,13 @@ def contact_frequency(models: list[Molecule], cutoff: float = 8.0,
     from .contactmap import ContactMap, contact_map
 
     _check_consistent(models)
-    maps = [contact_map(m, cutoff=cutoff, level=level, method=method) for m in models]
+    maps = [
+        contact_map(
+            m, cutoff=cutoff, level=level, method=method,
+            backend=backend, device=device,
+        )
+        for m in models
+    ]
     freq = np.mean([cm.matrix for cm in maps], axis=0)
     first = maps[0]
     return ContactMap(freq, level=level, cutoff=cutoff,

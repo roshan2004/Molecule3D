@@ -25,3 +25,9 @@ Contact map heatmap:
 ```python
 mol.plot_contact_map(cutoff=8.0, level="residue")
 ```
+
+Distance matrix heatmap:
+
+```python
+mol.alpha_carbons().plot_distance_matrix()
+```

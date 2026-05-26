@@ -84,6 +84,33 @@ def test_distance_matrix_and_contacts():
     assert len(mol.contacts(cutoff=2.0)) == 3  # all three pairs are within 2 A
 
 
+def test_distance_matrix_numpy_backend_matches_default():
+    mol = water()
+    default = mol.distance_matrix()
+    dense = mol.distance_matrix(backend="numpy")
+    np.testing.assert_allclose(default, dense)
+    assert mol.contact_count(cutoff=2.0, backend="numpy") == 3
+    np.testing.assert_array_equal(
+        np.sort(mol.contacts(cutoff=2.0, backend="numpy"), axis=0),
+        np.sort(mol.contacts(cutoff=2.0), axis=0),
+    )
+
+
+def test_distance_matrix_invalid_backend():
+    with pytest.raises(ValueError):
+        water().distance_matrix(backend="not-a-backend")
+
+
+def test_distance_matrix_torch_backend_if_installed():
+    pytest.importorskip("torch")
+    mol = water()
+    np.testing.assert_allclose(
+        mol.distance_matrix(backend="torch", device="cpu"),
+        mol.distance_matrix(),
+        atol=1e-6,
+    )
+
+
 def test_dimensions_and_formula():
     mol = Molecule(np.array([[0, 0, 0], [3, 0, 0]], dtype=float), ["O", "H"])
     np.testing.assert_allclose(mol.dimensions, [3, 0, 0])

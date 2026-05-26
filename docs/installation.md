@@ -26,15 +26,16 @@ pip install "molscope[viz]"    # py3Dmol notebook viewer
 pip install "molscope[graph]"  # NetworkX exporter
 pip install "molscope[chem]"   # RDKit chemical perception
 pip install "molscope[cif]"    # Gemmi CIF/mmCIF parser and validation helpers
+pip install "molscope[gpu]"    # PyTorch dense distance/contact-map backend
 pip install "molscope[pyg]"    # PyTorch + PyTorch Geometric exporter
 pip install "molscope[dgl]"    # PyTorch + DGL exporter
 pip install "molscope[gnn]"    # NetworkX + PyG + DGL exporters
 ```
 
-These extras use the default PyPI PyTorch/DGL/PyG packages. If you need a
-specific CUDA, ROCm, Apple Silicon, or cluster build, install the matching
-PyTorch stack first from the backend project's instructions, then install
-MolScope normally:
+The `gpu`, `pyg`, `dgl`, and `gnn` extras use the default PyPI PyTorch/DGL/PyG
+packages. If you need a specific CUDA, ROCm, Apple Silicon, or cluster build,
+install the matching PyTorch stack first from the backend project's
+instructions, then install MolScope normally:
 
 ```bash
 pip install torch torch_geometric

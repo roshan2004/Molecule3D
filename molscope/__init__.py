@@ -64,7 +64,7 @@ from .io import (
     write_xyz,
 )
 from .molecule import Molecule
-from .plotting import plot_rmsd_heatmap
+from .plotting import plot_distance_matrix, plot_rmsd_heatmap
 
 __all__ = [
     "Clustering",
@@ -90,6 +90,7 @@ __all__ = [
     "featurize_many",
     "fetch",
     "plot_rmsd_heatmap",
+    "plot_distance_matrix",
     "read",
     "read_cif",
     "read_pdb",

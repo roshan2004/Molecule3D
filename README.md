@@ -188,6 +188,7 @@ mol[mask_or_indices]                # subset by numpy mask / index array
 mol.centroid, mol.center_of_mass    # geometric / mass-weighted centre
 mol.radius_of_gyration              # compactness (angstrom)
 mol.dimensions, mol.formula         # bounding box, Hill-order formula
+mol.distance_matrix()               # dense pairwise matrix (NumPy, Torch, CuPy)
 mol.bonds()                         # inferred bond index pairs (KD-tree if scipy)
 mol.contacts(cutoff=5.0)            # atom pairs within a distance
 mol.contact_count(cutoff=5.0)       # count pairs without returning them
@@ -241,6 +242,7 @@ mol.plot_contact_map(cutoff=8.0)                      # heatmap
 mol.contact_map(level="atom")                         # atom-level map
 mol.contact_map(level="residue", method="min")        # closest inter-residue atom
 mol.contact_map(level="residue", method="com")        # residue centre of mass
+mol.contact_map(level="residue", backend="torch", device="cuda")  # optional GPU
 ```
 
 ### Secondary structure (DSSP)
@@ -421,6 +423,7 @@ python -m molscope examples/data/1fqy.pdb          # equivalent if not pip-insta
 - Optional extras: `pip install "molscope[fast]"` (scipy, faster bonds/contacts),
   `"molscope[viz]"` (py3Dmol, for `Molecule.view`), `"molscope[graph]"`
   (NetworkX), `"molscope[chem]"` (RDKit), `"molscope[cif]"` (Gemmi),
+  `"molscope[gpu]"` (PyTorch dense distance/contact-map backend),
   `"molscope[pyg]"`, `"molscope[dgl]"`, or `"molscope[gnn]"`. For custom CUDA,
   ROCm, Apple Silicon, or cluster builds, install the matching PyTorch stack
   first.

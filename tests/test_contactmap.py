@@ -29,6 +29,14 @@ def test_atom_contact_map():
     assert np.diag(cm.matrix).sum() == 0          # no self-contacts
 
 
+def test_atom_contact_map_numpy_backend_matches_default():
+    m = Molecule(np.array([[0.0, 0, 0], [1.0, 0, 0], [10.0, 0, 0]]), ["C", "C", "C"])
+    np.testing.assert_array_equal(
+        m.contact_map(cutoff=2.0, level="atom").matrix,
+        m.contact_map(cutoff=2.0, level="atom", backend="numpy").matrix,
+    )
+
+
 def test_residue_ca_contact_map():
     cm = ca_chain().contact_map(cutoff=8.0, level="residue", method="ca")
     assert cm.matrix.shape == (3, 3)
@@ -47,6 +55,15 @@ def test_residue_methods_all_run():
         assert cm.matrix.shape == (226, 226)
         assert np.array_equal(cm.matrix, cm.matrix.T)
         assert np.diag(cm.matrix).sum() == 0
+
+
+def test_residue_contact_map_torch_backend_if_installed():
+    pytest.importorskip("torch")
+    mol = ca_chain()
+    np.testing.assert_array_equal(
+        mol.contact_map(cutoff=8.0, level="residue", backend="torch", device="cpu").matrix,
+        mol.contact_map(cutoff=8.0, level="residue").matrix,
+    )
 
 
 def test_residue_map_requires_residues():
@@ -85,3 +102,11 @@ def test_plot_contact_map(tmp_path):
         ms.read_pdb_models(os.path.join(DATA, "1aml.pdb"))[:5]
     )
     assert freq.plot(show=False) is not None
+
+
+def test_plot_distance_matrix():
+    import matplotlib
+
+    matplotlib.use("Agg")
+    ax = ca_chain().plot_distance_matrix(show=False)
+    assert ax is not None

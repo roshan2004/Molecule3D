@@ -24,7 +24,7 @@ Common methods:
 - `select(...)`, `backbone()`, `alpha_carbons()`
 - `translate(...)`, `centered(...)`, `rotate(...)`, `superpose(...)`
 - `distance(...)`, `angle(...)`, `dihedral(...)`
-- `distance_matrix()`, `contacts(...)`, `contact_count(...)`, `contact_map(...)`
+- `distance_matrix(backend="numpy")`, `contacts(...)`, `contact_count(...)`, `contact_map(...)`
 - `bonds(...)`, `bond_order_array(...)`
 - `descriptors(...)`, `rdkit_descriptors(...)`
 - `chemical_features(...)`
@@ -36,6 +36,7 @@ Common methods:
 
 - `molscope.ensemble`: RMSD matrices, alignment, average structures, RMSF, clustering.
 - `molscope.contactmap`: contact map construction and plotting.
+- `molscope.distance`: optional NumPy, PyTorch, and CuPy dense distance backends.
 - `molscope.coarsegrain`: coarse-graining and mapping report classes.
 - `molscope.descriptors`: descriptor helpers and batch featurization.
 - `molscope.graph`: graph container and backend exporters.

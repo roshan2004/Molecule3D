@@ -101,7 +101,7 @@ fit comfortably in memory.
 
 - PDB parsing scales approximately with line count.
 - Full dense distance matrices and atom-level contact-map matrices are `O(N^2)`
-  outputs.
+  outputs, even when routed through optional Torch/CuPy GPU backends.
 - Distance histograms, atom contact counts, and no-SciPy `contacts()` fallback
   paths use chunked coordinate blocks.
 - SciPy enables KD-tree bond/contact searches.

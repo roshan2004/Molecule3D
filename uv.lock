@@ -3126,6 +3126,10 @@ gnn = [
     { name = "torch-geometric", version = "2.6.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.10'" },
     { name = "torch-geometric", version = "2.7.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.10'" },
 ]
+gpu = [
+    { name = "torch", version = "2.8.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.10'" },
+    { name = "torch", version = "2.12.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.10'" },
+]
 graph = [
     { name = "networkx", version = "3.2.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.10'" },
     { name = "networkx", version = "3.4.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.10.*'" },
@@ -3191,11 +3195,12 @@ requires-dist = [
     { name = "scipy", marker = "extra == 'fast'", specifier = ">=1.7" },
     { name = "torch", marker = "extra == 'dgl'", specifier = ">=2.0" },
     { name = "torch", marker = "extra == 'gnn'", specifier = ">=2.0" },
+    { name = "torch", marker = "extra == 'gpu'", specifier = ">=2.0" },
     { name = "torch", marker = "extra == 'pyg'", specifier = ">=2.0" },
     { name = "torch-geometric", marker = "extra == 'gnn'", specifier = ">=2.3" },
     { name = "torch-geometric", marker = "extra == 'pyg'", specifier = ">=2.3" },
 ]
-provides-extras = ["test", "fast", "viz", "graph", "chem", "cif", "validation", "pyg", "dgl", "gnn"]
+provides-extras = ["test", "fast", "viz", "graph", "chem", "cif", "gpu", "validation", "pyg", "dgl", "gnn"]
 
 [package.metadata.requires-dev]
 dev = [

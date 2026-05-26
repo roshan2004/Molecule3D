@@ -19,6 +19,7 @@ nav:
       - Reading molecular files: user-guide/reading-files.md
       - Selections: user-guide/selections.md
       - Geometry and measurements: user-guide/geometry.md
+      - Contact maps and distance matrices: user-guide/contact-maps.md
       - Plotting and viewing: user-guide/plotting.md
       - Ensemble analysis: user-guide/ensembles.md
       - Molecular graphs: user-guide/molecular-graphs.md

@@ -47,15 +47,28 @@ class ContactMap:
         return plot_contact_map(self, **kwargs)
 
 
-def contact_map(molecule: Molecule, cutoff: float = 8.0, level: str = "residue",
-                method: str = "ca") -> ContactMap:
+def contact_map(
+    molecule: Molecule,
+    cutoff: float = 8.0,
+    level: str = "residue",
+    method: str = "ca",
+    backend: str = "numpy",
+    device: str | None = None,
+) -> ContactMap:
     """Compute a contact map for one structure (see :class:`ContactMap`)."""
     if level == "atom":
-        mat = np.zeros((len(molecule), len(molecule)), dtype=float)
-        pairs = molecule.contacts(cutoff=cutoff)
-        if len(pairs):
-            mat[pairs[:, 0], pairs[:, 1]] = 1.0
-            mat[pairs[:, 1], pairs[:, 0]] = 1.0
+        if backend == "scipy":
+            mat = np.zeros((len(molecule), len(molecule)), dtype=float)
+            pairs = molecule.contacts(cutoff=cutoff)
+            if len(pairs):
+                mat[pairs[:, 0], pairs[:, 1]] = 1.0
+                mat[pairs[:, 1], pairs[:, 0]] = 1.0
+            return ContactMap(mat, level="atom", cutoff=cutoff)
+        from .distance import contact_matrix
+
+        mat = contact_matrix(
+            molecule.coords, cutoff=cutoff, backend=backend, device=device
+        )
         return ContactMap(mat, level="atom", cutoff=cutoff)
 
     if level != "residue":
@@ -66,18 +79,20 @@ def contact_map(molecule: Molecule, cutoff: float = 8.0, level: str = "residue",
         raise ValueError("residue contact map needs residue information")
     labels = [_label(chain, resname, resid) for _, resname, resid, chain in groups]
     resids = np.array([resid for _, _, resid, _ in groups], dtype=int)
-    mat = _residue_contacts(molecule, groups, cutoff, method)
+    mat = _residue_contacts(molecule, groups, cutoff, method, backend, device)
     return ContactMap(mat, level="residue", cutoff=cutoff, labels=labels, resids=resids)
 
 
-def _residue_contacts(molecule, groups, cutoff, method) -> np.ndarray:
+def _residue_contacts(molecule, groups, cutoff, method, backend, device) -> np.ndarray:
+    if backend == "scipy":
+        backend = "numpy"
     if method in ("ca", "com"):
         reps = np.array([_representative(molecule, idx, method) for idx, *_ in groups])
-        deltas = reps[:, None, :] - reps[None, :, :]
-        dist = np.sqrt((deltas ** 2).sum(axis=-1))
-        mat = (dist < cutoff).astype(float)
+        from .distance import contact_matrix
+
+        mat = contact_matrix(reps, cutoff=cutoff, backend=backend, device=device)
     elif method == "min":
-        mat = _min_distance_contacts(molecule, groups, cutoff)
+        mat = _min_distance_contacts(molecule, groups, cutoff, backend, device)
     else:
         raise ValueError(f"method must be 'ca', 'com' or 'min', got {method!r}")
     np.fill_diagonal(mat, 0.0)
@@ -95,20 +110,18 @@ def _representative(molecule, idx, method) -> np.ndarray:
     return molecule.coords[idx].mean(axis=0)  # CA fallback: residue centroid
 
 
-def _min_distance_contacts(molecule, groups, cutoff) -> np.ndarray:
-    try:
-        from scipy.spatial.distance import cdist
-    except ImportError:
-        def cdist(a, b):
-            d = a[:, None, :] - b[None, :, :]
-            return np.sqrt((d ** 2).sum(axis=-1))
+def _min_distance_contacts(molecule, groups, cutoff, backend, device) -> np.ndarray:
+    from .distance import distance_matrix
 
     n = len(groups)
     coords = [molecule.coords[idx] for idx, *_ in groups]
     mat = np.zeros((n, n))
     for a in range(n):
         for b in range(a + 1, n):
-            if cdist(coords[a], coords[b]).min() < cutoff:
+            merged = np.concatenate([coords[a], coords[b]], axis=0)
+            dist = distance_matrix(merged, backend=backend, device=device)
+            block = dist[:len(coords[a]), len(coords[a]):]
+            if block.min() < cutoff:
                 mat[a, b] = mat[b, a] = 1.0
     return mat
 

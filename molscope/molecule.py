@@ -335,28 +335,58 @@ class Molecule:
         y = np.dot(np.cross(v1, v), w)
         return float(np.degrees(np.arctan2(y, x)))
 
-    def distance_matrix(self) -> np.ndarray:
-        """Full ``(N, N)`` pairwise distance matrix (angstrom)."""
-        deltas = self.coords[:, None, :] - self.coords[None, :, :]
-        return np.sqrt((deltas ** 2).sum(axis=-1))
+    def distance_matrix(
+        self,
+        backend: str = "numpy",
+        device: str | None = None,
+        as_numpy: bool = True,
+    ):
+        """Full ``(N, N)`` pairwise distance matrix (angstrom).
+
+        ``backend`` may be ``"numpy"`` (default), ``"torch"``, ``"cupy"`` or
+        ``"auto"``. Torch and CuPy are optional; use them when you already have
+        a CPU/GPU array stack installed. Results are converted to NumPy by
+        default for compatibility; pass ``as_numpy=False`` to keep a backend
+        array.
+        """
+        from .distance import distance_matrix
+
+        return distance_matrix(
+            self.coords, backend=backend, device=device, as_numpy=as_numpy
+        )
 
     def contacts(
         self,
         cutoff: float = 5.0,
         chunk_size: int = _DEFAULT_CONTACT_CHUNK_SIZE,
+        backend: str = "scipy",
+        device: str | None = None,
     ) -> np.ndarray:
         """Atom index pairs ``(i, j)`` closer than ``cutoff`` angstrom.
 
-        SciPy, when installed, provides a KD-tree path. Without SciPy the
+        ``backend="scipy"`` uses a KD-tree when SciPy is installed. Without SciPy the
         fallback scans coordinate blocks, so it avoids materializing the full
-        distance matrix. The returned pair array is still proportional to the
-        number of contacts.
+        distance matrix. Dense backends (``"numpy"``, ``"torch"``, ``"cupy"``,
+        ``"auto"``) materialize a full contact matrix first, which is convenient
+        for CPU/GPU dense workflows but scales as ``O(N^2)`` memory.
         """
         n = len(self)
         if n < 2:
             return np.empty((0, 2), dtype=int)
         if cutoff <= 0.0:
             return np.empty((0, 2), dtype=int)
+        if backend in {"numpy", "torch", "cupy", "auto"}:
+            from .distance import contact_matrix, contacts_from_matrix
+
+            mat = contact_matrix(
+                self.coords, cutoff=cutoff, backend=backend, device=device
+            )
+            return contacts_from_matrix(mat)
+        if backend != "scipy":
+            raise ValueError(
+                "backend must be 'scipy', 'numpy', 'torch', 'cupy' or 'auto', "
+                f"got {backend!r}"
+            )
         chunk_size = _validate_chunk_size(chunk_size)
         try:
             from scipy.spatial import cKDTree
@@ -369,11 +399,20 @@ class Molecule:
         self,
         cutoff: float = 5.0,
         chunk_size: int = _DEFAULT_CONTACT_CHUNK_SIZE,
+        backend: str = "scipy",
+        device: str | None = None,
     ) -> int:
         """Count atom pairs closer than ``cutoff`` without returning the pairs."""
         n = len(self)
         if n < 2 or cutoff <= 0.0:
             return 0
+        if backend in {"numpy", "torch", "cupy", "auto"}:
+            return int(len(self.contacts(cutoff=cutoff, backend=backend, device=device)))
+        if backend != "scipy":
+            raise ValueError(
+                "backend must be 'scipy', 'numpy', 'torch', 'cupy' or 'auto', "
+                f"got {backend!r}"
+            )
         chunk_size = _validate_chunk_size(chunk_size)
         try:
             from scipy.spatial import cKDTree
@@ -385,21 +424,43 @@ class Molecule:
         except ImportError:
             return _contact_count_chunked(self.coords, cutoff, chunk_size)
 
-    def contact_map(self, cutoff: float = 8.0, level: str = "residue", method: str = "ca"):
+    def contact_map(
+        self,
+        cutoff: float = 8.0,
+        level: str = "residue",
+        method: str = "ca",
+        backend: str = "numpy",
+        device: str | None = None,
+    ):
         """Build a contact map. See :func:`molscope.contactmap.contact_map`.
 
         ``level`` is ``"atom"`` or ``"residue"``; for residue level ``method`` is
         ``"ca"`` (CA-CA distance), ``"com"`` (centre of mass) or ``"min"``
-        (closest inter-residue atom). Returns a :class:`ContactMap`.
+        (closest inter-residue atom). ``backend`` may be ``"numpy"``,
+        ``"torch"``, ``"cupy"`` or ``"auto"`` for dense distance work. Returns a
+        :class:`ContactMap`.
         """
         from .contactmap import contact_map
 
-        return contact_map(self, cutoff=cutoff, level=level, method=method)
+        return contact_map(
+            self, cutoff=cutoff, level=level, method=method,
+            backend=backend, device=device,
+        )
 
     def plot_contact_map(self, cutoff: float = 8.0, level: str = "residue",
-                         method: str = "ca", **kwargs):
+                         method: str = "ca", backend: str = "numpy",
+                         device: str | None = None, **kwargs):
         """Shortcut for ``self.contact_map(...).plot()``."""
-        return self.contact_map(cutoff, level, method).plot(**kwargs)
+        return self.contact_map(cutoff, level, method, backend, device).plot(**kwargs)
+
+    def plot_distance_matrix(self, backend: str = "numpy", device: str | None = None,
+                             **kwargs):
+        """Plot the dense pairwise distance matrix as a heatmap."""
+        from .plotting import plot_distance_matrix
+
+        return plot_distance_matrix(
+            self.distance_matrix(backend=backend, device=device), **kwargs
+        )
 
     def secondary_structure(self):
         """Assign protein secondary structure with a simplified DSSP.

@@ -135,6 +135,23 @@ def plot_contact_map(contact_map, ax=None, cmap=None, show: bool = True):
     return ax
 
 
+def plot_distance_matrix(matrix, ax=None, cmap="magma_r", show: bool = True):
+    """Draw a dense pairwise distance matrix heatmap."""
+    import matplotlib.pyplot as plt
+
+    matrix = np.asarray(matrix, dtype=float)
+    if ax is None:
+        _, ax = plt.subplots(figsize=(5, 4))
+    im = ax.imshow(matrix, origin="lower", interpolation="nearest", cmap=cmap)
+    ax.set_xlabel("atom index")
+    ax.set_ylabel("atom index")
+    ax.figure.colorbar(im, ax=ax, label="distance (Å)", fraction=0.046, pad=0.04)
+    ax.set_title("pairwise distance matrix")
+    if show:
+        plt.show()
+    return ax
+
+
 def plot_rmsd_heatmap(matrix, order=None, ax=None, cmap="viridis", show: bool = True):
     """Draw a pairwise-RMSD matrix as a heatmap (angstrom).
 

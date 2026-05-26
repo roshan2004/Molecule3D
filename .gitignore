@@ -14,4 +14,6 @@ docs/_build/
 !docs/assets/
 !docs/assets/readme/
 !docs/assets/readme/*.png
+!docs/assets/contactmaps/
+!docs/assets/contactmaps/*.png
 aqp_centered.xyz
