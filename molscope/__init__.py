@@ -44,7 +44,17 @@ See https://github.com/roshan2004/molscope for the full documentation.
 from . import coarsegrain, dssp, ensemble
 from .chem import ChemicalFeatures, chemical_features, rdkit_descriptors, to_rdkit
 from .cif import CifValidationReport, validate_cif
-from .coarsegrain import BeadMapping, BondMapping, CoarseGrainReport, DroppedAtom
+from .coarsegrain import (
+    BeadMapping,
+    BondMapping,
+    CoarseGrainReport,
+    DroppedAtom,
+)
+from .coarsegrain import apply_mapping as apply_cg_mapping
+from .coarsegrain import mapping_to_dict as cg_mapping_to_dict
+from .coarsegrain import read_mapping as read_cg_mapping
+from .coarsegrain import write_index as write_cg_index
+from .coarsegrain import write_mapping as write_cg_mapping
 from .contactmap import ContactMap
 from .descriptors import descriptor_feature_names, descriptors, featurize_many
 from .dssp import SecondaryStructure
@@ -64,7 +74,7 @@ from .io import (
     write_xyz,
 )
 from .molecule import Molecule
-from .plotting import plot_distance_matrix, plot_rmsd_heatmap
+from .plotting import plot_distance_matrix, plot_mapping, plot_rmsd_heatmap
 
 __all__ = [
     "Clustering",
@@ -78,6 +88,8 @@ __all__ = [
     "Molecule",
     "MolecularGraph",
     "SecondaryStructure",
+    "apply_cg_mapping",
+    "cg_mapping_to_dict",
     "cluster",
     "chemical_features",
     "coarsegrain",
@@ -89,9 +101,11 @@ __all__ = [
     "edge_feature_names",
     "featurize_many",
     "fetch",
+    "plot_mapping",
     "plot_rmsd_heatmap",
     "plot_distance_matrix",
     "read",
+    "read_cg_mapping",
     "read_cif",
     "read_pdb",
     "read_pdb_models",
@@ -103,6 +117,8 @@ __all__ = [
     "node_feature_names",
     "to_rdkit",
     "validate_cif",
+    "write_cg_index",
+    "write_cg_mapping",
     "write_pdb",
     "write_xyz",
 ]

@@ -381,6 +381,21 @@ cg = mol.coarse_grain({"head": [0, 1, 2, 3], "tail": [4, 5, 6, 7]},
 cg.to_graph()                               # CG bead network, ready for ML
 ```
 
+Visualise the mapping, inspect the per-bead assignment, and export it:
+
+```python
+ms.plot_mapping(mol, cg)                    # atoms coloured by bead, beads + bonds overlaid
+
+report = cg.coarse_grain_report             # structured assignment
+print(report.coverage())                    # "426 beads from 1661/1661 atoms"
+print(report.beads[0].atom_indices)          # source atoms folded into bead 0
+
+cg.write_mapping("mapping.json")            # round-trippable JSON record
+record = ms.read_cg_mapping("mapping.json")
+cg2 = ms.apply_cg_mapping(mol, record)      # rebuild on a matching structure
+cg.write_index("mapping.ndx")               # GROMACS-style index, one group per bead
+```
+
 Bead positions are mass-weighted (or centroids). For residue mappings bonds are
 generated automatically (within a residue, plus a backbone chain between
 residues); pass `bonds=` to define them yourself. Name-based bonds are intended
@@ -388,7 +403,8 @@ for unique bead names such as `head`/`tail`; repeated names such as `BB`/`SC`
 are ambiguous, so use bead indices for those. Atoms you leave unassigned are
 dropped with a warning. This is meant
 for teaching and prototyping CG mappings, not as a replacement for production
-Martini parameters.
+Martini parameters: the JSON and `.ndx` exports describe a bead assignment for
+inspection and reuse, not a validated simulation topology.
 
 ## Command line
 

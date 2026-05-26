@@ -37,6 +37,9 @@ production Martini parameters.
 
 from __future__ import annotations
 
+import json
+import os
+import re
 import warnings
 from dataclasses import dataclass, field
 from typing import Optional
@@ -46,12 +49,20 @@ import numpy as np
 from . import elements
 from .molecule import Molecule
 
+_MAPPING_FORMAT = "molscope-cg-mapping"
+_MAPPING_VERSION = 1
+
 _BACKBONE = ("N", "CA", "C", "O", "OXT")
 
 
 @dataclass(frozen=True)
 class BeadMapping:
-    """One coarse-grained bead and the atom names assigned to it."""
+    """One coarse-grained bead and the atoms assigned to it.
+
+    ``atom_indices`` are positions into the *source* (atomistic) molecule, in
+    the same order as ``atom_names``. They drive mapping visualisation and
+    export; ``atom_names`` stays the human-readable view.
+    """
 
     name: str
     atom_names: list[str]
@@ -59,6 +70,7 @@ class BeadMapping:
     resname: str = ""
     resid: Optional[int] = None
     chain: str = ""
+    atom_indices: list[int] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -90,11 +102,36 @@ class CoarseGrainReport:
     dropped_atoms: list[DroppedAtom] = field(default_factory=list)
     bonds: list[BondMapping] = field(default_factory=list)
 
+    @property
+    def n_beads(self) -> int:
+        """Number of coarse-grained beads."""
+        return len(self.beads)
+
+    @property
+    def n_assigned(self) -> int:
+        """Number of atoms folded into a bead."""
+        return sum(len(bead.atom_indices) for bead in self.beads)
+
+    @property
+    def n_dropped(self) -> int:
+        """Number of atoms left unassigned (and dropped)."""
+        return len(self.dropped_atoms)
+
     def __str__(self) -> str:
         return self.format()
 
+    def coverage(self) -> str:
+        """One-line summary of how much of the structure the mapping covered."""
+        total = self.n_assigned + self.n_dropped
+        beads = f"{self.n_beads} bead{'' if self.n_beads == 1 else 's'}"
+        atoms = f"{self.n_assigned}/{total} atom{'' if total == 1 else 's'}"
+        line = f"{beads} from {atoms}"
+        if self.n_dropped:
+            line += f" ({self.n_dropped} dropped)"
+        return line
+
     def format(self) -> str:
-        lines = [f"Mapping: {self.mapping}", "", "Beads:"]
+        lines = [f"Mapping: {self.mapping}", self.coverage(), "", "Beads:"]
         if self.beads:
             for bead in self.beads:
                 prefix = _residue_label(bead.resid, bead.resname, bead.chain)
@@ -168,6 +205,7 @@ def _by_index(molecule: Molecule, mapping: dict, weighted: bool, bonds) -> Molec
                 name=name,
                 atom_names=_atom_names(molecule, members),
                 reduction=_reduction_name(weighted),
+                atom_indices=[int(i) for i in members],
             )
         )
 
@@ -218,6 +256,7 @@ def _by_residue(molecule: Molecule, mapping, weighted: bool, bonds) -> Molecule:
                     resname=resname,
                     resid=resid,
                     chain=chain,
+                    atom_indices=[int(i) for i in members],
                 )
             )
         if local:
@@ -409,3 +448,213 @@ def _residue_label(resid: Optional[int], resname: str, chain: str) -> str:
     if chain:
         parts.append(chain)
     return " ".join(parts) if len(parts) > 1 else "Molecule"
+
+
+def bead_label(bead: BeadMapping, index: Optional[int] = None) -> str:
+    """A short, unique-ish label for a bead, e.g. ``"BB (12 ALA A)"``.
+
+    Falls back to ``name#index`` when no residue metadata is available, so beads
+    from index mappings still get distinct labels.
+    """
+    residue = " ".join(
+        str(p) for p in (bead.resid, bead.resname, bead.chain) if p not in (None, "")
+    )
+    if residue:
+        return f"{bead.name} ({residue})"
+    if index is not None:
+        return f"{bead.name}#{index}"
+    return bead.name
+
+
+# -- mapping export / round-trip -------------------------------------------
+
+
+def mapping_to_dict(cg: Molecule) -> dict:
+    """Serialise a coarse-grained molecule's mapping to a plain ``dict``.
+
+    The record captures, per bead, the source atom indices and names, the
+    reduction used, residue metadata and the bead position, plus the bead-index
+    bond network and any dropped atoms. It is JSON-serialisable and can be
+    re-applied with :func:`apply_mapping`.
+    """
+    report = cg.coarse_grain_report
+    beads = []
+    for index, bead in enumerate(report.beads):
+        beads.append({
+            "index": index,
+            "name": bead.name,
+            "resname": bead.resname,
+            "resid": bead.resid,
+            "chain": bead.chain,
+            "reduction": bead.reduction,
+            "atom_indices": list(bead.atom_indices),
+            "atom_names": list(bead.atom_names),
+            "position": [float(x) for x in cg.coords[index]],
+        })
+    # Only explicit CG bonds are part of the mapping; never geometry-infer beads.
+    bonds = (
+        [[int(i), int(j)] for i, j in cg.bond_index]
+        if cg.bond_index is not None else []
+    )
+    dropped = [
+        {
+            "name": atom.name,
+            "element": atom.element,
+            "resname": atom.resname,
+            "resid": atom.resid,
+            "chain": atom.chain,
+        }
+        for atom in report.dropped_atoms
+    ]
+    return {
+        "format": _MAPPING_FORMAT,
+        "version": _MAPPING_VERSION,
+        "name": cg.name,
+        "mapping": report.mapping,
+        "n_beads": report.n_beads,
+        "n_atoms_assigned": report.n_assigned,
+        "n_dropped": report.n_dropped,
+        "beads": beads,
+        "bonds": bonds,
+        "dropped_atoms": dropped,
+    }
+
+
+def write_mapping(cg: Molecule, path: str) -> str:
+    """Write a coarse-grained mapping to a JSON file (see :func:`mapping_to_dict`)."""
+    path = os.fspath(path)
+    with open(path, "w") as fh:
+        json.dump(mapping_to_dict(cg), fh, indent=2)
+        fh.write("\n")
+    return path
+
+
+def read_mapping(path: str) -> dict:
+    """Read a mapping JSON written by :func:`write_mapping`.
+
+    Returns the record ``dict``; apply it to a structure with
+    :func:`apply_mapping`.
+    """
+    with open(os.fspath(path)) as fh:
+        record = json.load(fh)
+    fmt = record.get("format")
+    if fmt != _MAPPING_FORMAT:
+        raise ValueError(
+            f"{path}: not a molscope CG mapping (format={fmt!r})"
+        )
+    return record
+
+
+def apply_mapping(molecule: Molecule, record: dict) -> Molecule:
+    """Re-apply a saved mapping ``record`` to ``molecule``.
+
+    Beads are rebuilt from the stored atom indices (so repeated bead names such
+    as ``BB``/``SC`` round-trip cleanly) and reduced exactly as recorded. The
+    structure must expose every referenced atom index, so apply a mapping to the
+    structure it was built from, or one with the same atom ordering.
+    """
+    beads = record.get("beads", [])
+    if not beads:
+        raise ValueError("mapping record has no beads")
+
+    n = len(molecule)
+    coords, names, resnames, resids, chains = [], [], [], [], []
+    bead_report: list[BeadMapping] = []
+    assigned: set[int] = set()
+    has_residues = False
+    for bead in beads:
+        members = [int(i) for i in bead["atom_indices"]]
+        out_of_range = [i for i in members if not 0 <= i < n]
+        if out_of_range:
+            raise ValueError(
+                f"bead {bead.get('name')!r} references atom index "
+                f"{out_of_range[0]} but the molecule has {n} atoms"
+            )
+        assigned.update(members)
+        use_mass = bead.get("reduction") == "centre of mass"
+        coords.append(_reduce(molecule, members, use_mass))
+        names.append(bead["name"])
+        resname, resid, chain = bead.get("resname", ""), bead.get("resid"), bead.get("chain", "")
+        resnames.append(resname)
+        resids.append(0 if resid is None else int(resid))
+        chains.append(chain)
+        has_residues = has_residues or resid is not None
+        bead_report.append(
+            BeadMapping(
+                name=bead["name"],
+                atom_names=list(bead.get("atom_names", _atom_names(molecule, members))),
+                reduction=bead.get("reduction", _reduction_name(use_mass)),
+                resname=resname,
+                resid=resid,
+                chain=chain,
+                atom_indices=members,
+            )
+        )
+
+    bonds = record.get("bonds") or []
+    bond_index = np.array(bonds, dtype=int).reshape(-1, 2) if bonds else None
+    bond_report = [
+        BondMapping(names[i], names[j], "(from mapping file)") for i, j in (bonds or [])
+    ]
+    dropped = _dropped_atoms(molecule, assigned)
+    report = CoarseGrainReport(
+        mapping=record.get("mapping", "custom"),
+        beads=bead_report,
+        dropped_atoms=dropped,
+        bonds=bond_report,
+    )
+    kwargs = dict(
+        elements=[""] * len(coords),
+        name=record.get("name") or f"{molecule.name} (CG)",
+        atom_names=names,
+        bond_index=bond_index,
+        _mapping_report=report,
+    )
+    if has_residues:
+        kwargs.update(
+            resnames=resnames,
+            resids=np.array(resids, dtype=int),
+            chains=chains,
+        )
+    return Molecule(np.array(coords, dtype=float), **kwargs)
+
+
+def write_index(cg: Molecule, path: str, per_line: int = 15) -> str:
+    """Write a GROMACS-style ``.ndx`` index file, one group per bead.
+
+    Each group lists the 1-based serial numbers of the source atoms folded into
+    that bead (serial = atom index + 1). Handy for inspecting a mapping in tools
+    that read index files. This is an educational convenience, not a validated
+    GROMACS topology.
+    """
+    path = os.fspath(path)
+    report = cg.coarse_grain_report
+    used: dict[str, int] = {}
+    lines = [
+        f"; molscope coarse-grain index ({report.mapping})",
+        f"; {report.coverage()}",
+    ]
+    for index, bead in enumerate(report.beads):
+        group = _index_group_name(bead, index, used)
+        lines.append(f"[ {group} ]")
+        serials = [i + 1 for i in bead.atom_indices]
+        for start in range(0, len(serials), per_line):
+            lines.append(" ".join(str(s) for s in serials[start:start + per_line]))
+    with open(path, "w") as fh:
+        fh.write("\n".join(lines) + "\n")
+    return path
+
+
+def _index_group_name(bead: BeadMapping, index: int, used: dict[str, int]) -> str:
+    """Build a unique, whitespace-free group name for one bead."""
+    parts = [bead.name]
+    if bead.resid is not None:
+        parts.append(str(bead.resid))
+    if bead.resname:
+        parts.append(bead.resname)
+    if bead.chain:
+        parts.append(bead.chain)
+    base = re.sub(r"\s+", "_", "_".join(parts)) or f"bead{index}"
+    count = used.get(base, 0)
+    used[base] = count + 1
+    return base if count == 0 else f"{base}_{count + 1}"

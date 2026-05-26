@@ -575,11 +575,43 @@ class Molecule:
             return_report=return_report,
         )
 
-    def mapping_report(self) -> str:
-        """Explain how this coarse-grained molecule was mapped."""
+    @property
+    def coarse_grain_report(self):
+        """The structured :class:`~molscope.coarsegrain.CoarseGrainReport`.
+
+        Available on molecules produced by :meth:`coarse_grain`; raises
+        otherwise. Carries the per-bead atom assignment that drives
+        :meth:`plot_mapping` and the mapping export helpers.
+        """
         if self._mapping_report is None:
             raise ValueError("no coarse-graining report is available for this molecule")
-        return self._mapping_report.format()
+        return self._mapping_report
+
+    def mapping_report(self) -> str:
+        """Explain how this coarse-grained molecule was mapped (text)."""
+        return self.coarse_grain_report.format()
+
+    def plot_mapping(self, atomistic: Molecule, **kwargs):
+        """Visualise how this CG model maps onto its ``atomistic`` source.
+
+        See :func:`molscope.plotting.plot_mapping`. ``atomistic`` must be the
+        molecule this CG model was built from (matching atom order).
+        """
+        from .plotting import plot_mapping
+
+        return plot_mapping(atomistic, self, **kwargs)
+
+    def write_mapping(self, path: str) -> str:
+        """Write this CG model's mapping to JSON. See :func:`molscope.write_cg_mapping`."""
+        from .coarsegrain import write_mapping
+
+        return write_mapping(self, path)
+
+    def write_index(self, path: str, per_line: int = 15) -> str:
+        """Write this CG model's bead assignment as a GROMACS-style ``.ndx`` file."""
+        from .coarsegrain import write_index
+
+        return write_index(self, path, per_line=per_line)
 
     # -- ML descriptors -----------------------------------------------------
 
