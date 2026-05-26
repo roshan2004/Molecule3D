@@ -223,11 +223,15 @@ mol.plot(color_by="ss")             # colour the 3D view by secondary structure
 ```
 
 Codes follow DSSP: `H`/`G`/`I` helices, `E`/`B` strands, `T` turn, `S` bend,
-`-` coil. This is a simplified **educational** implementation: it reproduces the
-main classes from the Kabsch-Sander hydrogen-bond model but is not bit-identical
-to the reference `mkdssp` on every edge case. It needs backbone N/CA/C/O atoms,
-so use PDB/mmCIF input (not a bare `.xyz`). The secondary-structure render in the
-showcase above (helices red, turns cyan, coil grey) is produced this way.
+`-` coil. This is a simplified **educational** implementation of the
+Kabsch-Sander hydrogen-bond model: not bit-identical to the reference `mkdssp`
+on every edge case, but validated against it. A CI cross-check
+(`tests/validation`) puts it at **~99% per-residue 3-state agreement**
+(helix/strand/coil) with `mkdssp` 4.2.2 on the bundled aquaporin (`1fqy`);
+strand-rich folds, where reference DSSP is hardest to match, will agree less
+closely. It needs backbone N/CA/C/O atoms, so use PDB/mmCIF input (not a bare
+`.xyz`). The secondary-structure render in the showcase above (helices red,
+turns cyan, coil grey) is produced this way.
 
 ### NMR ensembles
 
@@ -387,11 +391,18 @@ python -m molscope 1fqy.pdb          # equivalent if not pip-installed
 ## Tests and linting
 
 ```bash
-uv run pytest          # full test suite
-uv run ruff check .    # lint
+uv run pytest                      # full test suite
+uv run pytest tests/validation     # validation suite only
+uv run ruff check .                # lint
 ```
 
-CI (GitHub Actions) runs both across Python 3.9 / 3.11 / 3.13 on every push and PR.
+CI (GitHub Actions) runs the suite and linting across Python 3.9 / 3.11 / 3.13,
+smoke-imports the optional extras, and runs a separate **validation** job on
+every push and PR. `tests/validation` is a two-tier suite: dependency-free
+physical invariants (rigid-body algebra, geometry, coarse-grain conservation)
+that run everywhere, plus cross-checks against reference scientific tools (the
+simplified DSSP vs `mkdssp`) that turn "the tests pass" into a measured
+agreement number.
 
 ## License
 
