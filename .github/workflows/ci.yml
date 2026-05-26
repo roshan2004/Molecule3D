@@ -50,3 +50,27 @@ jobs:
 
       - name: Smoke import
         run: uv run python -c "import molscope as ms; print(ms.__version__)"
+
+  validation:
+    # Tier-2 cross-checks against reference scientific tools (tests/validation).
+    # Linux-only: the reference binaries (mkdssp) install cleanly via apt here
+    # but are finicky on macOS, so this stays off the main test matrix.
+    runs-on: ubuntu-latest
+    env:
+      MPLBACKEND: Agg
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install reference tools
+        run: sudo apt-get update && sudo apt-get install -y dssp
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Sync with validation extra
+        run: uv sync --python 3.11 --extra validation
+
+      - name: Run validation suite
+        run: uv run pytest tests/validation -v
