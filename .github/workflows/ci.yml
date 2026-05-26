@@ -30,3 +30,23 @@ jobs:
 
       - name: Test
         run: uv run pytest -q
+
+  extras-smoke:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        extra: ["graph", "cif", "chem"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install package extra
+        run: uv sync --python 3.11 --extra ${{ matrix.extra }}
+
+      - name: Smoke import
+        run: uv run python -c "import molscope as ms; print(ms.__version__)"

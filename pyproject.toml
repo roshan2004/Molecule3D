@@ -32,7 +32,17 @@ dependencies = ["numpy>=1.21", "matplotlib>=3.5"]
 test = ["pytest>=7"]
 fast = ["scipy>=1.7"]          # enables the KD-tree bond search for large structures
 viz = ["py3Dmol>=2.0"]         # interactive notebook viewer (Molecule.view)
-graph = ["networkx>=2.6"]      # NetworkX exporter only; PyG/DGL installed separately
+graph = ["networkx>=2.6"]      # NetworkX exporter
+chem = ["rdkit>=2023.9"]       # optional chemical perception backend
+cif = ["gemmi>=0.7"]           # robust mmCIF parsing and validation helpers
+pyg = ["torch>=2.0", "torch-geometric>=2.3"]
+dgl = ["torch>=2.0", "dgl>=1.1"]
+gnn = [
+    "networkx>=2.6",
+    "torch>=2.0",
+    "torch-geometric>=2.3",
+    "dgl>=1.1",
+]
 
 [project.urls]
 Homepage = "https://github.com/roshan2004/molscope"

@@ -13,22 +13,48 @@ DEFAULT_ELEMENTS = (
     "H", "C", "N", "O", "S", "P", "F", "CL", "BR", "I", "NA", "MG", "CA", "FE", "ZN",
 )
 
+DESCRIPTOR_PRESETS = ("native-basic", "native-3d", "rdkit-basic")
+RDKIT_BASIC_DESCRIPTORS = (
+    "MolWt",
+    "HeavyAtomCount",
+    "TPSA",
+    "MolLogP",
+    "NumHDonors",
+    "NumHAcceptors",
+    "NumRotatableBonds",
+    "RingCount",
+    "FractionCSP3",
+)
+
 
 def descriptors(
     molecule,
     *,
+    preset: Optional[str] = None,
     elements_to_count=DEFAULT_ELEMENTS,
     distance_bins: int = 10,
     distance_range: tuple[float, float] = (0.0, 20.0),
+    distance_chunk_size: int = 1024,
     contact_cutoff: float = 5.0,
     residue_contact_cutoff: float = 8.0,
+    include_rdkit: bool = False,
+    rdkit_descriptor_names: Optional[list[str]] = None,
+    rdkit_prefix: str = "rdkit_",
 ) -> dict:
     """Return a flat descriptor dictionary for a molecule.
 
     The defaults are fixed-size and suitable for small ML tables. Matrix-valued
     features such as contact maps remain available through ``mol.contact_map()``;
-    this function records table-friendly summaries of them.
+    this function records table-friendly summaries of them. Pairwise distance
+    histograms and contact counts are computed in coordinate blocks, controlled
+    by ``distance_chunk_size``.
     """
+    preset = _validate_preset(preset)
+    if preset == "rdkit-basic":
+        include_rdkit = True
+        if rdkit_descriptor_names is None:
+            rdkit_descriptor_names = list(RDKIT_BASIC_DESCRIPTORS)
+
     coords = np.asarray(molecule.coords, dtype=float)
     n_atoms = len(molecule)
     masses = molecule.masses if n_atoms else np.empty(0, dtype=float)
@@ -43,7 +69,10 @@ def descriptors(
         desc[f"count_{symbol.upper()}"] = float(counts.get(symbol.upper(), 0))
 
     if n_atoms == 0:
-        return _empty_descriptors(desc, distance_bins)
+        desc = _empty_descriptors(desc, distance_bins)
+        if include_rdkit:
+            desc.update(_rdkit_descriptors(molecule, rdkit_descriptor_names, rdkit_prefix))
+        return _apply_preset(desc, preset, elements_to_count, distance_bins, rdkit_prefix)
 
     dims = molecule.dimensions
     centroid = molecule.centroid
@@ -73,13 +102,19 @@ def descriptors(
     desc["principal_axes"] = principal_axes.reshape(-1).astype(float).tolist()
     desc["shape_anisotropy"] = shape_anisotropy(principal_moments)
 
-    distances = _pairwise_distances(coords)
-    hist, _ = np.histogram(distances, bins=distance_bins, range=distance_range)
+    hist = _pairwise_distance_histogram(
+        coords,
+        bins=distance_bins,
+        distance_range=distance_range,
+        chunk_size=distance_chunk_size,
+    )
     desc["distance_histogram"] = hist.astype(float).tolist()
     desc.update(_bond_length_summary(molecule))
-    desc.update(_contact_summary(molecule, contact_cutoff))
+    desc.update(_contact_summary(molecule, contact_cutoff, distance_chunk_size))
     desc.update(_residue_contact_summary(molecule, residue_contact_cutoff))
-    return desc
+    if include_rdkit:
+        desc.update(_rdkit_descriptors(molecule, rdkit_descriptor_names, rdkit_prefix))
+    return _apply_preset(desc, preset, elements_to_count, distance_bins, rdkit_prefix)
 
 
 def inertia_tensor(molecule) -> np.ndarray:
@@ -119,9 +154,38 @@ def featurize_many(
     ``return_names=True`` to receive ``(X, names)``.
     """
     rows = [flatten_descriptors(descriptors(read(path), **descriptor_kwargs)) for path in paths]
-    names = feature_names or sorted({key for row in rows for key in row})
+    preset = descriptor_kwargs.get("preset")
+    if feature_names is not None:
+        names = feature_names
+    elif preset is not None:
+        names = descriptor_feature_names(
+            preset,
+            elements_to_count=descriptor_kwargs.get("elements_to_count", DEFAULT_ELEMENTS),
+            distance_bins=descriptor_kwargs.get("distance_bins", 10),
+            rdkit_prefix=descriptor_kwargs.get("rdkit_prefix", "rdkit_"),
+        )
+    else:
+        names = sorted({key for row in rows for key in row})
     matrix = np.array([[row.get(name, 0.0) for name in names] for row in rows], dtype=float)
     return (matrix, names) if return_names else matrix
+
+
+def descriptor_feature_names(
+    preset: str,
+    *,
+    elements_to_count=DEFAULT_ELEMENTS,
+    distance_bins: int = 10,
+    rdkit_prefix: str = "rdkit_",
+) -> list[str]:
+    """Return stable flattened feature names for a descriptor preset."""
+    preset = _validate_preset(preset, required=True)
+    names = _preset_scalar_names(preset, elements_to_count, rdkit_prefix)
+    if preset == "native-3d":
+        names += [f"inertia_tensor_{i}" for i in range(9)]
+        names += [f"principal_moments_{i}" for i in range(3)]
+        names += [f"principal_axes_{i}" for i in range(9)]
+        names += [f"distance_histogram_{i}" for i in range(distance_bins)]
+    return names
 
 
 def flatten_descriptors(desc: dict) -> dict[str, float]:
@@ -176,6 +240,33 @@ def _pairwise_distances(coords: np.ndarray) -> np.ndarray:
     return np.linalg.norm(coords[i] - coords[j], axis=1)
 
 
+def _pairwise_distance_histogram(
+    coords: np.ndarray,
+    *,
+    bins: int,
+    distance_range: tuple[float, float],
+    chunk_size: int,
+) -> np.ndarray:
+    if distance_range is None:
+        distances = _pairwise_distances(coords)
+        hist, _ = np.histogram(distances, bins=bins, range=distance_range)
+        return hist.astype(float)
+
+    chunk_size = _validate_chunk_size(chunk_size, "distance_chunk_size")
+    hist, edges = np.histogram(np.empty(0, dtype=float), bins=bins, range=distance_range)
+    hist = hist.astype(float)
+    for _, end, block in _iter_blocks(coords, chunk_size):
+        if len(block) > 1:
+            d2 = _squared_distances(block, block)
+            i, j = np.triu_indices(len(block), k=1)
+            hist += np.histogram(np.sqrt(d2[i, j]), bins=edges)[0]
+
+        for _, _, other in _iter_blocks(coords, chunk_size, start=end):
+            d2 = _squared_distances(block, other)
+            hist += np.histogram(np.sqrt(d2.ravel()), bins=edges)[0]
+    return hist
+
+
 def _bond_length_summary(molecule) -> dict[str, float]:
     bonds = molecule.bonds()
     if len(bonds) == 0:
@@ -196,12 +287,12 @@ def _bond_length_summary(molecule) -> dict[str, float]:
     }
 
 
-def _contact_summary(molecule, cutoff: float) -> dict[str, float]:
-    contacts = molecule.contacts(cutoff=cutoff)
+def _contact_summary(molecule, cutoff: float, chunk_size: int) -> dict[str, float]:
+    contact_count = molecule.contact_count(cutoff=cutoff, chunk_size=chunk_size)
     possible = len(molecule) * (len(molecule) - 1) / 2
     return {
-        "atom_contact_count": float(len(contacts)),
-        "atom_contact_density": float(len(contacts) / possible) if possible else 0.0,
+        "atom_contact_count": float(contact_count),
+        "atom_contact_density": float(contact_count / possible) if possible else 0.0,
     }
 
 
@@ -230,3 +321,103 @@ def _n_residues(molecule) -> int:
 def _compactness(n_atoms: int, dims: np.ndarray) -> float:
     volume = float(np.prod(dims))
     return float(n_atoms / volume) if volume > 0.0 else 0.0
+
+
+def _validate_chunk_size(chunk_size: int, name: str) -> int:
+    chunk_size = int(chunk_size)
+    if chunk_size < 1:
+        raise ValueError(f"{name} must be >= 1")
+    return chunk_size
+
+
+def _iter_blocks(coords: np.ndarray, chunk_size: int, start: int = 0):
+    n = len(coords)
+    for block_start in range(start, n, chunk_size):
+        block_end = min(block_start + chunk_size, n)
+        yield block_start, block_end, coords[block_start:block_end]
+
+
+def _squared_distances(a: np.ndarray, b: np.ndarray) -> np.ndarray:
+    a2 = np.einsum("ij,ij->i", a, a)[:, None]
+    b2 = np.einsum("ij,ij->i", b, b)[None, :]
+    d2 = a2 + b2 - 2.0 * (a @ b.T)
+    return np.maximum(d2, 0.0)
+
+
+def _validate_preset(preset: Optional[str], required: bool = False) -> Optional[str]:
+    if preset is None:
+        if required:
+            raise ValueError(f"preset must be one of {', '.join(DESCRIPTOR_PRESETS)}")
+        return None
+    if preset not in DESCRIPTOR_PRESETS:
+        choices = "', '".join(DESCRIPTOR_PRESETS)
+        raise ValueError(f"unknown descriptor preset {preset!r}; expected '{choices}'")
+    return preset
+
+
+def _apply_preset(
+    desc: dict,
+    preset: Optional[str],
+    elements_to_count,
+    distance_bins: int,
+    rdkit_prefix: str,
+) -> dict:
+    if preset is None:
+        return desc
+    names = _preset_top_level_names(preset, elements_to_count, distance_bins, rdkit_prefix)
+    return {name: desc[name] for name in names if name in desc}
+
+
+def _preset_top_level_names(
+    preset: str,
+    elements_to_count,
+    distance_bins: int,
+    rdkit_prefix: str,
+) -> list[str]:
+    names = _preset_scalar_names(preset, elements_to_count, rdkit_prefix)
+    if preset == "native-3d":
+        names += ["inertia_tensor", "principal_moments", "principal_axes", "distance_histogram"]
+    return names
+
+
+def _preset_scalar_names(preset: str, elements_to_count, rdkit_prefix: str) -> list[str]:
+    names = [
+        "n_atoms",
+        "n_residues",
+        "molecular_mass",
+        *[f"count_{symbol.upper()}" for symbol in elements_to_count],
+        "radius_of_gyration",
+        "dim_x",
+        "dim_y",
+        "dim_z",
+        "bbox_volume",
+        "compactness",
+        "bond_count",
+        "bond_length_mean",
+        "bond_length_std",
+        "bond_length_min",
+        "bond_length_max",
+        "atom_contact_count",
+        "atom_contact_density",
+        "residue_contact_count",
+        "residue_contact_density",
+    ]
+    if preset == "native-3d":
+        names += [
+            "centroid_x",
+            "centroid_y",
+            "centroid_z",
+            "center_of_mass_x",
+            "center_of_mass_y",
+            "center_of_mass_z",
+            "shape_anisotropy",
+        ]
+    if preset == "rdkit-basic":
+        names += [f"{rdkit_prefix}{name}" for name in RDKIT_BASIC_DESCRIPTORS]
+    return names
+
+
+def _rdkit_descriptors(molecule, names, prefix: str) -> dict[str, float]:
+    from .chem import rdkit_descriptors
+
+    return rdkit_descriptors(molecule, names=names, prefix=prefix)

@@ -22,6 +22,11 @@ def test_construction_validates_element_count():
         Molecule(np.zeros((3, 3)), ["O", "H"])
 
 
+def test_construction_validates_formal_charge_count():
+    with pytest.raises(ValueError):
+        Molecule(np.zeros((3, 3)), ["O", "H", "H"], formal_charges=[0, 0])
+
+
 def test_equality_by_value():
     a = Molecule(np.zeros((3, 3)), ["O", "H", "H"])
     b = Molecule(np.zeros((3, 3)), ["O", "H", "H"])
@@ -29,6 +34,11 @@ def test_equality_by_value():
     assert a == b
     assert a != c
     assert a != "not a molecule"
+
+
+def test_take_subsets_formal_charges():
+    mol = Molecule(np.zeros((3, 3)), ["N", "C", "O"], formal_charges=[1, 0, -1])
+    np.testing.assert_array_equal(mol.take([0, 2]).formal_charges, [1, -1])
 
 
 def test_instances_are_unhashable():
@@ -100,6 +110,20 @@ def test_bonds_finds_the_two_oh_bonds():
 def test_bonds_dense_path_matches(no_scipy):
     pairs = {frozenset(b) for b in water().bonds()}
     assert pairs == {frozenset({0, 1}), frozenset({0, 2})}
+
+
+def test_contacts_dense_chunked_path_matches(no_scipy):
+    pairs = {frozenset(b) for b in water().contacts(cutoff=1.1, chunk_size=1)}
+    assert pairs == {frozenset({0, 1}), frozenset({0, 2})}
+
+
+def test_contact_count_dense_chunked_path(no_scipy):
+    assert water().contact_count(cutoff=1.1, chunk_size=1) == 2
+
+
+def test_contacts_validate_chunk_size():
+    with pytest.raises(ValueError, match="chunk_size"):
+        water().contacts(cutoff=1.1, chunk_size=0)
 
 
 def test_bonds_dense_guard_refuses_huge_molecules(no_scipy):

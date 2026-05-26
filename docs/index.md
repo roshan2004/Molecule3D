@@ -20,9 +20,13 @@ G = cg.to_networkx()
 
 ## What it does
 
-- Read `.pdb`, `.xyz`, basic `.cif` atom-site loops, and `.sdf` files.
+- Read `.pdb`, `.xyz`, `.cif` atom-site loops, and `.sdf` files, preserving
+  explicit SDF/PDB bonds where present.
+- Validate CIF/mmCIF syntax and atom-site columns with optional Gemmi support.
 - Select atoms by element, chain, residue name, atom name, and residue id.
 - Compute geometry, RMSD, contacts, contact maps, ensembles, and descriptors.
+- Preserve SDF formal charges and expose optional RDKit-backed chemical features
+  and descriptors.
 - Visualize molecules with Matplotlib or py3Dmol.
 - Export molecular graphs to NetworkX, PyTorch Geometric, or DGL.
 - Prototype interpretable coarse-grained mappings.

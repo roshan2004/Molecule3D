@@ -10,7 +10,7 @@ from molscope.io import read_pdb, read_pdb_models, read_xyz, write_pdb, write_xy
 DATA = os.path.dirname(os.path.dirname(__file__))
 
 
-def _atom_line(serial, altloc, x, y, z, element="N"):
+def _atom_line(serial, altloc, x, y, z, element="N", occupancy=1.0):
     """Build a fixed-column ATOM record with an explicit altLoc at column 17."""
     line = list(" " * 80)
 
@@ -27,6 +27,7 @@ def _atom_line(serial, altloc, x, y, z, element="N"):
     put(f"{x:8.3f}", 31)
     put(f"{y:8.3f}", 39)
     put(f"{z:8.3f}", 47)
+    put(f"{occupancy:6.2f}", 55)
     put(f"{element:>2}", 77)
     return "".join(line).rstrip() + "\n"
 
@@ -93,6 +94,46 @@ def test_pdb_skips_alternate_conformations(tmp_path):
     np.testing.assert_allclose(mol.coords[0], [1.0, 2.0, 3.0])
 
 
+def test_pdb_altloc_all_keeps_every_location(tmp_path):
+    f = tmp_path / "alt_all.pdb"
+    f.write_text(
+        _atom_line(1, "A", 1.0, 2.0, 3.0)
+        + _atom_line(2, "B", 9.0, 9.0, 9.0)
+    )
+    mol = read_pdb(str(f), altloc="all")
+    assert len(mol) == 2
+    np.testing.assert_allclose(mol.coords[1], [9.0, 9.0, 9.0])
+
+
+def test_pdb_altloc_first_keeps_first_location_per_atom(tmp_path):
+    f = tmp_path / "alt_first.pdb"
+    f.write_text(
+        _atom_line(1, "B", 9.0, 9.0, 9.0)
+        + _atom_line(2, "A", 1.0, 2.0, 3.0)
+    )
+    mol = read_pdb(str(f), altloc="first")
+    assert len(mol) == 1
+    np.testing.assert_allclose(mol.coords[0], [9.0, 9.0, 9.0])
+
+
+def test_pdb_altloc_highest_occupancy(tmp_path):
+    f = tmp_path / "alt_occ.pdb"
+    f.write_text(
+        _atom_line(1, "A", 1.0, 2.0, 3.0, occupancy=0.25)
+        + _atom_line(2, "B", 9.0, 9.0, 9.0, occupancy=0.75)
+    )
+    mol = read_pdb(str(f), altloc="highest_occupancy")
+    assert len(mol) == 1
+    np.testing.assert_allclose(mol.coords[0], [9.0, 9.0, 9.0])
+
+
+def test_pdb_altloc_rejects_unknown_policy(tmp_path):
+    f = tmp_path / "alt_bad.pdb"
+    f.write_text(_atom_line(1, "A", 1.0, 2.0, 3.0))
+    with pytest.raises(ValueError, match="altloc"):
+        read_pdb(str(f), altloc="bad")
+
+
 def test_read_all_nmr_models():
     models = read_pdb_models(os.path.join(DATA, "1aml.pdb"))
     assert len(models) == 20
@@ -128,3 +169,26 @@ def test_pdb_round_trip(tmp_path):
     back = read_pdb(path)
     np.testing.assert_allclose(back.coords, mol.coords, atol=1e-3)
     assert back.elements == ["C", "O"]
+
+
+def test_pdb_conect_records_create_explicit_bonds(tmp_path):
+    f = tmp_path / "conect.pdb"
+    f.write_text(
+        _atom_line(1, " ", 0.0, 0.0, 0.0, element="C")
+        + _atom_line(2, " ", 10.0, 0.0, 0.0, element="C")
+        + "CONECT    1    2\n"
+    )
+    mol = read_pdb(str(f))
+    np.testing.assert_array_equal(mol.bonds(), [[0, 1]])
+
+
+def test_pdb_round_trip_preserves_explicit_bonds(tmp_path):
+    mol = Molecule(
+        np.array([[0.0, 0.0, 0.0], [10.0, 0.0, 0.0]]),
+        ["C", "C"],
+        bond_index=[[0, 1]],
+    )
+    path = str(tmp_path / "bonded.pdb")
+    write_pdb(mol, path)
+    back = read_pdb(path)
+    np.testing.assert_array_equal(back.bonds(), [[0, 1]])

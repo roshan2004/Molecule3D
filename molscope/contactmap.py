@@ -51,9 +51,11 @@ def contact_map(molecule: Molecule, cutoff: float = 8.0, level: str = "residue",
                 method: str = "ca") -> ContactMap:
     """Compute a contact map for one structure (see :class:`ContactMap`)."""
     if level == "atom":
-        dist = molecule.distance_matrix()
-        mat = (dist < cutoff).astype(float)
-        np.fill_diagonal(mat, 0.0)
+        mat = np.zeros((len(molecule), len(molecule)), dtype=float)
+        pairs = molecule.contacts(cutoff=cutoff)
+        if len(pairs):
+            mat[pairs[:, 0], pairs[:, 1]] = 1.0
+            mat[pairs[:, 1], pairs[:, 0]] = 1.0
         return ContactMap(mat, level="atom", cutoff=cutoff)
 
     if level != "residue":

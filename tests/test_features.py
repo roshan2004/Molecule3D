@@ -154,6 +154,56 @@ def test_read_cif(tmp_path):
     np.testing.assert_allclose(mol.coords[1], [4, 5, 6])
 
 
+def test_read_cif_handles_quoted_atom_site_values(tmp_path):
+    f = tmp_path / "quoted.cif"
+    f.write_text("""\
+data_TEST
+loop_
+_atom_site.group_PDB
+_atom_site.id
+_atom_site.type_symbol
+_atom_site.label_atom_id
+_atom_site.label_comp_id
+_atom_site.auth_asym_id
+_atom_site.auth_seq_id
+_atom_site.Cartn_x
+_atom_site.Cartn_y
+_atom_site.Cartn_z
+ATOM 1 C 'CA alt' 'GLY A' A 1 1.000 2.000 3.000
+#
+""")
+    mol = ms.read(str(f))
+    assert mol.atom_names == ["CA alt"]
+    assert mol.resnames == ["GLY A"]
+    np.testing.assert_allclose(mol.coords[0], [1, 2, 3])
+
+
+def test_read_cif_handles_semicolon_text_fields(tmp_path):
+    f = tmp_path / "multiline.cif"
+    f.write_text("""\
+data_TEST
+loop_
+_atom_site.group_PDB
+_atom_site.id
+_atom_site.type_symbol
+_atom_site.label_atom_id
+_atom_site.label_comp_id
+_atom_site.auth_asym_id
+_atom_site.auth_seq_id
+_atom_site.Cartn_x
+_atom_site.Cartn_y
+_atom_site.Cartn_z
+ATOM 1 C
+;CA alt
+;
+GLY A 1 1.000 2.000 3.000
+#
+""")
+    mol = ms.read(str(f))
+    assert mol.atom_names == ["CA alt"]
+    np.testing.assert_allclose(mol.coords[0], [1, 2, 3])
+
+
 SDF = """\
 water
   example
@@ -175,6 +225,29 @@ def test_read_sdf(tmp_path):
     mol = ms.read(str(f))
     assert mol.elements == ["O", "H", "H"]
     np.testing.assert_allclose(mol.coords[1], [0.96, 0.0, 0.0])
+    np.testing.assert_array_equal(mol.bonds(), [[0, 1], [0, 2]])
+    np.testing.assert_array_equal(mol.bond_orders, [1.0, 1.0])
+    np.testing.assert_array_equal(mol.formal_charges, [0, 0, 0])
+    np.testing.assert_array_equal(mol.to_graph().edge_types, [1.0, 1.0])
+
+
+def test_read_sdf_preserves_charges_and_aromatic_bond_code(tmp_path):
+    f = tmp_path / "charged.sdf"
+    f.write_text("""\
+charged
+  example
+
+  2  1  0  0  0  0  0  0  0  0999 V2000
+    0.0000    0.0000    0.0000 N   0  3
+    1.2000    0.0000    0.0000 C   0  0
+  1  2  4  0
+M  CHG  1   2  -1
+M  END
+$$$$
+""")
+    mol = ms.read(str(f))
+    np.testing.assert_array_equal(mol.bond_orders, [1.5])
+    np.testing.assert_array_equal(mol.formal_charges, [1, -1])
 
 
 def test_multi_frame_xyz(tmp_path):

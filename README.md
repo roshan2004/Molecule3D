@@ -8,8 +8,9 @@
 Lightweight molecular structure analysis, visualisation, graph export, and
 coarse-graining in Python. Read `.xyz`, `.pdb`, `.cif` and `.sdf` files
 (optionally gzip-compressed), select and analyse atoms, and visualise them in
-3D. The `.cif` reader is a basic mmCIF parser for standard `_atom_site`
-coordinate loops, not a full mmCIF syntax implementation.
+3D. The `.cif` reader handles standard `_atom_site` coordinate loops, including
+quoted values; optional Gemmi-backed validation is available through
+`pip install "molscope[cif]"`.
 
 | 3D structure (element) | Secondary structure (DSSP) | Residue contact map | Coarse-grained beads |
 | --- | --- | --- | --- |
@@ -17,18 +18,24 @@ coordinate loops, not a full mmCIF syntax implementation.
 
 ## What it does
 
-- **Read and write** XYZ, PDB, mmCIF and SDF (gzip-aware), fetch structures by
-  id from RCSB, and load multi-model NMR ensembles.
+- **Read and write** XYZ, PDB, mmCIF and SDF (gzip-aware), preserve SDF/PDB
+  explicit bonds and SDF formal charges where present, fetch structures by id
+  from RCSB, and load multi-model NMR ensembles.
+- **Validate mmCIF** syntax, atom-site coordinate columns, and supplied
+  dictionary files with optional Gemmi support.
 - **Select and measure** by chain, element or residue; compute distances,
   angles, dihedrals and Kabsch-aligned RMSD.
-- **Analyse** centroids, radius of gyration, the inertia tensor, inferred bonds
-  and contacts.
+- **Analyse** centroids, radius of gyration, the inertia tensor,
+  explicit/inferred bonds, and contacts.
 - **Contact maps** at atom or residue level, with heatmap plots.
 - **Secondary structure** via a self-contained, dependency-free DSSP, with
   `plot(color_by="ss")`.
 - **Ensembles**: pairwise RMSD, RMSF, averaging, and conformer clustering.
 - **Export for ML**: flat structural descriptors and molecular graphs for
   NetworkX, PyTorch Geometric and DGL.
+- **Chemical perception and descriptors**: optional RDKit-backed formal charge,
+  valence, aromaticity and scalar descriptor features with
+  `pip install "molscope[chem]"`.
 - **Coarse-grain** onto residue, Martini-style or custom bead mappings.
 - **Visualise** with 3D matplotlib plots, an interactive py3Dmol viewer, spin
   GIFs, and a command-line interface.
@@ -146,6 +153,7 @@ mol.radius_of_gyration              # compactness (angstrom)
 mol.dimensions, mol.formula         # bounding box, Hill-order formula
 mol.bonds()                         # inferred bond index pairs (KD-tree if scipy)
 mol.contacts(cutoff=5.0)            # atom pairs within a distance
+mol.contact_count(cutoff=5.0)       # count pairs without returning them
 
 mol.distance(i, j)                  # bond length
 mol.angle(i, j, k)                  # bond angle (degrees)
@@ -158,12 +166,14 @@ a.alpha_carbons().rmsd(b.alpha_carbons(), align=True)   # CA-RMSD after Kabsch f
 
 ```python
 features = mol.descriptors()                 # flat dict of scalar/vector descriptors
+features = mol.descriptors(preset="native-3d")
 features["radius_of_gyration"]
 features["principal_moments"]                # 3 values
 features["distance_histogram"]               # fixed-size histogram
 
 X, names = ms.featurize_many(
     ["a.pdb", "b.pdb", "c.xyz"],
+    preset="native-basic",
     return_names=True,
 )                                            # numeric matrix + column names
 ```
@@ -172,7 +182,17 @@ Descriptors include atom/residue counts, element counts, molecular mass,
 centres, radius of gyration, bounding-box dimensions, inertia tensor, principal
 moments/axes, shape anisotropy, compactness, distance histograms, bond-length
 summary statistics, and atom/residue contact summaries. Full contact maps remain
-available through `mol.contact_map(...)`.
+available through `mol.contact_map(...)`. With `pip install "molscope[chem]"`,
+you can also request RDKit descriptors directly:
+
+```python
+mol.rdkit_descriptors(names=["MolWt", "TPSA"])
+mol.descriptors(include_rdkit=True, rdkit_descriptor_names=["MolWt", "TPSA"])
+```
+
+For reproducible ML columns, use descriptor presets: `native-basic`,
+`native-3d`, or `rdkit-basic`. Inspect the flattened column order with
+`ms.descriptor_feature_names(...)`.
 
 ### Contact maps
 
@@ -257,9 +277,9 @@ spin_gif(mol, "spin.gif")                    # rotating animation
 
 ### Molecular graphs (for machine learning)
 
-Turn 3D coordinates plus inferred bonds into a graph, then export to the common
-ML frameworks. The base `to_graph()` needs no extra dependencies; each exporter
-imports its backend lazily.
+Turn 3D coordinates plus explicit or inferred bonds into a graph, then export
+to the common ML frameworks. The base `to_graph()` needs no extra dependencies;
+each exporter imports its backend lazily.
 
 ```python
 mol = ms.read("1fqy.pdb")
@@ -268,18 +288,28 @@ g = mol.to_graph()                  # MolecularGraph: nodes + edges, no deps
 g.n_atoms, g.n_bonds                # counts
 g.atomic_numbers, g.masses          # per-node arrays
 g.node_features()                   # (N, 2) default features [atomic_number, mass]
+g.node_features("ml")               # stable ML node preset
+g.edge_features("ml")               # stable ML edge preset
 
 G = mol.to_networkx()               # networkx.Graph with node/edge attributes
 data = mol.to_pyg_data()            # torch_geometric.data.Data (x, pos, edge_index, edge_attr, z)
 dglg = mol.to_dgl_graph()           # dgl.DGLGraph with ndata/edata tensors
 ```
 
-Nodes carry element, atomic number, mass, coordinates and (from PDB/mmCIF) atom
-name, residue and chain. Edges carry the bonded pair, interatomic distance, and
-bond order (`1.0` for geometrically inferred bonds). Install backends as needed:
-`pip install "molscope[graph]"` installs only NetworkX. PyTorch Geometric and
-DGL are optional manual installs: `pip install torch torch_geometric` or
-`pip install dgl` after choosing the right PyTorch build for your platform.
+Nodes carry element, atomic number, mass, coordinates, formal charge, and (from
+PDB/mmCIF) atom name, residue and chain. Edges carry the bonded pair,
+interatomic distance, and bond order from SDF where available (`1.0` for
+PDB/CONECT or geometrically inferred bonds). Install backends as needed:
+`pip install "molscope[graph]"` for NetworkX, `"molscope[pyg]"` for PyTorch
+Geometric, `"molscope[dgl]"` for DGL, or `"molscope[gnn]"` for all graph
+backends. For custom CUDA, ROCm, Apple Silicon, or cluster builds, install the
+matching PyTorch stack first.
+
+Graph feature presets are also available through
+`mol.to_pyg_data(node_preset="ml", edge_preset="ml")` and
+`mol.to_dgl_graph(node_preset="ml", edge_preset="ml")`. Use
+`mol.to_graph(include_chemical_features=True)` to attach optional RDKit-backed
+aromatic atom and bond flags.
 
 ### Coarse-graining
 
@@ -339,12 +369,20 @@ python -m molscope 1fqy.pdb          # equivalent if not pip-installed
 - PDB files are parsed by **fixed columns**, not whitespace splitting, so atoms
   with touching coordinate fields (large or negative values) read correctly.
 - Alternate conformations (altLoc) other than the primary one are skipped.
+  Use `read_pdb(..., altloc="first"|"highest_occupancy"|"all")` to select a
+  different policy.
 - `read_pdb` returns a single model (`model=1` by default); use `read_pdb_models`
   for the whole ensemble.
+- SDF/MOL V2000 bond blocks, formal charges, and PDB `CONECT` records are
+  preserved. PDB output writes explicit bonds back as `CONECT` records.
 - Bond inference uses a `scipy.spatial.cKDTree` when available; without scipy it
   falls back to a dense `O(n^2)` search that is refused above ~8000 atoms.
-- Optional extras: `pip install "molscope[fast]"` (scipy, faster bonds/contacts)
-  and `"molscope[viz]"` (py3Dmol, for `Molecule.view`).
+- Optional extras: `pip install "molscope[fast]"` (scipy, faster bonds/contacts),
+  `"molscope[viz]"` (py3Dmol, for `Molecule.view`), `"molscope[graph]"`
+  (NetworkX), `"molscope[chem]"` (RDKit), `"molscope[cif]"` (Gemmi),
+  `"molscope[pyg]"`, `"molscope[dgl]"`, or `"molscope[gnn]"`. For custom CUDA,
+  ROCm, Apple Silicon, or cluster builds, install the matching PyTorch stack
+  first.
 
 ## Tests and linting
 

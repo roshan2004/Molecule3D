@@ -15,14 +15,36 @@ Supported formats:
 
 | Format | Notes |
 | --- | --- |
-| PDB | Fixed-column parser for `ATOM` and `HETATM` records. |
+| PDB | Fixed-column parser for `ATOM`/`HETATM`; preserves `CONECT` bonds. |
 | XYZ | Single-frame and multi-frame XYZ files. |
-| SDF/MOL | Basic V2000 atom block reader. |
-| CIF/mmCIF | Basic reader for standard `_atom_site` coordinate loops. |
+| SDF/MOL | V2000 atom and bond block reader; preserves bond orders and formal charges. |
+| CIF/mmCIF | Reader for standard `_atom_site` coordinate loops, including quoted values. |
 
-The CIF reader is not a full mmCIF syntax implementation. It handles standard
-atom-site coordinate loops but does not aim to support all quoted, multiline, or
-complex loop constructs.
+PDB alternate conformations can be selected explicitly:
+
+```python
+mol = ms.read_pdb("structure.pdb", altloc="primary")
+mol = ms.read_pdb("structure.pdb", altloc="highest_occupancy")
+```
+
+Supported policies are `primary`, `first`, `highest_occupancy`, and `all`.
+
+The built-in CIF reader handles standard atom-site coordinate loops with quoted
+values and semicolon-delimited text fields. Install `molscope[cif]` to use the
+optional Gemmi parser and validation helpers:
+
+```python
+mol = ms.read_cif("structure.cif", parser="gemmi")
+report = ms.validate_cif("structure.cif")
+report.raise_for_errors()
+```
+
+Dictionary-aware validation is available when you provide local dictionary
+files:
+
+```python
+report = ms.validate_cif("structure.cif", dictionaries=["mmcif_pdbx_v50.dic"])
+```
 
 Download a structure from RCSB:
 

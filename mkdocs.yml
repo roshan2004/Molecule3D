@@ -22,6 +22,7 @@ nav:
       - Plotting and viewing: user-guide/plotting.md
       - Ensemble analysis: user-guide/ensembles.md
       - Molecular graphs: user-guide/molecular-graphs.md
+      - Chemical perception: user-guide/chemical-perception.md
       - Structural descriptors: user-guide/descriptors.md
       - Coarse-graining: user-guide/coarse-graining.md
   - Examples:

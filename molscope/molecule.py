@@ -21,6 +21,7 @@ from . import elements
 # Above this size the dense O(n^2) bond search is refused; install scipy for the
 # KD-tree path (pip install 'molscope[fast]') to handle larger structures.
 _DENSE_BOND_LIMIT = 8000
+_DEFAULT_CONTACT_CHUNK_SIZE = 1024
 
 _BACKBONE_ATOMS = ("N", "CA", "C", "O")
 
@@ -36,18 +37,31 @@ class Molecule:
     resids: np.ndarray = field(default_factory=lambda: np.empty(0, dtype=int))
     chains: list[str] = field(default_factory=list)
     # Optional explicit bonds as an (E, 2) index array. When set, bonds() returns
-    # these instead of inferring from geometry (used by coarse-graining).
+    # these instead of inferring from geometry (used by coarse-graining and file
+    # formats that carry connectivity).
     bond_index: Optional[np.ndarray] = None
+    bond_orders: Optional[np.ndarray] = None
+    formal_charges: np.ndarray = field(default_factory=lambda: np.empty(0, dtype=int))
     _mapping_report: Optional[Any] = field(default=None, repr=False, compare=False)
 
     def __post_init__(self):
         coords = np.asarray(self.coords, dtype=float).reshape(-1, 3)
         object.__setattr__(self, "coords", coords)
         object.__setattr__(self, "resids", np.asarray(self.resids, dtype=int))
+        object.__setattr__(self, "formal_charges", np.asarray(self.formal_charges, dtype=int))
         if self.bond_index is not None:
             object.__setattr__(
                 self, "bond_index", np.asarray(self.bond_index, dtype=int).reshape(-1, 2)
             )
+        if self.bond_orders is not None:
+            if self.bond_index is None:
+                raise ValueError("bond_orders require bond_index")
+            orders = np.asarray(self.bond_orders, dtype=float).reshape(-1)
+            if len(orders) != len(self.bond_index):
+                raise ValueError(
+                    f"{len(orders)} bond_orders for {len(self.bond_index)} bonds"
+                )
+            object.__setattr__(self, "bond_orders", orders)
         if not self.elements:
             object.__setattr__(self, "elements", [""] * len(coords))
         for name in ("elements", "atom_names", "resnames", "chains"):
@@ -56,6 +70,10 @@ class Molecule:
                 raise ValueError(f"{len(seq)} {name} for {len(coords)} coordinates")
         if len(self.resids) and len(self.resids) != len(coords):
             raise ValueError(f"{len(self.resids)} resids for {len(coords)} coordinates")
+        if len(self.formal_charges) and len(self.formal_charges) != len(coords):
+            raise ValueError(
+                f"{len(self.formal_charges)} formal_charges for {len(coords)} coordinates"
+            )
 
     def __len__(self) -> int:
         return len(self.coords)
@@ -69,6 +87,7 @@ class Molecule:
             self.name == other.name
             and self.elements == other.elements
             and np.array_equal(self.coords, other.coords)
+            and np.array_equal(self.formal_charges, other.formal_charges)
         )
 
     __hash__ = None
@@ -91,6 +110,7 @@ class Molecule:
         def sub(seq):
             return [seq[i] for i in idx] if seq else []
 
+        bond_index, bond_orders = self._subset_bonds(idx)
         return replace(
             self,
             coords=self.coords[idx],
@@ -99,20 +119,31 @@ class Molecule:
             resnames=sub(self.resnames),
             resids=self.resids[idx] if len(self.resids) else self.resids,
             chains=sub(self.chains),
-            bond_index=self._subset_bonds(idx),
+            formal_charges=(
+                self.formal_charges[idx] if len(self.formal_charges) else self.formal_charges
+            ),
+            bond_index=bond_index,
+            bond_orders=bond_orders,
             _mapping_report=None,
         )
 
     def _subset_bonds(self, idx):
         """Restrict explicit bonds to a kept-atom index set and renumber them."""
         if self.bond_index is None:
-            return None
+            return None, None
         remap = {old: new for new, old in enumerate(idx)}
-        kept = [
-            (remap[i], remap[j]) for i, j in self.bond_index
-            if i in remap and j in remap
-        ]
-        return np.array(kept, dtype=int).reshape(-1, 2)
+        kept, orders = [], []
+        source_orders = (
+            self.bond_orders if self.bond_orders is not None
+            else np.ones(len(self.bond_index), dtype=float)
+        )
+        for (i, j), order in zip(self.bond_index, source_orders):
+            if i in remap and j in remap:
+                kept.append((remap[i], remap[j]))
+                orders.append(float(order))
+        bond_index = np.array(kept, dtype=int).reshape(-1, 2)
+        bond_orders = np.array(orders, dtype=float) if self.bond_orders is not None else None
+        return bond_index, bond_orders
 
     def select(
         self,
@@ -309,19 +340,50 @@ class Molecule:
         deltas = self.coords[:, None, :] - self.coords[None, :, :]
         return np.sqrt((deltas ** 2).sum(axis=-1))
 
-    def contacts(self, cutoff: float = 5.0) -> np.ndarray:
-        """Atom index pairs ``(i, j)`` closer than ``cutoff`` angstrom."""
+    def contacts(
+        self,
+        cutoff: float = 5.0,
+        chunk_size: int = _DEFAULT_CONTACT_CHUNK_SIZE,
+    ) -> np.ndarray:
+        """Atom index pairs ``(i, j)`` closer than ``cutoff`` angstrom.
+
+        SciPy, when installed, provides a KD-tree path. Without SciPy the
+        fallback scans coordinate blocks, so it avoids materializing the full
+        distance matrix. The returned pair array is still proportional to the
+        number of contacts.
+        """
         n = len(self)
         if n < 2:
             return np.empty((0, 2), dtype=int)
+        if cutoff <= 0.0:
+            return np.empty((0, 2), dtype=int)
+        chunk_size = _validate_chunk_size(chunk_size)
         try:
             from scipy.spatial import cKDTree
 
             return cKDTree(self.coords).query_pairs(cutoff, output_type="ndarray")
         except ImportError:
-            dist = self.distance_matrix()
-            i, j = np.where(np.triu(dist < cutoff, k=1))
-            return np.stack([i, j], axis=1)
+            return _contacts_chunked(self.coords, cutoff, chunk_size)
+
+    def contact_count(
+        self,
+        cutoff: float = 5.0,
+        chunk_size: int = _DEFAULT_CONTACT_CHUNK_SIZE,
+    ) -> int:
+        """Count atom pairs closer than ``cutoff`` without returning the pairs."""
+        n = len(self)
+        if n < 2 or cutoff <= 0.0:
+            return 0
+        chunk_size = _validate_chunk_size(chunk_size)
+        try:
+            from scipy.spatial import cKDTree
+
+            tree = cKDTree(self.coords)
+            # count_neighbors(tree, tree) includes self-pairs and both pair
+            # directions; remove the diagonal and collapse i->j / j->i.
+            return max(0, int((tree.count_neighbors(tree, cutoff) - n) // 2))
+        except ImportError:
+            return _contact_count_chunked(self.coords, cutoff, chunk_size)
 
     def contact_map(self, cutoff: float = 8.0, level: str = "residue", method: str = "ca"):
         """Build a contact map. See :func:`molscope.contactmap.contact_map`.
@@ -406,6 +468,19 @@ class Molecule:
         keep = dist < cutoff
         return np.stack([i[keep], j[keep]], axis=1)
 
+    def bond_order_array(self, tolerance: float = 1.2) -> np.ndarray:
+        """Bond-order values aligned with :meth:`bonds`.
+
+        Explicit file/topology bonds preserve their source order values where
+        available. Geometrically inferred bonds have unknown order and are
+        reported as ``1.0``.
+        """
+        if self.bond_index is not None:
+            if self.bond_orders is not None:
+                return self.bond_orders
+            return np.ones(len(self.bond_index), dtype=float)
+        return np.ones(len(self.bonds(tolerance)), dtype=float)
+
     def summary(self) -> str:
         """One-line human-readable description of the molecule."""
         parts = [f"{self.name or 'molecule'}: {len(self)} atoms"]
@@ -453,28 +528,84 @@ class Molecule:
 
         return descriptors(self, **kwargs)
 
+    def chemical_features(self, **kwargs):
+        """Return optional RDKit-backed aromaticity, valence and charge features.
+
+        Requires the ``chem`` extra (``pip install "molscope[chem]"``). Explicit
+        SDF bond orders and formal charges are used when present; coordinate-only
+        structures fall back to geometrically inferred single bonds.
+        """
+        from .chem import chemical_features
+
+        return chemical_features(self, **kwargs)
+
+    def rdkit_descriptors(self, **kwargs) -> dict[str, float]:
+        """Return optional RDKit scalar molecular descriptors.
+
+        Requires the ``chem`` extra (``pip install "molscope[chem]"``). Use
+        ``descriptors(include_rdkit=True)`` to merge these into the MolScope
+        native descriptor dictionary.
+        """
+        from .chem import rdkit_descriptors
+
+        return rdkit_descriptors(self, **kwargs)
+
     # -- graph export -------------------------------------------------------
 
-    def to_graph(self, tolerance: float = 1.2, bonds=None):
+    def to_graph(
+        self,
+        tolerance: float = 1.2,
+        bonds=None,
+        bond_orders=None,
+        include_chemical_features: bool = False,
+    ):
         """Build a :class:`molscope.graph.MolecularGraph` from this molecule.
 
         Bonds are inferred from covalent radii (see :meth:`bonds`) unless an
-        explicit ``(E, 2)`` array of index pairs is passed. Node and edge
-        attributes (element, residue, chain, distance, ...) are carried along.
+        explicit ``(E, 2)`` array of index pairs is passed. Explicit bond orders
+        from input files are preserved when available; inferred or user-supplied
+        bonds default to order ``1.0`` unless ``bond_orders=`` is passed. Node
+        and edge attributes (element, residue, chain, distance, ...) are carried
+        along. With ``include_chemical_features=True``, optional RDKit-backed
+        aromatic atom/bond flags are attached when the ``chem`` extra is
+        installed.
         """
         from .graph import MolecularGraph
 
-        edges = self.bonds(tolerance) if bonds is None else np.asarray(bonds, dtype=int)
+        aromatic_atoms = np.empty(0, dtype=bool)
+        aromatic_bonds = np.empty(0, dtype=bool)
+        if bonds is None:
+            edges = self.bonds(tolerance)
+            if self.bond_index is not None and self.bond_orders is not None:
+                edge_types = self.bond_orders
+            else:
+                edge_types = np.ones(len(edges), dtype=float)
+            if include_chemical_features:
+                features = self.chemical_features()
+                aromatic_atoms = features.aromatic_atoms
+                aromatic_bonds = _align_bond_flags(
+                    edges, features.bond_index, features.aromatic_bonds
+                )
+        else:
+            edges = np.asarray(bonds, dtype=int)
+            if bond_orders is None:
+                edge_types = np.ones(len(edges), dtype=float)
+            else:
+                edge_types = np.asarray(bond_orders, dtype=float).reshape(-1)
         edges = edges.reshape(-1, 2)
+        if len(edge_types) != len(edges):
+            raise ValueError(f"{len(edge_types)} bond_orders for {len(edges)} bonds")
         if len(edges):
             dist = np.linalg.norm(self.coords[edges[:, 0]] - self.coords[edges[:, 1]], axis=1)
         else:
             dist = np.empty(0, dtype=float)
         return MolecularGraph(
             coords=self.coords, elements=self.elements, edges=edges,
-            edge_distances=dist, edge_types=np.ones(len(edges)),
+            edge_distances=dist, edge_types=edge_types,
             atom_names=self.atom_names, resnames=self.resnames,
-            resids=self.resids, chains=self.chains, name=self.name,
+            resids=self.resids, chains=self.chains,
+            formal_charges=self.formal_charges, aromatic_atoms=aromatic_atoms,
+            aromatic_bonds=aromatic_bonds, name=self.name,
         )
 
     def to_networkx(self, **kwargs):
@@ -513,3 +644,74 @@ def _rotation_matrix(axis: np.ndarray, angle: float) -> np.ndarray:
         [y * x * C + z * s, c + y * y * C, y * z * C - x * s],
         [z * x * C - y * s, z * y * C + x * s, c + z * z * C],
     ])
+
+
+def _validate_chunk_size(chunk_size: int) -> int:
+    chunk_size = int(chunk_size)
+    if chunk_size < 1:
+        raise ValueError("chunk_size must be >= 1")
+    return chunk_size
+
+
+def _contacts_chunked(coords: np.ndarray, cutoff: float, chunk_size: int) -> np.ndarray:
+    pairs = []
+    cutoff2 = float(cutoff) ** 2
+    for start, end, block in _iter_blocks(coords, chunk_size):
+        if len(block) > 1:
+            d2 = _squared_distances(block, block)
+            i, j = np.triu_indices(len(block), k=1)
+            keep = d2[i, j] < cutoff2
+            if np.any(keep):
+                pairs.append(np.stack([start + i[keep], start + j[keep]], axis=1))
+
+        for other_start, _, other in _iter_blocks(coords, chunk_size, start=end):
+            d2 = _squared_distances(block, other)
+            i, j = np.nonzero(d2 < cutoff2)
+            if len(i):
+                pairs.append(np.stack([start + i, other_start + j], axis=1))
+
+    if not pairs:
+        return np.empty((0, 2), dtype=int)
+    return np.concatenate(pairs).astype(int, copy=False).reshape(-1, 2)
+
+
+def _contact_count_chunked(coords: np.ndarray, cutoff: float, chunk_size: int) -> int:
+    count = 0
+    cutoff2 = float(cutoff) ** 2
+    for _, end, block in _iter_blocks(coords, chunk_size):
+        if len(block) > 1:
+            d2 = _squared_distances(block, block)
+            i, j = np.triu_indices(len(block), k=1)
+            count += int(np.count_nonzero(d2[i, j] < cutoff2))
+
+        for _, _, other in _iter_blocks(coords, chunk_size, start=end):
+            d2 = _squared_distances(block, other)
+            count += int(np.count_nonzero(d2 < cutoff2))
+    return count
+
+
+def _iter_blocks(coords: np.ndarray, chunk_size: int, start: int = 0):
+    n = len(coords)
+    for block_start in range(start, n, chunk_size):
+        block_end = min(block_start + chunk_size, n)
+        yield block_start, block_end, coords[block_start:block_end]
+
+
+def _squared_distances(a: np.ndarray, b: np.ndarray) -> np.ndarray:
+    a2 = np.einsum("ij,ij->i", a, a)[:, None]
+    b2 = np.einsum("ij,ij->i", b, b)[None, :]
+    d2 = a2 + b2 - 2.0 * (a @ b.T)
+    return np.maximum(d2, 0.0)
+
+
+def _align_bond_flags(edges: np.ndarray, source_edges: np.ndarray, flags: np.ndarray) -> np.ndarray:
+    if len(edges) == 0:
+        return np.empty(0, dtype=bool)
+    flag_by_pair = {
+        tuple(sorted((int(i), int(j)))): bool(flag)
+        for (i, j), flag in zip(source_edges, flags)
+    }
+    return np.array([
+        flag_by_pair.get(tuple(sorted((int(i), int(j)))), False)
+        for i, j in edges
+    ], dtype=bool)

@@ -7,6 +7,7 @@ import pytest
 
 import molscope as ms
 from molscope import MolecularGraph, Molecule
+from molscope.graph import edge_feature_names, node_feature_names
 
 DATA = os.path.dirname(os.path.dirname(__file__))
 
@@ -40,9 +41,60 @@ def test_node_features_shape():
     assert feats.shape == (3, 2)  # [atomic_number, mass]
 
 
+def test_graph_feature_presets_have_stable_names_and_shapes():
+    g = water().to_graph()
+    x, e, node_names, edge_names = g.feature_matrices(return_names=True)
+    assert node_names == node_feature_names("ml")
+    assert edge_names == edge_feature_names("ml")
+    assert x.shape == (3, len(node_names))
+    assert e.shape == (2, len(edge_names))
+    assert "element_O" in node_names
+    assert "formal_charge" in node_names
+    assert "bond_order" in edge_names
+
+
+def test_graph_basic_feature_presets_include_charge_and_bond_order():
+    mol = Molecule(
+        np.array([[0.0, 0.0, 0.0], [1.3, 0.0, 0.0]]),
+        ["N", "O"],
+        bond_index=[[0, 1]],
+        bond_orders=[2],
+        formal_charges=[1, -1],
+    )
+    g = mol.to_graph()
+    x, node_names = g.node_features("basic", return_names=True)
+    e, edge_names = g.edge_features("basic", return_names=True)
+    assert node_names == ["atomic_number", "mass", "formal_charge"]
+    assert edge_names == ["distance", "bond_order"]
+    np.testing.assert_array_equal(x[:, node_names.index("formal_charge")], [1.0, -1.0])
+    np.testing.assert_array_equal(e[:, edge_names.index("bond_order")], [2.0])
+
+
+def test_graph_ml_preset_marks_aromatic_bond_order():
+    mol = Molecule(
+        np.array([[0.0, 0.0, 0.0], [1.4, 0.0, 0.0]]),
+        ["C", "C"],
+        bond_index=[[0, 1]],
+        bond_orders=[1.5],
+    )
+    e, names = mol.to_graph().edge_features("ml", return_names=True)
+    assert e[0, names.index("aromatic")] == 1.0
+
+
 def test_to_graph_accepts_explicit_bonds():
     g = water().to_graph(bonds=[[0, 1]])
     assert g.n_bonds == 1
+
+
+def test_to_graph_preserves_explicit_bond_orders():
+    mol = Molecule(
+        np.array([[0.0, 0.0, 0.0], [1.3, 0.0, 0.0]]),
+        ["C", "C"],
+        bond_index=[[0, 1]],
+        bond_orders=[2],
+    )
+    g = mol.to_graph()
+    np.testing.assert_array_equal(g.edge_types, [2.0])
 
 
 def test_graph_carries_metadata():
@@ -50,6 +102,37 @@ def test_graph_carries_metadata():
     g = mol.to_graph()
     assert g.n_atoms == 1661
     assert len(g.chains) == 1661 and g.chains[0] == "A"
+
+
+def test_graph_carries_formal_charges():
+    mol = Molecule(
+        np.array([[0.0, 0.0, 0.0], [1.2, 0.0, 0.0]]),
+        ["O", "C"],
+        bond_index=[[0, 1]],
+        formal_charges=[-1, 1],
+    )
+    g = mol.to_graph()
+    np.testing.assert_array_equal(g.formal_charges, [-1, 1])
+
+
+def test_graph_can_attach_rdkit_aromatic_features():
+    pytest.importorskip("rdkit")
+    mol = Molecule(
+        np.array([
+            [1.396, 0.000, 0.000],
+            [0.698, 1.209, 0.000],
+            [-0.698, 1.209, 0.000],
+            [-1.396, 0.000, 0.000],
+            [-0.698, -1.209, 0.000],
+            [0.698, -1.209, 0.000],
+        ]),
+        ["C"] * 6,
+        bond_index=[[0, 1], [1, 2], [2, 3], [3, 4], [4, 5], [5, 0]],
+        bond_orders=[1.5] * 6,
+    )
+    g = mol.to_graph(include_chemical_features=True)
+    assert g.aromatic_atoms.all()
+    assert g.aromatic_bonds.all()
 
 
 # -- networkx (in dev deps, tested for real) --------------------------------
@@ -75,6 +158,13 @@ def test_networkx_includes_residue_metadata():
     assert G.nodes[0]["resname"] == "LYS"
 
 
+def test_networkx_includes_formal_charge():
+    pytest.importorskip("networkx")
+    mol = Molecule(np.zeros((1, 3)), ["N"], formal_charges=[1])
+    G = mol.to_networkx()
+    assert G.nodes[0]["formal_charge"] == 1
+
+
 # -- PyTorch Geometric / DGL (skipped unless installed) ---------------------
 
 
@@ -88,6 +178,8 @@ def test_to_pyg_data():
     # 2 undirected bonds -> 4 directed edges
     assert data.edge_index.shape == (2, 4)
     assert data.edge_attr.shape == (4, 1)
+    assert data.bond_order.shape == (4,)
+    assert data.formal_charge.shape == (3,)
 
 
 def test_to_dgl_graph():
@@ -97,3 +189,5 @@ def test_to_dgl_graph():
     assert g.num_nodes() == 3
     assert g.num_edges() == 4
     assert g.ndata["feat"].shape == (3, 2)
+    assert g.ndata["formal_charge"].shape == (3,)
+    assert g.edata["bond_order"].shape == (4,)

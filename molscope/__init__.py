@@ -7,8 +7,10 @@ beads, and visualise everything in 3D.
 
 What it does
 ------------
-- **Read and write** XYZ, PDB, mmCIF and SDF; fetch by id from RCSB; load
-  multi-model NMR ensembles (:func:`read`, :func:`fetch`, :func:`read_pdb_models`).
+- **Read and write** XYZ, PDB, mmCIF and SDF; preserve SDF/PDB explicit bonds
+  and SDF formal charges; fetch by id from RCSB; load multi-model NMR ensembles;
+  validate CIF/mmCIF with optional Gemmi support
+  (:func:`read`, :func:`fetch`, :func:`read_pdb_models`, :func:`validate_cif`).
 - **Select and measure** by chain, element or residue; distances, angles,
   dihedrals and Kabsch-aligned RMSD (:class:`Molecule`).
 - **Analyse** centroids, radius of gyration, inertia tensor, bonds and contacts.
@@ -17,6 +19,8 @@ What it does
   (:mod:`molscope.ensemble`, :func:`cluster`, :func:`rmsd_matrix`).
 - **Export for ML**: structural descriptors and molecular graphs for NetworkX,
   PyTorch Geometric and DGL (:func:`descriptors`, :class:`MolecularGraph`).
+- **Chemical perception**: optional RDKit-backed valence, aromaticity, charge
+  features and descriptors (:func:`chemical_features`, :func:`rdkit_descriptors`).
 - **Coarse-grain** onto residue, Martini-style or custom bead mappings
   (:mod:`molscope.coarsegrain`).
 - **Visualise** with 3D matplotlib plots, an interactive py3Dmol viewer, and
@@ -38,13 +42,15 @@ See https://github.com/roshan2004/molscope for the full documentation.
 """
 
 from . import coarsegrain, dssp, ensemble
+from .chem import ChemicalFeatures, chemical_features, rdkit_descriptors, to_rdkit
+from .cif import CifValidationReport, validate_cif
 from .coarsegrain import BeadMapping, BondMapping, CoarseGrainReport, DroppedAtom
 from .contactmap import ContactMap
-from .descriptors import descriptors, featurize_many
+from .descriptors import descriptor_feature_names, descriptors, featurize_many
 from .dssp import SecondaryStructure
 from .ensemble import Clustering, cluster, rmsd_matrix
 from .ensemble import contact_frequency as ensemble_contact_frequency
-from .graph import MolecularGraph
+from .graph import MolecularGraph, edge_feature_names, node_feature_names
 from .io import (
     fetch,
     read,
@@ -62,6 +68,8 @@ from .plotting import plot_rmsd_heatmap
 
 __all__ = [
     "Clustering",
+    "ChemicalFeatures",
+    "CifValidationReport",
     "BeadMapping",
     "BondMapping",
     "CoarseGrainReport",
@@ -71,11 +79,14 @@ __all__ = [
     "MolecularGraph",
     "SecondaryStructure",
     "cluster",
+    "chemical_features",
     "coarsegrain",
+    "descriptor_feature_names",
     "descriptors",
     "dssp",
     "ensemble",
     "ensemble_contact_frequency",
+    "edge_feature_names",
     "featurize_many",
     "fetch",
     "plot_rmsd_heatmap",
@@ -86,7 +97,11 @@ __all__ = [
     "read_sdf",
     "read_xyz",
     "read_xyz_frames",
+    "rdkit_descriptors",
     "rmsd_matrix",
+    "node_feature_names",
+    "to_rdkit",
+    "validate_cif",
     "write_pdb",
     "write_xyz",
 ]

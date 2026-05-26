@@ -20,15 +20,23 @@ uv run pytest
 ```bash
 pip install "molscope[fast]"   # scipy KD-tree bond search
 pip install "molscope[viz]"    # py3Dmol notebook viewer
-pip install "molscope[graph]"  # NetworkX exporter only
+pip install "molscope[graph]"  # NetworkX exporter
+pip install "molscope[chem]"   # RDKit chemical perception
+pip install "molscope[cif]"    # Gemmi CIF/mmCIF parser and validation helpers
+pip install "molscope[pyg]"    # PyTorch + PyTorch Geometric exporter
+pip install "molscope[dgl]"    # PyTorch + DGL exporter
+pip install "molscope[gnn]"    # NetworkX + PyG + DGL exporters
 ```
 
-PyTorch Geometric and DGL are optional manual installs because PyTorch builds
-are platform-specific:
+These extras use the default PyPI PyTorch/DGL/PyG packages. If you need a
+specific CUDA, ROCm, Apple Silicon, or cluster build, install the matching
+PyTorch stack first from the backend project's instructions, then install
+MolScope normally:
 
 ```bash
 pip install torch torch_geometric
 pip install dgl
+pip install molscope
 ```
 
 ## Documentation site
