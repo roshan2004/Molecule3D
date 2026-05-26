@@ -107,9 +107,10 @@ def test_dssp_three_state_agreement_with_reference():
     fraction = agree / len(shared)
     print(f"\n3-state DSSP agreement: {fraction:.1%} over {len(shared)} residues")
 
-    # Floor for a simplified method. Once you observe the real number on CI,
-    # tighten this toward it so the test guards against drift in both directions.
-    assert fraction >= 0.70
+    # Observed 99.1% vs mkdssp 4.2.2 on 1fqy (mostly helical). Floor set below
+    # that with headroom for boundary residues, tight enough to catch a real
+    # regression in the assignment.
+    assert fraction >= 0.95
 
 
 def test_helix_and_strand_fractions_are_in_the_right_ballpark():
