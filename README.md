@@ -57,13 +57,13 @@ coarse-grained bead models without pulling in a full simulation stack.
 ## Architecture
 
 ```mermaid
-flowchart LR
-    files["XYZ / PDB / mmCIF / SDF"] --> readers["read(), fetch(), validators"]
-    readers --> mol["Molecule\ncoords + elements + topology metadata"]
-    mol --> analysis["geometry, contacts,\nsecondary structure, descriptors"]
-    mol --> graphs["MolecularGraph\nNetworkX / PyG / DGL"]
-    mol --> cg["coarse_grain()\nresidue, simplified Martini-style, custom"]
-    mol --> viz["Matplotlib / py3Dmol / CLI"]
+graph LR
+    A[XYZ, PDB, mmCIF, SDF files] --> B[read, fetch, validate]
+    B --> C[Molecule object]
+    C --> D[Geometry, contacts, DSSP, descriptors]
+    C --> E[Molecular graphs for NetworkX, PyG, DGL]
+    C --> F[Residue, simplified Martini-style, custom CG mappings]
+    C --> G[Matplotlib, py3Dmol, CLI visualisation]
 ```
 
 ## Why MolScope?
