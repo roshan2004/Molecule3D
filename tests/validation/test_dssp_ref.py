@@ -5,10 +5,15 @@ is not byte-for-byte equality with the reference but a per-residue *agreement
 fraction* on the reduced 3-state alphabet (helix / strand / coil). The test
 prints that fraction so a regression is visible, and asserts a defensible floor.
 
-Requires Biopython and the ``mkdssp`` executable on PATH (``pip install
-'molscope[validation]'`` plus a system ``dssp``/``mkdssp``). Skips otherwise.
+We invoke ``mkdssp`` directly and parse its classic (``--output-format dssp``)
+output rather than going through Biopython's wrapper, which does not drive
+mkdssp v4 (the version shipped by current Linux distros). Skips cleanly when no
+``mkdssp``/``dssp`` binary is on PATH.
 """
 
+import shutil
+import subprocess
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -20,8 +25,8 @@ pytestmark = pytest.mark.validation
 ROOT = Path(__file__).resolve().parents[2]
 PROTEIN = str(ROOT / "1fqy.pdb")
 
-# Reduce DSSP's 8-state alphabet to 3 states. Note molscope emits 'S' for bend
-# (not strand) and 'T' for turn; both reduce to coil, matching the reference.
+# Reduce DSSP's 8-state alphabet to 3 states. molscope emits 'S' for bend (not
+# strand) and 'T' for turn; both reduce to coil, matching the reference.
 _THREE_STATE = {"H": "H", "G": "H", "I": "H", "E": "E", "B": "E"}
 
 
@@ -29,26 +34,61 @@ def _to3(code: str) -> str:
     return _THREE_STATE.get(code, "C")
 
 
-def _reference_codes(pdb_path: str) -> dict:
-    """Return ``{(chain, resid): dssp_code}`` from the reference mkdssp run."""
-    Bio_PDB = pytest.importorskip("Bio.PDB")
-    DSSP = pytest.importorskip("Bio.PDB.DSSP").DSSP
-    structure = Bio_PDB.PDBParser(QUIET=True).get_structure("ref", pdb_path)
-    # The binary is called `dssp` on some distros and `mkdssp` on others, and
-    # Biopython's default name varies by version. Try both before skipping.
-    last_exc = None
-    for executable in ("mkdssp", "dssp"):
-        try:
-            dssp = DSSP(structure[0], pdb_path, dssp=executable)
-            break
-        except Exception as exc:  # binary missing or output unparseable
-            last_exc = exc
-    else:
-        pytest.skip(f"reference dssp/mkdssp unavailable: {last_exc}")
+def _run_mkdssp(exe: str, pdb_path: str, out_path: str) -> subprocess.CompletedProcess:
+    """Try the v4 invocation first, then the legacy one (older dssp/mkdssp)."""
+    attempts = (
+        [exe, "--output-format", "dssp", pdb_path, out_path],
+        [exe, pdb_path, out_path],
+    )
+    last = None
+    for cmd in attempts:
+        last = subprocess.run(cmd, capture_output=True, text=True)
+        if last.returncode == 0 and Path(out_path).stat().st_size > 0:
+            return last
+    return last
+
+
+def _parse_dssp(text: str) -> dict:
+    """Parse classic DSSP output into ``{(chain, resid): code}``.
+
+    Columns are fixed-width: residue number [5:10], chain [11], amino acid [13]
+    ('!' marks a chain break), secondary-structure code [16] (space == coil).
+    """
     out = {}
-    for chain_id, (_, resid, _icode) in dssp.keys():
-        out[(chain_id, int(resid))] = dssp[(chain_id, (_, resid, _icode))][2]
+    in_body = False
+    for line in text.splitlines():
+        if not in_body:
+            if line.startswith("  #  RESIDUE"):
+                in_body = True
+            continue
+        if len(line) < 17 or line[13] == "!":
+            continue
+        try:
+            resid = int(line[5:10])
+        except ValueError:
+            continue
+        chain = line[11]
+        code = line[16] if line[16] != " " else "-"
+        out[(chain, resid)] = code
     return out
+
+
+def _reference_codes(pdb_path: str) -> dict:
+    exe = shutil.which("mkdssp") or shutil.which("dssp")
+    if exe is None:
+        pytest.skip("reference mkdssp/dssp not found on PATH")
+    with tempfile.NamedTemporaryFile(suffix=".dssp", delete=False) as tmp:
+        out_path = tmp.name
+    proc = _run_mkdssp(exe, pdb_path, out_path)
+    text = Path(out_path).read_text() if Path(out_path).exists() else ""
+    Path(out_path).unlink(missing_ok=True)
+    ref = _parse_dssp(text)
+    if not ref:
+        pytest.skip(
+            f"could not parse mkdssp output (rc={proc.returncode if proc else '?'}): "
+            f"{(proc.stderr or '').strip()[:200] if proc else ''}"
+        )
+    return ref
 
 
 def _molscope_codes(pdb_path: str) -> dict:

@@ -35,9 +35,6 @@ viz = ["py3Dmol>=2.0"]         # interactive notebook viewer (Molecule.view)
 graph = ["networkx>=2.6"]      # NetworkX exporter
 chem = ["rdkit>=2023.9"]       # optional chemical perception backend
 cif = ["gemmi>=0.7"]           # robust mmCIF parsing and validation helpers
-# Reference tools for the Tier-2 validation suite (tests/validation). Needs a
-# system `mkdssp`/`dssp` binary too. See tests/validation for the design.
-validation = ["biopython>=1.83"]
 pyg = ["torch>=2.0", "torch-geometric>=2.3"]
 dgl = ["torch>=2.0", "dgl>=1.1"]
 gnn = [

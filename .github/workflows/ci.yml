@@ -69,8 +69,9 @@ jobs:
         with:
           enable-cache: true
 
-      - name: Sync with validation extra
-        run: uv sync --python 3.11 --extra validation
+      - name: Sync dependencies
+        run: uv sync --python 3.11
 
       - name: Run validation suite
-        run: uv run pytest tests/validation -v
+        # -s so the printed DSSP agreement fraction lands in the job log.
+        run: uv run pytest tests/validation -v -s
