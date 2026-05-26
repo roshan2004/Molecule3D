@@ -2,19 +2,22 @@
 
 Run it from the repo root:
 
-    uv run python example.py          # opens plot windows
-    MPLBACKEND=Agg uv run python example.py   # headless: saves PNGs instead
+    uv run python examples/tour.py          # opens plot windows
+    MPLBACKEND=Agg uv run python examples/tour.py   # headless: saves PNGs instead
 
 It reads each sample file, prints a few derived properties, compares the NMR
 models of 1aml, writes a transformed structure back out, and renders a plot.
 """
 
 import os
+from pathlib import Path
 
 import matplotlib
 
 import molscope as ms
 from molscope import ensemble
+
+DATA = Path(__file__).resolve().parent / "data"
 
 # Use a non-interactive backend (save to file) when there's no display.
 HEADLESS = matplotlib.get_backend().lower() == "agg" or not os.environ.get("DISPLAY")
@@ -40,12 +43,12 @@ def _save_contact_map(contact_map, filename):
 
 def main():
     print("== 1. Read and inspect an .xyz file ==")
-    helix = ms.read("helix_201.xyz")
+    helix = ms.read(DATA / "helix_201.xyz")
     print(f"  {helix.name}: {len(helix)} atoms")
     print(f"  centroid: {helix.centroid.round(3)}")
 
     print("\n== 2. Read a protein (.pdb) and derive properties ==")
-    aqp = ms.read("1fqy.pdb")  # Aquaporin-1
+    aqp = ms.read(DATA / "1fqy.pdb")  # Aquaporin-1
     print(f"  {aqp.summary()}")
     print(f"  centre of mass:      {aqp.center_of_mass.round(2)}")
     print(f"  radius of gyration:  {aqp.radius_of_gyration:.2f} A")
@@ -61,7 +64,7 @@ def main():
     print(f"  centroid after centre+rotate+translate: {view.centroid.round(3)}")
 
     print("\n== 5. Compare NMR ensemble models (1aml), CA-based ==")
-    models = ms.read_pdb_models("1aml.pdb")
+    models = ms.read_pdb_models(DATA / "1aml.pdb")
     ca_models = [m.alpha_carbons() for m in models]
     print(f"  {len(models)} models, {len(ca_models[0])} CA atoms each")
     raw = ca_models[0].rmsd(ca_models[1])

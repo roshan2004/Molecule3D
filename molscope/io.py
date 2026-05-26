@@ -29,6 +29,7 @@ def read(path: str) -> Molecule:
 
     Transparently handles gzip-compressed files (``.pdb.gz``, ``.xyz.gz``).
     """
+    path = os.fspath(path)
     ext = _data_extension(path)
     if ext == ".pdb":
         return read_pdb(path)
@@ -137,6 +138,7 @@ def read_cif(path: str, parser: str = "builtin") -> Molecule:
     (``pip install "molscope[cif]"``). Neither parser performs full dictionary
     validation; use :func:`molscope.validate_cif` for validation checks.
     """
+    path = os.fspath(path)
     if parser == "gemmi":
         return _read_cif_gemmi(path)
     if parser != "builtin":
@@ -664,6 +666,7 @@ def _pdb_conect_line(a: int, b: int) -> str:
 
 def _open(path: str, mode: str = "r"):
     """Open a file, transparently handling gzip by the ``.gz`` suffix."""
+    path = os.fspath(path)
     if path.endswith(".gz"):
         return gzip.open(path, mode + "t")
     return open(path, mode)
@@ -671,6 +674,7 @@ def _open(path: str, mode: str = "r"):
 
 def _data_extension(path: str) -> str:
     """Extension ignoring a trailing ``.gz`` (so ``a.pdb.gz`` -> ``.pdb``)."""
+    path = os.fspath(path)
     base = path[:-3] if path.endswith(".gz") else path
     return os.path.splitext(base)[1].lower()
 
@@ -684,6 +688,7 @@ def _is_float(token: str) -> bool:
 
 
 def _stem(path: str) -> str:
+    path = os.fspath(path)
     base = os.path.basename(path)
     if base.endswith(".gz"):
         base = base[:-3]

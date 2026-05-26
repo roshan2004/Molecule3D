@@ -12,8 +12,8 @@ import numpy as np
 
 import molscope as ms
 
-ROOT = Path(__file__).resolve().parents[2]
-PROTEIN = str(ROOT / "1fqy.pdb")
+DATA = Path(__file__).resolve().parents[2] / "examples" / "data"
+PROTEIN = str(DATA / "1fqy.pdb")
 
 
 def _fibonacci_sphere(n: int, radius: float) -> np.ndarray:

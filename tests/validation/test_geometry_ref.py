@@ -17,9 +17,9 @@ import molscope as ms
 
 pytestmark = pytest.mark.validation
 
-ROOT = Path(__file__).resolve().parents[2]
-PROTEIN = str(ROOT / "1fqy.pdb")
-ENSEMBLE = str(ROOT / "1aml.pdb")
+DATA = Path(__file__).resolve().parents[2] / "examples" / "data"
+PROTEIN = str(DATA / "1fqy.pdb")
+ENSEMBLE = str(DATA / "1aml.pdb")
 
 
 @pytest.fixture(scope="module")

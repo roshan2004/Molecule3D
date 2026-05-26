@@ -3,7 +3,7 @@
 ```python
 import molscope as ms
 
-mol = ms.read("1fqy.pdb")
+mol = ms.read("examples/data/1fqy.pdb")
 print(mol.summary())
 mol.plot()
 ```
@@ -17,7 +17,7 @@ moved = mol.centered().rotate("z", 90).translate((1, 2, -1))
 Read all models from an NMR PDB file:
 
 ```python
-models = ms.read_pdb_models("1aml.pdb")
+models = ms.read_pdb_models("examples/data/1aml.pdb")
 matrix = ms.ensemble.rmsd_matrix(models[:5])
 ```
 

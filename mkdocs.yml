@@ -29,6 +29,7 @@ nav:
       - Overview: examples/index.md
       - Compare NMR models: examples/compare-nmr-models.md
       - Build a molecular graph: examples/build-molecular-graph.md
+      - PDB to graph and CG beads: examples/pdb-to-graph-cg.md
       - Coarse-grain a protein: examples/coarse-grain-protein.md
       - Export to PyTorch Geometric: examples/export-pyg.md
       - Analyze contacts: examples/analyze-contacts.md

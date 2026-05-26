@@ -9,7 +9,7 @@ import molscope as ms
 from molscope import SecondaryStructure, dssp
 from molscope.molecule import Molecule
 
-DATA = os.path.dirname(os.path.dirname(__file__))
+DATA = os.path.join(os.path.dirname(os.path.dirname(__file__)), "examples", "data")
 
 
 def aquaporin():

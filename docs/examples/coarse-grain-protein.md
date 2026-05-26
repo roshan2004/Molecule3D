@@ -3,7 +3,7 @@
 ```python
 import molscope as ms
 
-mol = ms.read("1fqy.pdb")
+mol = ms.read("examples/data/1fqy.pdb")
 
 cg = mol.coarse_grain("residue_com")
 print(cg.summary())

@@ -11,7 +11,7 @@ SDF files to geometric descriptors, coarse-grained beads, and graph-ready data.
 ```python
 import molscope as ms
 
-mol = ms.read("1fqy.pdb")
+mol = ms.read("examples/data/1fqy.pdb")
 print(mol.summary())
 
 cg = mol.coarse_grain("residue_com")

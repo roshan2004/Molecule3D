@@ -8,7 +8,7 @@ import pytest
 import molscope as ms
 from molscope import ContactMap, Molecule
 
-DATA = os.path.dirname(os.path.dirname(__file__))
+DATA = os.path.join(os.path.dirname(os.path.dirname(__file__)), "examples", "data")
 
 
 def ca_chain():

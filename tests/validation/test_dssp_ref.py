@@ -22,8 +22,8 @@ import molscope as ms
 
 pytestmark = pytest.mark.validation
 
-ROOT = Path(__file__).resolve().parents[2]
-PROTEIN = str(ROOT / "1fqy.pdb")
+DATA = Path(__file__).resolve().parents[2] / "examples" / "data"
+PROTEIN = str(DATA / "1fqy.pdb")
 
 # Reduce DSSP's 8-state alphabet to 3 states. molscope emits 'S' for bend (not
 # strand) and 'T' for turn; both reduce to coil, matching the reference.

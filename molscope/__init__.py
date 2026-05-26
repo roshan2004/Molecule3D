@@ -29,7 +29,7 @@ What it does
 Examples
 --------
 >>> import molscope as ms
->>> mol = ms.read("1fqy.pdb")          # parser chosen from the extension
+>>> mol = ms.read("structure.pdb")     # parser chosen from the extension
 >>> mol = ms.fetch("1fqy")             # ...or download straight from RCSB by id
 >>> print(mol.summary())               # atoms, formula, chains, bounding box
 >>> ca = mol.alpha_carbons()           # select the C-alpha atoms

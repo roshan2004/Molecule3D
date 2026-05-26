@@ -5,10 +5,14 @@ keeps the old ``Molecule`` / ``Pdb`` classes working so existing scripts and
 notebooks don't break, but new code should use ``molscope`` directly::
 
     import molscope as ms
-    ms.read("helix_201.xyz").translate((1, 2, -1)).plot()
+    ms.read("examples/data/helix_201.xyz").translate((1, 2, -1)).plot()
 """
 
+from pathlib import Path
+
 from molscope import io
+
+DATA = Path(__file__).resolve().parent / "data"
 
 
 class Molecule:
@@ -42,7 +46,7 @@ class Pdb(Molecule):
 
 
 def main():
-    molecule = Molecule("helix_201.xyz")
+    molecule = Molecule(DATA / "helix_201.xyz")
     molecule.coordinates()
     molecule.translate((1, 2, -1))
     molecule.graph()

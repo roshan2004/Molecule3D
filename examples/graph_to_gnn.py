@@ -17,8 +17,8 @@ from pathlib import Path
 
 import molscope as ms
 
-ROOT = Path(__file__).resolve().parent.parent
-STRUCTURE = ROOT / "1fqy.pdb"
+DATA = Path(__file__).resolve().parent / "data"
+STRUCTURE = DATA / "1fqy.pdb"
 
 
 def main():

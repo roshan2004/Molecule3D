@@ -9,7 +9,7 @@ import pytest
 import molscope as ms
 from molscope import Molecule, ensemble
 
-DATA = os.path.dirname(os.path.dirname(__file__))
+DATA = os.path.join(os.path.dirname(os.path.dirname(__file__)), "examples", "data")
 
 
 # -- selections / metadata --------------------------------------------------

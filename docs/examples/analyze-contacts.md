@@ -3,7 +3,7 @@
 ```python
 import molscope as ms
 
-mol = ms.read("1fqy.pdb")
+mol = ms.read("examples/data/1fqy.pdb")
 
 pairs = mol.contacts(cutoff=5.0)
 print(len(pairs))
@@ -16,7 +16,7 @@ cmap.plot()
 For ensembles:
 
 ```python
-models = ms.read_pdb_models("1aml.pdb")
+models = ms.read_pdb_models("examples/data/1aml.pdb")
 freq = ms.ensemble_contact_frequency(models, cutoff=8.0)
 freq.plot()
 ```

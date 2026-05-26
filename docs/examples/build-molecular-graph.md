@@ -3,7 +3,7 @@
 ```python
 import molscope as ms
 
-mol = ms.read("1fqy.pdb")
+mol = ms.read("examples/data/1fqy.pdb")
 graph = mol.to_graph()
 
 print(graph.n_atoms, graph.n_bonds)

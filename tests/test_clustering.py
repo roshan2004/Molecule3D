@@ -8,7 +8,7 @@ import pytest
 import molscope as ms
 from molscope import Molecule
 
-DATA = os.path.dirname(os.path.dirname(__file__))
+DATA = os.path.join(os.path.dirname(os.path.dirname(__file__)), "examples", "data")
 
 
 def two_conformer_set():

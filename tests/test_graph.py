@@ -9,7 +9,7 @@ import molscope as ms
 from molscope import MolecularGraph, Molecule
 from molscope.graph import edge_feature_names, node_feature_names
 
-DATA = os.path.dirname(os.path.dirname(__file__))
+DATA = os.path.join(os.path.dirname(os.path.dirname(__file__)), "examples", "data")
 
 
 def water():

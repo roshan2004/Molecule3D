@@ -1,6 +1,7 @@
 # MolScope
 
 [![CI](https://github.com/roshan2004/molscope/actions/workflows/ci.yml/badge.svg)](https://github.com/roshan2004/molscope/actions/workflows/ci.yml)
+[![Docs](https://img.shields.io/badge/docs-MkDocs%20Material-blue)](https://roshan2004.github.io/molscope/)
 [![Python](https://img.shields.io/badge/python-3.9%20%7C%203.11%20%7C%203.13-blue)](pyproject.toml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](LICENSE)
 [![Code style: Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
@@ -12,9 +13,22 @@ coarse-graining in Python. Read `.xyz`, `.pdb`, `.cif` and `.sdf` files
 quoted values; optional Gemmi-backed validation is available through
 `pip install "molscope[cif]"`.
 
+MolScope is a small scientific Python toolkit for turning molecular coordinate
+files into inspectable structures, descriptors, ML-ready graphs, and
+coarse-grained bead models without pulling in a full simulation stack.
+
 | 3D structure (element) | Secondary structure (DSSP) | Residue contact map | Coarse-grained beads |
 | --- | --- | --- | --- |
 | ![Aquaporin-1 rendered as a 3D element-coloured molecular structure](https://raw.githubusercontent.com/roshan2004/molscope/main/docs/assets/readme/aquaporin-structure-v2.png) | ![Aquaporin-1 coloured by DSSP secondary structure: helices red, turns cyan, coil grey](https://raw.githubusercontent.com/roshan2004/molscope/main/docs/assets/readme/secondary-structure.png) | ![Residue-level contact map heatmap for Aquaporin-1](https://raw.githubusercontent.com/roshan2004/molscope/main/docs/assets/readme/residue-contact-map.png) | ![Coarse-grained bead model of Aquaporin-1](https://raw.githubusercontent.com/roshan2004/molscope/main/docs/assets/readme/coarse-grained-beads-v2.png) |
+
+## Who is this for?
+
+- Students learning molecular-coordinate formats, structure analysis, and basic
+  visualisation from readable Python code.
+- Molecular modellers who want quick static-structure checks, selections,
+  contact maps, and lightweight coarse-grained mapping prototypes.
+- ML-for-molecules learners who need deterministic descriptors and graph exports
+  before moving to larger chemistry or simulation frameworks.
 
 ## What it does
 
@@ -39,6 +53,18 @@ quoted values; optional Gemmi-backed validation is available through
 - **Coarse-grain** onto residue, Martini-style or custom bead mappings.
 - **Visualise** with 3D matplotlib plots, an interactive py3Dmol viewer, spin
   GIFs, and a command-line interface.
+
+## Architecture
+
+```mermaid
+flowchart LR
+    files["XYZ / PDB / mmCIF / SDF"] --> readers["read(), fetch(), validators"]
+    readers --> mol["Molecule\ncoords + elements + topology metadata"]
+    mol --> analysis["geometry, contacts,\nsecondary structure, descriptors"]
+    mol --> graphs["MolecularGraph\nNetworkX / PyG / DGL"]
+    mol --> cg["coarse_grain()\nresidue, simplified Martini-style, custom"]
+    mol --> viz["Matplotlib / py3Dmol / CLI"]
+```
 
 ## Why MolScope?
 
@@ -73,7 +99,7 @@ With [uv](https://docs.astral.sh/uv/) (recommended):
 
 ```bash
 uv sync                     # creates .venv, installs deps + dev tools from the lockfile
-uv run molscope 1fqy.pdb  # run the CLI
+uv run molscope examples/data/1fqy.pdb  # run the CLI
 uv run pytest               # run the tests
 ```
 
@@ -103,22 +129,26 @@ builder requires Pandoc and a LaTeX engine such as `xelatex`.
 ## Quickstart
 
 A runnable end-to-end tour over the bundled sample structures lives in
-[`example.py`](example.py):
+[`examples/tour.py`](examples/tour.py):
 
 ```bash
-uv run python example.py                  # opens 3D plot windows
-MPLBACKEND=Agg uv run python example.py   # headless: saves PNGs instead
+uv run python examples/tour.py                  # opens 3D plot windows
+MPLBACKEND=Agg uv run python examples/tour.py   # headless: saves PNGs instead
 ```
 
 It reads an `.xyz` and a `.pdb`, prints derived properties, compares the NMR
 models of `1aml`, writes a transformed structure back out, and renders a plot.
+
+For a focused workflow, see
+[`docs/examples/pdb-to-graph-cg.md`](docs/examples/pdb-to-graph-cg.md):
+from PDB to molecular graph and coarse-grained beads in about 10 minutes.
 
 ## Library
 
 ```python
 import molscope as ms
 
-mol = ms.read("1fqy.pdb")          # parser chosen from the extension
+mol = ms.read("examples/data/1fqy.pdb")  # parser chosen from the extension
 mol = ms.fetch("1fqy")             # ...or download straight from RCSB by id
 print(mol.summary())                # atoms, formula, chains, bounding box
 
@@ -212,7 +242,7 @@ Assign protein secondary structure from backbone hydrogen-bond patterns with a
 self-contained, pure-NumPy DSSP (no external `mkdssp` binary needed):
 
 ```python
-mol = ms.read("1fqy.pdb")
+mol = ms.read("examples/data/1fqy.pdb")
 ss = mol.secondary_structure()      # SecondaryStructure, one code per residue
 
 ss.string                           # e.g. '--HHHHHHHH--SS--EEEE--'
@@ -238,7 +268,7 @@ turns cyan, coil grey) is produced this way.
 ```python
 from molscope import ensemble
 
-models = ms.read_pdb_models("1aml.pdb")     # all 20 models
+models = ms.read_pdb_models("examples/data/1aml.pdb")     # all 20 models
 ensemble.rmsd_matrix(models)                 # pairwise RMSD matrix
 ensemble.rmsf(models)                        # per-atom fluctuation
 ensemble.average(models)                     # mean structure
@@ -286,7 +316,7 @@ to the common ML frameworks. The base `to_graph()` needs no extra dependencies;
 each exporter imports its backend lazily.
 
 ```python
-mol = ms.read("1fqy.pdb")
+mol = ms.read("examples/data/1fqy.pdb")
 
 g = mol.to_graph()                  # MolecularGraph: nodes + edges, no deps
 g.n_atoms, g.n_bonds                # counts
@@ -322,7 +352,7 @@ ordinary `Molecule` (beads as "atoms") with explicit CG bonds attached, so it
 plots, transforms and graphs like anything else.
 
 ```python
-mol = ms.read("1fqy.pdb")
+mol = ms.read("examples/data/1fqy.pdb")
 
 cg = mol.coarse_grain("residue_com")        # one bead per residue (centre of mass)
 cg = mol.coarse_grain("residue_centroid")   # ...or geometric centroid
@@ -354,19 +384,19 @@ Martini parameters.
 ## Command line
 
 ```bash
-molscope helix_201.xyz --translate 1 2 -1
-molscope 1fqy.pdb --select atom_name=CA --color-by residue --save ca.png
+molscope examples/data/helix_201.xyz --translate 1 2 -1
+molscope examples/data/1fqy.pdb --select atom_name=CA --color-by residue --save ca.png
 molscope --fetch 1aml --center --gif amyloid.gif
-python -m molscope 1fqy.pdb          # equivalent if not pip-installed
+python -m molscope examples/data/1fqy.pdb          # equivalent if not pip-installed
 ```
 
 ## Sample structures
 
 | File | Contents |
 |------|----------|
-| `helix_201.xyz` | a helix (bare coordinates) |
-| `1fqy.pdb` | Aquaporin-1, single model (1661 atoms) |
-| `1aml.pdb` | Alzheimer amyloid A4 peptide, 20-model NMR ensemble |
+| `examples/data/helix_201.xyz` | a helix (bare coordinates) |
+| `examples/data/1fqy.pdb` | Aquaporin-1, single model (1661 atoms) |
+| `examples/data/1aml.pdb` | Alzheimer amyloid A4 peptide, 20-model NMR ensemble |
 
 ## Notes
 

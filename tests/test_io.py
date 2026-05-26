@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -7,7 +8,7 @@ import molscope as ms
 from molscope import Molecule
 from molscope.io import read_pdb, read_pdb_models, read_xyz, write_pdb, write_xyz
 
-DATA = os.path.dirname(os.path.dirname(__file__))
+DATA = os.path.join(os.path.dirname(os.path.dirname(__file__)), "examples", "data")
 
 
 def _atom_line(serial, altloc, x, y, z, element="N", occupancy=1.0):
@@ -41,6 +42,11 @@ def test_read_xyz_bare_coordinates():
     assert len(mol) == 201
     assert mol.coords.shape == (201, 3)
     np.testing.assert_allclose(mol.coords[0], [0.3517846, -0.7869986, -2.873479])
+
+
+def test_read_accepts_pathlike():
+    mol = ms.read(Path(DATA) / "helix_201.xyz")
+    assert len(mol) == 201
 
 
 def test_read_standard_xyz_with_elements(tmp_path):

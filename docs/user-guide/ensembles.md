@@ -3,7 +3,7 @@
 Read all models from an NMR PDB file:
 
 ```python
-models = ms.read_pdb_models("1aml.pdb")
+models = ms.read_pdb_models("examples/data/1aml.pdb")
 ```
 
 Compute ensemble descriptors:

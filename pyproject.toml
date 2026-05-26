@@ -50,6 +50,8 @@ gnn = [
 [project.urls]
 Homepage = "https://github.com/roshan2004/molscope"
 Repository = "https://github.com/roshan2004/molscope"
+Documentation = "https://roshan2004.github.io/molscope/"
+Issues = "https://github.com/roshan2004/molscope/issues"
 
 [project.scripts]
 molscope = "molscope.cli:main"
@@ -59,7 +61,7 @@ molscope = "molscope.cli:main"
 [dependency-groups]
 dev = ["pytest>=7", "scipy>=1.7", "ruff>=0.6", "py3Dmol>=2.0", "networkx>=2.6"]
 docs = ["mkdocs-material>=9.5"]
-# Tooling to open and re-execute Notebook.ipynb (jupyter lab + headless nbconvert).
+# Tooling to open and re-execute notebooks/molscope_tour.ipynb.
 notebook = ["jupyterlab>=4", "ipykernel>=6", "nbconvert>=7"]
 
 [tool.setuptools]
