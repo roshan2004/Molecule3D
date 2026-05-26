@@ -6,6 +6,9 @@
 pip install molscope
 ```
 
+The package is published on PyPI at
+[pypi.org/project/molscope](https://pypi.org/project/molscope/).
+
 ## From a local checkout
 
 ```bash

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "molscope"
-version = "0.8.0"
+version = "0.8.1"
 description = "Lightweight molecular structure analysis, visualisation, graph export, and coarse-graining in Python."
 readme = "README.md"
 requires-python = ">=3.9"

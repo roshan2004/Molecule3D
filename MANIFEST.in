@@ -1,0 +1,11 @@
+include CITATION.cff
+include LICENSE
+include README.md
+include mkdocs.yml
+include requirements.txt
+recursive-include docs *.md *.png
+recursive-include examples *.py
+recursive-include examples/data *.pdb *.xyz
+recursive-include notebooks *.ipynb
+recursive-include tests *.py
+prune notebooks/.ipynb_checkpoints

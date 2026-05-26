@@ -2,6 +2,7 @@
 
 [![CI](https://github.com/roshan2004/molscope/actions/workflows/ci.yml/badge.svg)](https://github.com/roshan2004/molscope/actions/workflows/ci.yml)
 [![Docs](https://img.shields.io/badge/docs-MkDocs%20Material-blue)](https://roshan2004.github.io/molscope/)
+[![PyPI](https://img.shields.io/pypi/v/molscope.svg)](https://pypi.org/project/molscope/)
 [![Python](https://img.shields.io/badge/python-3.9%20%7C%203.11%20%7C%203.13-blue)](pyproject.toml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](LICENSE)
 [![Code style: Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
@@ -109,6 +110,9 @@ uv run pytest               # run the tests
 With plain pip:
 
 ```bash
+pip install molscope
+
+# for local development from this checkout:
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[test]"    # or: pip install -r requirements.txt
 ```
@@ -142,6 +146,9 @@ models of `1aml`, writes a transformed structure back out, and renders a plot.
 For a focused workflow, see
 [`docs/examples/pdb-to-graph-cg.md`](docs/examples/pdb-to-graph-cg.md):
 from PDB to molecular graph and coarse-grained beads in about 10 minutes.
+For an ML-oriented walkthrough, see
+[`docs/examples/pdb-to-pyg-ml.md`](docs/examples/pdb-to-pyg-ml.md):
+PDB ensemble to PyTorch Geometric classifier/regressor toy model.
 
 ## Library
 

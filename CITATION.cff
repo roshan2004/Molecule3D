@@ -1,0 +1,15 @@
+cff-version: 1.2.0
+message: "If you use MolScope in teaching, research, or software demos, please cite it."
+type: software
+title: "MolScope: lightweight molecular structure analysis, visualisation, graph export, and coarse-graining in Python"
+authors:
+  - family-names: Shrestha
+    given-names: Roshan
+version: 0.8.1
+date-released: "2026-05-26"
+license: MIT
+repository-code: "https://github.com/roshan2004/molscope"
+url: "https://github.com/roshan2004/molscope"
+abstract: >
+  MolScope is a lightweight Python toolkit for molecular structure analysis,
+  visualisation, descriptors, graph export, and coarse-graining workflows.
