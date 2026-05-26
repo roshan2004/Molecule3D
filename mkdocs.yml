@@ -35,7 +35,8 @@ nav:
       - Export to PyTorch Geometric: examples/export-pyg.md
       - Analyze contacts: examples/analyze-contacts.md
   - API reference: api-reference.md
-  - Limitations: limitations.md
+  - Benchmarks: benchmarks.md
+  - Limitations and validation: limitations.md
   - Roadmap: roadmap.md
   - Contributing: contributing.md
 

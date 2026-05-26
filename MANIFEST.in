@@ -7,5 +7,6 @@ recursive-include docs *.md *.png
 recursive-include examples *.py
 recursive-include examples/data *.pdb *.xyz
 recursive-include notebooks *.ipynb
+recursive-include scripts *.py
 recursive-include tests *.py
 prune notebooks/.ipynb_checkpoints
