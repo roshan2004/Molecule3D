@@ -62,6 +62,112 @@ def plot(
     return ax
 
 
+def plot_mapping(
+    atomistic,
+    cg,
+    show_assignment: Optional[bool] = None,
+    show_bonds: bool = True,
+    scale: float = 60.0,
+    bead_scale: float = 420.0,
+    atom_alpha: float = 0.55,
+    ax=None,
+    show: bool = True,
+    max_legend: int = 14,
+):
+    """Show how a coarse-grained model ``cg`` maps onto its ``atomistic`` source.
+
+    Atoms are coloured by the bead they were folded into (dropped atoms grey),
+    each bead is drawn as a large translucent sphere at its position, thin
+    "assignment" lines join atoms to their bead, and the CG bond network is
+    drawn between beads. ``cg`` must carry a coarse-graining report (i.e. come
+    from :meth:`~molscope.molecule.Molecule.coarse_grain`) and ``atomistic``
+    must be the structure it was built from, in the same atom order.
+
+    ``show_assignment`` toggles the atom-to-bead lines (default: on for
+    structures small enough to stay legible). Returns the ``Axes3D``; pass
+    ``show=False`` to suppress ``plt.show()``.
+    """
+    import matplotlib.pyplot as plt
+    from matplotlib.lines import Line2D
+
+    from .coarsegrain import bead_label
+
+    report = cg.coarse_grain_report
+    n_atoms = len(atomistic)
+    atom_bead = np.full(n_atoms, -1, dtype=int)
+    for k, bead in enumerate(report.beads):
+        for i in bead.atom_indices:
+            if not 0 <= i < n_atoms:
+                raise ValueError(
+                    f"bead {bead.name!r} references atom index {i} but the "
+                    f"atomistic molecule has {n_atoms} atoms; pass the structure "
+                    "this CG model was built from"
+                )
+            atom_bead[i] = k
+
+    palette = plt.get_cmap("tab20").colors
+    bead_color = [palette[k % len(palette)] for k in range(report.n_beads)]
+    grey = (0.6, 0.6, 0.6, 1.0)
+
+    if ax is None:
+        ax = plt.figure().add_subplot(1, 1, 1, projection="3d")
+
+    a_coords = atomistic.coords
+    radii = np.array([elements.covalent_radius(e) for e in atomistic.elements])
+    assigned = atom_bead >= 0
+    if np.any(assigned):
+        ax.scatter(
+            *a_coords[assigned].T, s=radii[assigned] * scale,
+            c=[bead_color[k] for k in atom_bead[assigned]],
+            alpha=atom_alpha, depthshade=True, zorder=1,
+        )
+    if np.any(~assigned):
+        ax.scatter(
+            *a_coords[~assigned].T, s=radii[~assigned] * scale,
+            color=grey, alpha=0.25, marker="x", depthshade=True, zorder=1,
+        )
+
+    if show_assignment is None:
+        show_assignment = n_atoms <= 1500
+    if show_assignment and np.any(assigned):
+        for i in np.flatnonzero(assigned):
+            seg = np.vstack([a_coords[i], cg.coords[atom_bead[i]]])
+            ax.plot(*seg.T, color=bead_color[atom_bead[i]], linewidth=0.5,
+                    alpha=0.35, zorder=0)
+
+    if show_bonds and cg.bond_index is not None:
+        for i, j in cg.bond_index:
+            seg = cg.coords[[i, j]]
+            ax.plot(*seg.T, color="0.25", linewidth=2.0, zorder=2)
+
+    ax.scatter(
+        *cg.coords.T, s=bead_scale, c=bead_color[: len(cg)],
+        edgecolors="0.2", linewidths=1.2, alpha=0.85, depthshade=False, zorder=3,
+    )
+
+    if report.n_beads <= max_legend:
+        handles = [
+            Line2D([0], [0], marker="o", linestyle="", markerfacecolor=bead_color[k],
+                   markeredgecolor="0.2", markersize=9, label=bead_label(report.beads[k], k))
+            for k in range(report.n_beads)
+        ]
+        if report.n_dropped:
+            handles.append(Line2D([0], [0], marker="x", linestyle="", color=grey,
+                                  markersize=8, label=f"dropped ({report.n_dropped})"))
+        ax.legend(handles=handles, loc="upper left", fontsize="small",
+                  framealpha=0.9, borderaxespad=0.0)
+
+    ax.set_xlabel("X")
+    ax.set_ylabel("Y")
+    ax.set_zlabel("Z")
+    ax.set_title(f"{cg.name or 'coarse-grained'} mapping\n{report.coverage()}")
+    _set_equal_aspect(ax, np.vstack([a_coords, cg.coords]))
+
+    if show:
+        plt.show()
+    return ax
+
+
 def view(molecule, style: str = "stick", width: int = 480, height: int = 360):
     """Return an interactive py3Dmol viewer (for Jupyter notebooks).
 
