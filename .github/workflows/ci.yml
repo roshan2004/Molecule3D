@@ -72,6 +72,12 @@ jobs:
       - name: Sync with validation extra
         run: uv sync --python 3.11 --extra validation
 
+      - name: Verify reference tools import
+        # Fail loudly here rather than letting the tests skip silently: on this
+        # job the reference tools are required, so a missing import is a failure.
+        run: uv run --python 3.11 --extra validation python -c "import MDAnalysis, rdkit.Chem, rdkit.Chem.AllChem; print('reference tools import OK')"
+
       - name: Run validation suite
-        # -s so the printed agreement/recall numbers land in the job log.
-        run: uv run pytest tests/validation -v -s
+        # --extra validation so uv run does not prune the reference tools;
+        # -rs surfaces any skip reason, -s prints the agreement/recall numbers.
+        run: uv run --python 3.11 --extra validation pytest tests/validation -v -rs -s
