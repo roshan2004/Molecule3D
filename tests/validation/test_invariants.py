@@ -86,3 +86,24 @@ def test_residue_com_beads_sit_at_residue_centres_of_mass():
     )
     cg = mol.coarse_grain("residue_com", weighted=True)
     assert np.allclose(cg.coords, expected, atol=1e-9)
+
+
+def test_residue_centroid_beads_sit_at_residue_centroids():
+    """Each residue_centroid bead must equal the unweighted mean of its atoms."""
+    mol = ms.read(PROTEIN)
+    expected = np.array([mol.coords[idx].mean(0) for idx, *_ in mol.residue_groups()])
+    cg = mol.coarse_grain("residue_centroid")
+    assert np.allclose(cg.coords, expected, atol=1e-9)
+
+
+# -- contact map correctness ------------------------------------------------
+
+
+def test_atom_contact_map_equals_brute_force():
+    """The atom-level contact map must equal a direct all-pairs distance threshold."""
+    ca = ms.read(PROTEIN).alpha_carbons()
+    cutoff = 8.0
+    mat = ca.contact_map(cutoff=cutoff, level="atom").matrix
+    d = np.linalg.norm(ca.coords[:, None, :] - ca.coords[None, :, :], axis=-1)
+    brute = ((d <= cutoff) & ~np.eye(len(ca), dtype=bool)).astype(float)
+    assert np.array_equal(mat, brute)

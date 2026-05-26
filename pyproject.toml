@@ -35,6 +35,9 @@ viz = ["py3Dmol>=2.0"]         # interactive notebook viewer (Molecule.view)
 graph = ["networkx>=2.6"]      # NetworkX exporter
 chem = ["rdkit>=2023.9"]       # optional chemical perception backend
 cif = ["gemmi>=0.7"]           # robust mmCIF parsing and validation helpers
+# Reference tools for the Tier-2 validation suite (tests/validation). The DSSP
+# cross-check additionally needs a system `mkdssp`/`dssp` binary.
+validation = ["mdanalysis>=2.7", "rdkit>=2023.9"]
 pyg = ["torch>=2.0", "torch-geometric>=2.3"]
 dgl = ["torch>=2.0", "dgl>=1.1"]
 gnn = [
