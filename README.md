@@ -165,15 +165,13 @@ MPLBACKEND=Agg uv run python examples/tour.py   # headless: saves PNGs instead
 It reads an `.xyz` and a `.pdb`, prints derived properties, compares the NMR
 models of `1aml`, writes a transformed structure back out, and renders a plot.
 
-For a focused workflow, see
-[`docs/examples/pdb-to-graph-cg.md`](docs/examples/pdb-to-graph-cg.md):
-from PDB to molecular graph and coarse-grained beads in about 10 minutes.
-For an ML-oriented walkthrough, see
-[`docs/examples/pdb-to-pyg-ml.md`](docs/examples/pdb-to-pyg-ml.md):
-PDB ensemble to PyTorch Geometric classifier/regressor toy model.
-For coarse-graining as a teaching workflow, run
+For polished, focused workflows, start with the tutorials:
+[`PDB to descriptors`](docs/tutorials/pdb-to-descriptors.md),
+[`PDB to graph/GNN`](docs/tutorials/pdb-to-graph-gnn.md), and
+[`PDB to coarse-grained beads`](docs/tutorials/pdb-to-coarse-grained-beads.md).
+For coarse-graining as a runnable visual workflow, run
 [`examples/coarse_graining.py`](examples/coarse_graining.py): residue
-centre-of-mass beads, residue centroids, and a simplified backbone/sidechain
+center-of-mass beads, residue centroids, and a simplified backbone/sidechain
 mapping with a visual atomistic-to-CG comparison.
 
 For protein-coordinate analysis from scratch, see

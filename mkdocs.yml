@@ -15,6 +15,11 @@ nav:
   - Home: index.md
   - Installation: installation.md
   - Quickstart: quickstart.md
+  - Tutorials:
+      - Overview: tutorials/index.md
+      - PDB to descriptors: tutorials/pdb-to-descriptors.md
+      - PDB to graph/GNN: tutorials/pdb-to-graph-gnn.md
+      - PDB to coarse-grained beads: tutorials/pdb-to-coarse-grained-beads.md
   - User Guide:
       - Coordinate formats compared: user-guide/coordinate-formats.md
       - Reading molecular files: user-guide/reading-files.md
