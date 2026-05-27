@@ -5,8 +5,11 @@ files. The repository also includes:
 
 - `examples/tour.py`: an end-to-end tour over the bundled sample structures.
 - `examples/geometry.py`: a tour of every geometry quantity (see [Molecular geometry tour](geometry-tour.md)).
+- `examples/protein_analysis.py`: protein metadata, contacts, simplified DSSP, NMR ensemble contacts, and binding sites.
 - `examples/data/`: small bundled structures used by the examples and tests.
 - `notebooks/molscope_tour.ipynb`: a notebook version of the tour.
+- `notebooks/protein_analysis_from_scratch.ipynb`: a tutorial notebook over `1fqy`, `1aml`, and `3ptb`.
+- `docs/examples/protein-analysis-from-scratch.md`: the short doc version of the same workflow.
 - `docs/examples/pdb-to-graph-cg.md`: a focused PDB to graph and coarse-grain walkthrough.
 - `docs/examples/residue-contact-graphs.md`: residue nodes plus spatial contact edges.
 - `docs/examples/pdb-to-pyg-ml.md`: PDB to PyTorch Geometric classifier/regressor.

@@ -167,6 +167,12 @@ For an ML-oriented walkthrough, see
 [`docs/examples/pdb-to-pyg-ml.md`](docs/examples/pdb-to-pyg-ml.md):
 PDB ensemble to PyTorch Geometric classifier/regressor toy model.
 
+For protein-coordinate analysis from scratch, see
+[`docs/examples/protein-analysis-from-scratch.md`](docs/examples/protein-analysis-from-scratch.md)
+and [`notebooks/protein_analysis_from_scratch.ipynb`](notebooks/protein_analysis_from_scratch.ipynb):
+backbone atoms, residues, chains, alpha carbons, contact maps, NMR ensemble
+contacts, ligands, waters, binding sites, and simplified DSSP.
+
 For a runnable, narrated version of that ML walkthrough, open the notebook
 [`notebooks/pdb_to_gnn.ipynb`](notebooks/pdb_to_gnn.ipynb): structure file to a
 trained GNN, end to end (needs `pip install 'molscope[pyg]'`).
@@ -269,7 +275,8 @@ mol.contact_map(level="residue", backend="torch", device="cuda")  # optional GPU
 ### Secondary structure (DSSP)
 
 Assign protein secondary structure from backbone hydrogen-bond patterns with a
-self-contained, pure-NumPy DSSP (no external `mkdssp` binary needed):
+self-contained, pure-NumPy, **simplified DSSP-style** implementation (no
+external `mkdssp` binary needed):
 
 ```python
 mol = ms.read("examples/data/1fqy.pdb")
@@ -282,8 +289,8 @@ ss.summary()                        # helix/strand/coil counts and fractions
 mol.plot(color_by="ss")             # colour the 3D view by secondary structure
 ```
 
-Codes follow DSSP: `H`/`G`/`I` helices, `E`/`B` strands, `T` turn, `S` bend,
-`-` coil. This is a simplified **educational** implementation of the
+Codes follow DSSP notation: `H`/`G`/`I` helices, `E`/`B` strands, `T` turn, `S`
+bend, `-` coil. This is a simplified **educational** implementation of the
 Kabsch-Sander hydrogen-bond model: not bit-identical to the reference `mkdssp`
 on every edge case, but validated against it. A CI cross-check
 (`tests/validation`) puts it at **~99% per-residue 3-state agreement**

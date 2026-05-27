@@ -45,7 +45,7 @@ Common methods:
 - `molscope.ensemble`: RMSD matrices, alignment, average structures, RMSF, clustering.
 - `molscope.contactmap`: contact map construction, metrics, and plotting.
 - `molscope.contacts`: chain interfaces and ligand-binding-site analysis.
-- `molscope.dssp`: secondary-structure assignment, segments, and backbone torsions.
+- `molscope.dssp`: simplified DSSP-style secondary-structure assignment, segments, and backbone torsions.
 - `molscope.distance`: optional NumPy, PyTorch, and CuPy dense distance backends.
 - `molscope.coarsegrain`: coarse-graining and mapping report classes.
 - `molscope.descriptors`: descriptor helpers and batch featurization.
