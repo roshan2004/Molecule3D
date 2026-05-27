@@ -246,18 +246,26 @@ class Molecule:
 
     @property
     def centroid(self) -> np.ndarray:
-        """Geometric centre (mean of all atom positions)."""
+        """Geometric centre: the unweighted mean of atom positions.
+
+        Contrast :attr:`center_of_mass`, which weights by atomic mass; the two
+        differ when heavy atoms sit off-centre.
+        """
         return self.coords.mean(axis=0)
 
     @property
     def center_of_mass(self) -> np.ndarray:
-        """Mass-weighted centre of the molecule."""
+        """Mass-weighted centre: ``sum(m_i r_i) / sum(m_i)``."""
         m = self.masses
         return (m[:, None] * self.coords).sum(axis=0) / m.sum()
 
     @property
     def radius_of_gyration(self) -> float:
-        """Mass-weighted radius of gyration (angstrom)."""
+        """Mass-weighted RMS distance of atoms from the centre of mass (angstrom).
+
+        ``Rg = sqrt(sum(m_i |r_i - R_com|^2) / sum(m_i))`` — a compactness
+        measure: smaller for globular structures, larger for extended ones.
+        """
         m = self.masses
         d2 = ((self.coords - self.center_of_mass) ** 2).sum(axis=1)
         return float(np.sqrt((m * d2).sum() / m.sum()))
@@ -266,6 +274,35 @@ class Molecule:
     def dimensions(self) -> np.ndarray:
         """Axis-aligned bounding-box size (dx, dy, dz) in angstrom."""
         return self.coords.max(axis=0) - self.coords.min(axis=0)
+
+    def inertia_tensor(self) -> np.ndarray:
+        """Mass-weighted moment-of-inertia tensor ``(3, 3)`` about the centre of mass.
+
+        ``I = sum_i m_i (|r_i|^2 I_3 - r_i r_i^T)`` with ``r_i`` relative to the
+        centre of mass. Its eigenvectors are the principal axes and eigenvalues
+        the principal moments (see :meth:`principal_moments`).
+        """
+        from .descriptors import inertia_tensor
+
+        return inertia_tensor(self)
+
+    def principal_moments(self) -> np.ndarray:
+        """Principal moments of inertia ``(3,)``, ascending.
+
+        The eigenvalues of :meth:`inertia_tensor`; they describe the mass
+        distribution along the principal axes (equal for a sphere, two-large-
+        one-small for a rod, etc.).
+        """
+        return np.linalg.eigvalsh(self.inertia_tensor())
+
+    def principal_axes(self) -> np.ndarray:
+        """Principal axes as columns of a ``(3, 3)`` matrix, ordered by ascending moment.
+
+        The eigenvectors of :meth:`inertia_tensor`; column ``k`` is the axis
+        whose moment is ``principal_moments()[k]``.
+        """
+        moments, axes = np.linalg.eigh(self.inertia_tensor())
+        return axes[:, np.argsort(moments)]
 
     @property
     def formula(self) -> str:
@@ -321,11 +358,11 @@ class Molecule:
         """
         if len(self) != len(reference):
             raise ValueError(f"atom count mismatch: {len(self)} vs {len(reference)}")
-        p = self.coords - self.centroid
+        p = self.coords - self.centroid            # centre both sets at the origin
         q = reference.coords - reference.centroid
-        u, _, vt = np.linalg.svd(p.T @ q)
-        d = np.sign(np.linalg.det(vt.T @ u.T))
-        rot = vt.T @ np.diag([1.0, 1.0, d]) @ u.T
+        u, _, vt = np.linalg.svd(p.T @ q)          # SVD of the cross-covariance
+        d = np.sign(np.linalg.det(vt.T @ u.T))     # correct for a reflection
+        rot = vt.T @ np.diag([1.0, 1.0, d]) @ u.T  # optimal rotation
         aligned = p @ rot.T + reference.centroid
         return replace(self, coords=aligned)
 

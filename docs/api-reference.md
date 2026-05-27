@@ -27,6 +27,8 @@ Common methods:
 - `select(...)`, `backbone()`, `alpha_carbons()`, `protein()`, `hetero_atoms()`, `chain_ids()`
 - `translate(...)`, `centered(...)`, `rotate(...)`, `superpose(...)`
 - `distance(...)`, `angle(...)`, `dihedral(...)`
+- `centroid`, `center_of_mass`, `radius_of_gyration`, `dimensions`
+- `inertia_tensor()`, `principal_moments()`, `principal_axes()`
 - `distance_matrix(backend="numpy")`, `contacts(...)`, `contact_count(...)`, `contact_map(...)`
 - `secondary_structure()`, `backbone_torsions()`, `interface(...)`, `chain_contacts(...)`, `ligands(...)`, `binding_site(...)`
 - `bonds(...)`, `bond_order_array(...)`

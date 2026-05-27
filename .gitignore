@@ -18,4 +18,6 @@ docs/_build/
 !docs/assets/contactmaps/*.png
 !docs/assets/coarsegrain/
 !docs/assets/coarsegrain/*.png
+!docs/assets/geometry/
+!docs/assets/geometry/*.png
 aqp_centered.xyz
