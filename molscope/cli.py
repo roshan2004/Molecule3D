@@ -130,29 +130,34 @@ def _run_view(args: argparse.Namespace) -> int:
 
 
 
+def _analyze_one(path: str, preset: str):
+    """Compute flattened descriptors for one structure (worker; must be top-level
+    so it is picklable under the ``spawn`` start method on macOS/Windows)."""
+    from .descriptors import descriptors, flatten_descriptors
+
+    try:
+        mol = read(path)
+        desc = descriptors(mol, preset=preset)
+        return {"file": path, **flatten_descriptors(desc)}
+    except Exception as e:
+        print(f"Error processing {path}: {e}", file=sys.stderr)
+        return None
+
+
 def _run_analyze(args: argparse.Namespace) -> int:
     import csv
+    from functools import partial
     from multiprocessing import Pool
-
-    from .descriptors import descriptors, flatten_descriptors
 
     paths = _expand_globs(args.files)
     print(f"Analyzing {len(paths)} structures using {args.jobs} jobs...")
 
-    def process_one(path):
-        try:
-            mol = read(path)
-            desc = descriptors(mol, preset=args.preset)
-            return {"file": path, **flatten_descriptors(desc)}
-        except Exception as e:
-            print(f"Error processing {path}: {e}", file=sys.stderr)
-            return None
-
+    worker = partial(_analyze_one, preset=args.preset)
     if args.jobs > 1:
         with Pool(args.jobs) as p:
-            results = p.map(process_one, paths)
+            results = p.map(worker, paths)
     else:
-        results = [process_one(p) for p in paths]
+        results = [worker(p) for p in paths]
 
     results = [r for result in results if (r := result) is not None]
 
@@ -170,55 +175,60 @@ def _run_analyze(args: argparse.Namespace) -> int:
     return 0
 
 
+def _export_one(path: str, to_fmt: str, out_dir: str, kwargs: dict) -> bool:
+    """Export one structure's graph (worker; must be top-level so it is picklable
+    under the ``spawn`` start method on macOS/Windows)."""
+    try:
+        mol = read(path)
+        g = mol.to_graph()
+        stem = os.path.splitext(os.path.basename(path))[0]
+
+        if to_fmt == "pyg":
+            import torch
+            data = g.to_pyg_data(**kwargs)
+            out_path = os.path.join(out_dir, f"{stem}.pt")
+            torch.save(data, out_path)
+        elif to_fmt == "dgl":
+            from dgl.data.utils import save_graphs
+            dg = g.to_dgl_graph(**kwargs)
+            out_path = os.path.join(out_dir, f"{stem}.bin")
+            save_graphs(out_path, [dg])
+        elif to_fmt == "nx":
+            import json
+
+            import networkx as nx
+            # NetworkX exporter doesn't support the new options yet
+            ng = g.to_networkx()
+            out_path = os.path.join(out_dir, f"{stem}.json")
+            with open(out_path, "w") as f:
+                json.dump(nx.node_link_data(ng), f)
+        return True
+    except Exception as e:
+        print(f"Error exporting {path}: {e}", file=sys.stderr)
+        return False
+
+
 def _run_export(args: argparse.Namespace) -> int:
+    from functools import partial
     from multiprocessing import Pool
+
     paths = _expand_globs(args.files)
     os.makedirs(args.out_dir, exist_ok=True)
-    
+
     print(f"Exporting {len(paths)} structures to {args.to} format...")
 
-    def process_one(path):
-        try:
-            mol = read(path)
-            g = mol.to_graph()
-            stem = os.path.splitext(os.path.basename(path))[0]
-            
-            kwargs = {
-                "include_self_loops": args.self_loops,
-                "include_global_node": args.global_node,
-                "include_pe": args.pe,
-                "pe_k": args.pe_k,
-            }
-
-            if args.to == "pyg":
-                import torch
-                data = g.to_pyg_data(**kwargs)
-                out_path = os.path.join(args.out_dir, f"{stem}.pt")
-                torch.save(data, out_path)
-            elif args.to == "dgl":
-                from dgl.data.utils import save_graphs
-                dg = g.to_dgl_graph(**kwargs)
-                out_path = os.path.join(args.out_dir, f"{stem}.bin")
-                save_graphs(out_path, [dg])
-            elif args.to == "nx":
-                import json
-
-                import networkx as nx
-                # NetworkX exporter doesn't support the new options yet
-                ng = g.to_networkx()
-                out_path = os.path.join(args.out_dir, f"{stem}.json")
-                with open(out_path, "w") as f:
-                    json.dump(nx.node_link_data(ng), f)
-            return True
-        except Exception as e:
-            print(f"Error exporting {path}: {e}", file=sys.stderr)
-            return False
-
+    kwargs = {
+        "include_self_loops": args.self_loops,
+        "include_global_node": args.global_node,
+        "include_pe": args.pe,
+        "pe_k": args.pe_k,
+    }
+    worker = partial(_export_one, to_fmt=args.to, out_dir=args.out_dir, kwargs=kwargs)
     if args.jobs > 1:
         with Pool(args.jobs) as p:
-            successes = p.map(process_one, paths)
+            successes = p.map(worker, paths)
     else:
-        successes = [process_one(p) for p in paths]
+        successes = [worker(p) for p in paths]
 
     print(f"Successfully exported {sum(successes)} structures to {args.out_dir}")
     return 0
