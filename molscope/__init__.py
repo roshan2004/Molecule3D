@@ -67,7 +67,7 @@ from .contacts import (
     interface_residues,
     ligands,
 )
-from .descriptors import descriptor_feature_names, descriptors, featurize_many
+from .descriptors import descriptor_feature_names, descriptors, featurize_many, inertia_tensor
 from .dssp import BackboneTorsions, SecondaryStructure, SSSegment, backbone_torsions
 from .ensemble import Clustering, cluster, rmsd_matrix
 from .ensemble import contact_frequency as ensemble_contact_frequency
@@ -123,6 +123,7 @@ __all__ = [
     "edge_feature_names",
     "featurize_many",
     "fetch",
+    "inertia_tensor",
     "interface_residues",
     "ligands",
     "plot_mapping",

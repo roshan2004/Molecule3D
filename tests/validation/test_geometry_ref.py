@@ -46,9 +46,49 @@ def test_center_of_mass_matches_mdanalysis(both):
 
 def test_principal_moments_match_mdanalysis(both):
     mine, u = both
-    mine_pm = np.array(mine.descriptors()["principal_moments"])
+    mine_pm = mine.principal_moments()
     ref_pm = np.sort(np.linalg.eigvalsh(u.atoms.moment_of_inertia()))
     assert np.allclose(mine_pm, ref_pm, rtol=1e-5)
+
+
+def test_inertia_tensor_matches_mdanalysis(both):
+    mine, u = both
+    assert np.allclose(mine.inertia_tensor(), u.atoms.moment_of_inertia(), rtol=1e-5)
+
+
+def test_centroid_matches_mdanalysis(both):
+    mine, u = both
+    assert np.allclose(mine.centroid, u.atoms.center_of_geometry(), atol=1e-5)
+
+
+def test_distance_angle_dihedral_match_mdanalysis(both):
+    from MDAnalysis.lib import distances as mdadist
+
+    mine, u = both
+    p = u.atoms.positions
+    i, j, k, m = 0, 10, 20, 30
+    assert mine.distance(i, j) == pytest.approx(float(mdadist.calc_bonds(p[i], p[j])), rel=1e-5)
+    assert mine.angle(i, j, k) == pytest.approx(
+        np.degrees(float(mdadist.calc_angles(p[i], p[j], p[k]))), abs=1e-4
+    )
+    assert mine.dihedral(i, j, k, m) == pytest.approx(
+        np.degrees(float(mdadist.calc_dihedrals(p[i], p[j], p[k], p[m]))), abs=1e-4
+    )
+
+
+def test_rmsf_matches_mdanalysis(mda):
+    from MDAnalysis.analysis import align, rms
+
+    models = ms.read_pdb_models(ENSEMBLE)
+    mine = ms.ensemble.rmsf(models)               # aligns each model to model 1
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        u = mda.Universe(ENSEMBLE, in_memory=True)
+        align.AlignTraj(u, u, select="all", ref_frame=0, in_memory=True).run()
+        ref = rms.RMSF(u.atoms).run().results.rmsf
+    assert mine.shape == ref.shape
+    assert np.allclose(mine, ref, atol=1e-3)
 
 
 def test_kabsch_rmsd_matches_mdanalysis(mda):
