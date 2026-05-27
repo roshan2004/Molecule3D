@@ -35,7 +35,7 @@ Common methods:
 - `bonds(...)`, `bond_order_array(...)`
 - `descriptors(...)`, `rdkit_descriptors(...)`
 - `chemical_features(...)`
-- `coarse_grain(...)`, `mapping_report()`
+- `coarse_grain(..., virtual_sites=None)`, `mapping_report()`
 - `to_graph()`, `to_networkx()`, `to_pyg_data()`, `to_dgl_graph()`
 - `to_residue_contact_graph()`
 - `plot(...)`, `view(...)`, `spin_gif(...)`
@@ -47,7 +47,7 @@ Common methods:
 - `molscope.contacts`: chain interfaces and ligand-binding-site analysis.
 - `molscope.dssp`: simplified DSSP-style secondary-structure assignment, segments, and backbone torsions.
 - `molscope.distance`: optional NumPy, PyTorch, and CuPy dense distance backends.
-- `molscope.coarsegrain`: coarse-graining and mapping report classes.
+- `molscope.coarsegrain`: coarse-graining, virtual-site metadata, and mapping report classes.
 - `molscope.descriptors`: descriptor helpers and batch featurization.
 - `molscope.graph`: graph container and backend exporters.
 - `molscope.chem`: optional RDKit-backed chemical perception and descriptors.

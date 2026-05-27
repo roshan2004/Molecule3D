@@ -50,6 +50,7 @@ from .coarsegrain import (
     BondMapping,
     CoarseGrainReport,
     DroppedAtom,
+    VirtualSiteMapping,
 )
 from .coarsegrain import apply_mapping as apply_cg_mapping
 from .coarsegrain import mapping_to_dict as cg_mapping_to_dict
@@ -117,6 +118,7 @@ __all__ = [
     "SSSegment",
     "SecondaryStructure",
     "UnitCell",
+    "VirtualSiteMapping",
     "apply_cg_mapping",
     "backbone_torsions",
     "binding_site",

@@ -60,6 +60,7 @@ class MolecularGraph:
     formal_charges: np.ndarray = field(default_factory=lambda: np.empty(0, dtype=int))
     aromatic_atoms: np.ndarray = field(default_factory=lambda: np.empty(0, dtype=bool))
     aromatic_bonds: np.ndarray = field(default_factory=lambda: np.empty(0, dtype=bool))
+    virtual_sites: np.ndarray = field(default_factory=lambda: np.empty(0, dtype=bool))
 
     @property
     def n_atoms(self) -> int:
@@ -235,6 +236,8 @@ class MolecularGraph:
                 attrs["formal_charge"] = int(self.formal_charges[i])
             if len(self.aromatic_atoms):
                 attrs["aromatic"] = bool(self.aromatic_atoms[i])
+            if len(self.virtual_sites):
+                attrs["virtual_site"] = bool(self.virtual_sites[i])
             g.add_node(i, **attrs)
         aromatic = self._aromatic_bonds_or_order()
         for edge_idx, ((i, j), dist, btype) in enumerate(
@@ -277,6 +280,7 @@ class MolecularGraph:
         pos = self.coords
         z = self.atomic_numbers
         formal_charge = self._formal_charges_or_zero()
+        virtual_site = self._virtual_sites_or_false()
         src, dst, dist, order = self._directed_edges()
         e = self._directed_edge_features(edge_preset)
 
@@ -289,6 +293,7 @@ class MolecularGraph:
             pos = np.concatenate([pos, pos_g], axis=0)
             z = np.concatenate([z, [0]])  # 0 for global node
             formal_charge = np.concatenate([formal_charge, [0]])
+            virtual_site = np.concatenate([virtual_site, [False]])
             
             # Connect global node to all other nodes (bidirectional)
             others = np.arange(g_idx)
@@ -318,6 +323,7 @@ class MolecularGraph:
             node_feature_names=node_feature_names(node_preset),
             z=torch.tensor(z, dtype=torch.long),
             formal_charge=torch.tensor(formal_charge, dtype=torch.long),
+            virtual_site=torch.tensor(virtual_site, dtype=torch.bool),
             pos=torch.tensor(pos, dtype=torch.float),
             edge_index=torch.tensor(np.stack([src, dst]), dtype=torch.long),
             edge_attr=torch.tensor(e, dtype=torch.float),
@@ -367,6 +373,7 @@ class MolecularGraph:
         pos = self.coords
         z = self.atomic_numbers
         formal_charge = self._formal_charges_or_zero()
+        virtual_site = self._virtual_sites_or_false()
         src, dst, dist, order = self._directed_edges()
         e = self._directed_edge_features(edge_preset)
 
@@ -378,6 +385,7 @@ class MolecularGraph:
             pos = np.concatenate([pos, pos_g], axis=0)
             z = np.concatenate([z, [0]])
             formal_charge = np.concatenate([formal_charge, [0]])
+            virtual_site = np.concatenate([virtual_site, [False]])
             
             others = np.arange(g_idx)
             g_src = np.concatenate([others, np.full(g_idx, g_idx)])
@@ -407,6 +415,7 @@ class MolecularGraph:
         g.ndata["feat"] = torch.tensor(x, dtype=torch.float)
         g.ndata["z"] = torch.tensor(z, dtype=torch.long)
         g.ndata["formal_charge"] = torch.tensor(formal_charge, dtype=torch.long)
+        g.ndata["virtual_site"] = torch.tensor(virtual_site, dtype=torch.bool)
         g.ndata["pos"] = torch.tensor(pos, dtype=torch.float)
 
         g.edata["feat"] = torch.tensor(e, dtype=torch.float)
@@ -454,6 +463,11 @@ class MolecularGraph:
         if len(self.aromatic_bonds):
             return np.asarray(self.aromatic_bonds, dtype=bool)
         return np.isclose(np.asarray(self.edge_types, dtype=float), 1.5)
+
+    def _virtual_sites_or_false(self) -> np.ndarray:
+        if len(self.virtual_sites):
+            return np.asarray(self.virtual_sites, dtype=bool)
+        return np.zeros(self.n_atoms, dtype=bool)
 
     def _directed_edge_features(self, preset: str) -> np.ndarray:
         undirected = self.edge_features(preset)

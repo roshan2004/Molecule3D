@@ -107,6 +107,10 @@ def plot_mapping(
 
     palette = plt.get_cmap("tab20").colors
     bead_color = [palette[k % len(palette)] for k in range(report.n_beads)]
+    virtual_site_flags = (
+        np.asarray(cg.virtual_sites, dtype=bool)
+        if len(cg.virtual_sites) else np.zeros(len(cg), dtype=bool)
+    )
     grey = (0.6, 0.6, 0.6, 1.0)
 
     if ax is None:
@@ -139,18 +143,51 @@ def plot_mapping(
         for i, j in cg.bond_index:
             seg = cg.coords[[i, j]]
             ax.plot(*seg.T, color="0.25", linewidth=2.0, zorder=2)
+    if show_bonds and report.virtual_sites:
+        for site in report.virtual_sites:
+            for parent in site.parents:
+                seg = cg.coords[[parent, site.index]]
+                ax.plot(*seg.T, color="0.2", linewidth=1.2, linestyle="--",
+                        alpha=0.75, zorder=2)
 
-    ax.scatter(
-        *cg.coords.T, s=bead_scale, c=bead_color[: len(cg)],
-        edgecolors="0.2", linewidths=1.2, alpha=0.85, depthshade=False, zorder=3,
-    )
+    real_site_flags = ~virtual_site_flags
+    if np.any(real_site_flags):
+        real_indices = np.flatnonzero(real_site_flags)
+        ax.scatter(
+            *cg.coords[real_indices].T,
+            s=bead_scale,
+            c=[bead_color[i] for i in real_indices],
+            edgecolors="0.2",
+            linewidths=1.2,
+            alpha=0.85,
+            depthshade=False,
+            zorder=3,
+        )
+    if np.any(virtual_site_flags):
+        v_indices = np.flatnonzero(virtual_site_flags)
+        ax.scatter(
+            *cg.coords[v_indices].T,
+            s=bead_scale * 0.72,
+            c="white",
+            marker="D",
+            edgecolors="0.05",
+            linewidths=1.4,
+            alpha=0.95,
+            depthshade=False,
+            zorder=4,
+        )
 
-    if report.n_beads <= max_legend:
+    if report.n_sites <= max_legend:
         handles = [
             Line2D([0], [0], marker="o", linestyle="", markerfacecolor=bead_color[k],
                    markeredgecolor="0.2", markersize=9, label=bead_label(report.beads[k], k))
             for k in range(report.n_beads)
         ]
+        handles.extend(
+            Line2D([0], [0], marker="D", linestyle="", markerfacecolor="white",
+                   markeredgecolor="0.05", markersize=7, label=f"{site.name} (virtual)")
+            for site in report.virtual_sites
+        )
         if report.n_dropped:
             handles.append(Line2D([0], [0], marker="x", linestyle="", color=grey,
                                   markersize=8, label=f"dropped ({report.n_dropped})"))

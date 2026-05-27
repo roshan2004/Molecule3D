@@ -64,14 +64,21 @@ def test_coarse_grain_report_property_requires_cg_molecule():
 
 
 def test_mapping_to_dict_shape():
-    cg = two_alanines().coarse_grain("martini")
+    cg = two_alanines().coarse_grain(
+        "martini",
+        virtual_sites=[{"name": "MID", "parents": [0, 2]}],
+    )
     rec = ms.cg_mapping_to_dict(cg)
     assert rec["format"] == "molscope-cg-mapping"
+    assert rec["version"] == 2
     assert rec["mapping"] == "martini"
-    assert rec["n_beads"] == 4 and rec["n_atoms_assigned"] == 10
+    assert rec["n_beads"] == 4 and rec["n_virtual_sites"] == 1
+    assert rec["n_sites"] == 5 and rec["n_atoms_assigned"] == 10
     first = rec["beads"][0]
     assert first["name"] == "BB" and first["atom_indices"] == [0, 1, 2, 3]
     assert len(first["position"]) == 3
+    assert rec["virtual_sites"][0]["parents"] == [0, 2]
+    assert rec["virtual_sites"][0]["name"] == "MID"
     assert [tuple(b) for b in rec["bonds"]] == [(0, 1), (2, 3), (0, 2)]
 
 
@@ -102,11 +109,13 @@ def test_read_mapping_rejects_foreign_json(tmp_path):
 
 def test_apply_mapping_reproduces_the_model(tmp_path):
     mol = two_alanines()
-    cg = mol.coarse_grain("martini")
+    cg = mol.coarse_grain("martini", virtual_sites=[{"name": "MID", "parents": [0, 2]}])
     record = ms.read_cg_mapping(ms.write_cg_mapping(cg, tmp_path / "m.json"))
     rebuilt = ms.apply_cg_mapping(mol, record)
     np.testing.assert_allclose(rebuilt.coords, cg.coords)
     assert rebuilt.atom_names == cg.atom_names  # repeated BB/SC names preserved
+    assert rebuilt.virtual_sites.tolist() == cg.virtual_sites.tolist()
+    assert rebuilt.coarse_grain_report.virtual_sites[0].name == "MID"
     np.testing.assert_array_equal(rebuilt.bonds(), cg.bonds())
     assert rebuilt.coarse_grain_report.coverage() == cg.coarse_grain_report.coverage()
 
@@ -137,7 +146,7 @@ def test_apply_mapping_keeps_centroid_reduction():
 
 
 def test_write_index_groups_and_serials(tmp_path):
-    cg = two_alanines().coarse_grain("martini")
+    cg = two_alanines().coarse_grain("martini", virtual_sites=[{"name": "MID", "parents": [0, 2]}])
     path = cg.write_index(tmp_path / "map.ndx")
     lines = [ln for ln in open(path).read().splitlines() if ln and not ln.startswith(";")]
     groups = [ln for ln in lines if ln.startswith("[")]
@@ -177,7 +186,7 @@ def _agg():
 def test_plot_mapping_returns_axes():
     _agg()
     mol = two_alanines()
-    cg = mol.coarse_grain("martini")
+    cg = mol.coarse_grain("martini", virtual_sites=[{"name": "MID", "parents": [0, 2]}])
     ax = ms.plot_mapping(mol, cg, show=False)
     assert ax is not None
     assert "mapping" in ax.get_title()

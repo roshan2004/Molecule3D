@@ -139,6 +139,15 @@ def test_graph_carries_formal_charges():
     np.testing.assert_array_equal(g.formal_charges, [-1, 1])
 
 
+def test_graph_carries_virtual_site_flags():
+    cg = residue_toy().coarse_grain(
+        "residue_com",
+        virtual_sites=[{"name": "MID", "parents": [0, 1]}],
+    )
+    g = cg.to_graph()
+    np.testing.assert_array_equal(g.virtual_sites, [False, False, False, True])
+
+
 def test_graph_can_attach_rdkit_aromatic_features():
     pytest.importorskip("rdkit")
     mol = Molecule(
@@ -187,6 +196,17 @@ def test_networkx_includes_formal_charge():
     mol = Molecule(np.zeros((1, 3)), ["N"], formal_charges=[1])
     G = mol.to_networkx()
     assert G.nodes[0]["formal_charge"] == 1
+
+
+def test_networkx_includes_virtual_site_flag():
+    pytest.importorskip("networkx")
+    cg = residue_toy().coarse_grain(
+        "residue_com",
+        virtual_sites=[{"name": "MID", "parents": [0, 1]}],
+    )
+    G = cg.to_networkx()
+    assert G.nodes[3]["virtual_site"] is True
+    assert G.nodes[0]["virtual_site"] is False
 
 
 # -- residue contact graph --------------------------------------------------
@@ -286,6 +306,7 @@ def test_to_pyg_data():
     assert data.edge_attr.shape == (4, 1)
     assert data.bond_order.shape == (4,)
     assert data.formal_charge.shape == (3,)
+    assert data.virtual_site.shape == (3,)
 
 
 def test_to_dgl_graph():

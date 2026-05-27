@@ -82,6 +82,7 @@ What it does:
 - Creates bead coordinates.
 - Builds simple bead connectivity.
 - Reports assigned and dropped atoms.
+- Preserves explicitly requested virtual sites as derived coordinate metadata.
 - Returns a normal `Molecule` so plotting and graph export still work.
 
 What it does not do:
@@ -89,6 +90,7 @@ What it does not do:
 - It is not a validated Martini force-field generator.
 - It does not assign production force-field parameters.
 - It does not build simulation-ready topologies.
+- It does not write GROMACS `[ virtual_sites* ]` topology sections.
 - It does not validate bead chemistry, elastic networks, or force constants.
 - It does not claim thermodynamic, kinetic, or structural fidelity for a CG
   model without external validation.

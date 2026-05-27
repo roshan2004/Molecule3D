@@ -31,6 +31,11 @@ or by bead name when names are unique, e.g. ``bonds=[("head", "tail")]`` or
 ``bonds=[(0, 1)]``. Repeated names such as ``BB``/``SC`` in Martini-like residue
 mappings are ambiguous; use bead indices for those.
 
+``virtual_sites`` lets you append coordinate sites derived from existing beads
+without treating them as ordinary atom-assignment beads, e.g.
+``virtual_sites=[{"name": "MID", "parents": [0, 2]}]``. Supported construction
+rules are ``"weighted_average"`` and ``"linear_combination"``.
+
 Intended for teaching and prototyping CG mappings, not as a substitute for
 production Martini parameters.
 """
@@ -50,7 +55,7 @@ from . import elements
 from .molecule import Molecule
 
 _MAPPING_FORMAT = "molscope-cg-mapping"
-_MAPPING_VERSION = 1
+_MAPPING_VERSION = 2
 
 _BACKBONE = ("N", "CA", "C", "O", "OXT")
 
@@ -94,6 +99,26 @@ class BondMapping:
 
 
 @dataclass(frozen=True)
+class VirtualSiteMapping:
+    """One coordinate site derived from parent CG beads.
+
+    Virtual sites are present in the CG molecule's coordinates, but are not
+    ordinary beads: they do not fold source atoms into a new assignment group.
+    ``parents`` are CG bead indices from the non-virtual bead list.
+    """
+
+    index: int
+    name: str
+    parents: list[int]
+    parent_names: list[str]
+    rule: str
+    weights: list[float]
+    resname: str = ""
+    resid: Optional[int] = None
+    chain: str = ""
+
+
+@dataclass(frozen=True)
 class CoarseGrainReport:
     """Human-readable explanation of a coarse-graining operation."""
 
@@ -101,11 +126,22 @@ class CoarseGrainReport:
     beads: list[BeadMapping] = field(default_factory=list)
     dropped_atoms: list[DroppedAtom] = field(default_factory=list)
     bonds: list[BondMapping] = field(default_factory=list)
+    virtual_sites: list[VirtualSiteMapping] = field(default_factory=list)
 
     @property
     def n_beads(self) -> int:
         """Number of coarse-grained beads."""
         return len(self.beads)
+
+    @property
+    def n_virtual_sites(self) -> int:
+        """Number of coordinate sites derived from CG beads."""
+        return len(self.virtual_sites)
+
+    @property
+    def n_sites(self) -> int:
+        """Total number of CG coordinate sites, including virtual sites."""
+        return self.n_beads + self.n_virtual_sites
 
     @property
     def n_assigned(self) -> int:
@@ -126,6 +162,9 @@ class CoarseGrainReport:
         beads = f"{self.n_beads} bead{'' if self.n_beads == 1 else 's'}"
         atoms = f"{self.n_assigned}/{total} atom{'' if total == 1 else 's'}"
         line = f"{beads} from {atoms}"
+        if self.n_virtual_sites:
+            plural = "" if self.n_virtual_sites == 1 else "s"
+            line += f" + {self.n_virtual_sites} virtual site{plural}"
         if self.n_dropped:
             line += f" ({self.n_dropped} dropped)"
         return line
@@ -140,6 +179,19 @@ class CoarseGrainReport:
                 lines.append(f"    {bead.name} bead: {atoms} -> {bead.reduction}")
         else:
             lines.append("  (none)")
+
+        if self.virtual_sites:
+            lines.extend(["", "Virtual sites:"])
+            for site in self.virtual_sites:
+                parents = ", ".join(
+                    f"{name}#{idx}" for idx, name in zip(site.parents, site.parent_names)
+                )
+                weights = ", ".join(f"{w:g}" for w in site.weights)
+                prefix = _residue_label(site.resid, site.resname, site.chain)
+                lines.append(f"  {prefix}:")
+                lines.append(
+                    f"    {site.name} site: {site.rule}({parents}; weights={weights})"
+                )
 
         lines.extend(["", "Dropped atoms:"])
         if self.dropped_atoms:
@@ -160,10 +212,10 @@ class CoarseGrainReport:
 
 
 def coarse_grain(molecule: Molecule, mapping="residue_com", weighted: bool = True,
-                 bonds=None, return_report: bool = False):
+                 bonds=None, virtual_sites=None, return_report: bool = False):
     """Coarse-grain ``molecule``; see the module docstring for the options."""
     if _is_index_mapping(mapping):
-        cg, report = _by_index(molecule, mapping, weighted, bonds)
+        cg, report = _by_index(molecule, mapping, weighted, bonds, virtual_sites)
         return (cg, report) if return_report else cg
 
     if len(molecule.resids) == 0:
@@ -171,7 +223,7 @@ def coarse_grain(molecule: Molecule, mapping="residue_com", weighted: bool = Tru
             "coarse-graining by residue needs residue information; for a file "
             "without it (e.g. .xyz) use an index mapping {bead: [atom_indices]}"
         )
-    cg, report = _by_residue(molecule, mapping, weighted, bonds)
+    cg, report = _by_residue(molecule, mapping, weighted, bonds, virtual_sites)
     return (cg, report) if return_report else cg
 
 
@@ -182,7 +234,7 @@ def _is_index_mapping(mapping) -> bool:
     return not isinstance(next(iter(mapping.values())), dict)
 
 
-def _by_index(molecule: Molecule, mapping: dict, weighted: bool, bonds) -> Molecule:
+def _by_index(molecule: Molecule, mapping: dict, weighted: bool, bonds, virtual_sites) -> Molecule:
     bead_names: list[str] = []
     bead_coords: list[np.ndarray] = []
     bead_report: list[BeadMapping] = []
@@ -214,21 +266,28 @@ def _by_index(molecule: Molecule, mapping: dict, weighted: bool, bonds) -> Molec
     dropped = _dropped_atoms(molecule, assigned)
     _warn_dropped(len(molecule), assigned)
     bond_index, bond_report = _resolve_bonds(bonds, bead_names)
+    virtual_report = _append_virtual_sites(
+        bead_coords,
+        bead_names,
+        virtual_sites,
+    )
     report = CoarseGrainReport(
         mapping="index",
         beads=bead_report,
         dropped_atoms=dropped,
         bonds=bond_report,
+        virtual_sites=virtual_report,
     )
+    virtual_flags = _virtual_site_flags(len(bead_coords), virtual_report)
     cg = Molecule(
         np.array(bead_coords, dtype=float), elements=[""] * len(bead_coords),
         name=f"{molecule.name} (CG)", atom_names=bead_names,
-        bond_index=bond_index, _mapping_report=report,
+        bond_index=bond_index, virtual_sites=virtual_flags, _mapping_report=report,
     )
     return cg, report
 
 
-def _by_residue(molecule: Molecule, mapping, weighted: bool, bonds) -> Molecule:
+def _by_residue(molecule: Molecule, mapping, weighted: bool, bonds, virtual_sites) -> Molecule:
     use_mass = weighted and mapping != "residue_centroid"
     bead_coords, bead_names = [], []
     bead_resnames, bead_resids, bead_chains = [], [], []
@@ -272,17 +331,27 @@ def _by_residue(molecule: Molecule, mapping, weighted: bool, bonds) -> Molecule:
         bond_index, bond_report = _resolve_bonds(bonds, bead_names)
     else:
         bond_index, bond_report = _cg_bonds(residue_beads, bead_chains, bead_names)
+    virtual_report = _append_virtual_sites(
+        bead_coords,
+        bead_names,
+        virtual_sites,
+        bead_resnames,
+        bead_resids,
+        bead_chains,
+    )
     report = CoarseGrainReport(
         mapping=_mapping_name(mapping),
         beads=bead_report,
         dropped_atoms=dropped if isinstance(mapping, dict) or mapping == "martini" else [],
         bonds=bond_report,
+        virtual_sites=virtual_report,
     )
+    virtual_flags = _virtual_site_flags(len(bead_coords), virtual_report)
     cg = Molecule(
         np.array(bead_coords, dtype=float), elements=[""] * len(bead_coords),
         name=f"{molecule.name} (CG)", atom_names=bead_names, resnames=bead_resnames,
         resids=np.array(bead_resids, dtype=int), chains=bead_chains,
-        bond_index=bond_index, _mapping_report=report,
+        bond_index=bond_index, virtual_sites=virtual_flags, _mapping_report=report,
     )
     return cg, report
 
@@ -329,6 +398,157 @@ def _reduce(molecule: Molecule, members, use_mass: bool) -> np.ndarray:
         w = np.array([elements.mass(molecule.elements[i]) for i in members])
         return (w[:, None] * coords).sum(axis=0) / w.sum()
     return coords.mean(axis=0)
+
+
+def _append_virtual_sites(
+    bead_coords: list[np.ndarray],
+    bead_names: list[str],
+    virtual_sites,
+    bead_resnames: Optional[list[str]] = None,
+    bead_resids: Optional[list[int]] = None,
+    bead_chains: Optional[list[str]] = None,
+) -> list[VirtualSiteMapping]:
+    """Append virtual-site coordinates to the CG coordinate/name lists."""
+    if not virtual_sites:
+        return []
+
+    base_count = len(bead_coords)
+    if base_count == 0:
+        raise ValueError("virtual sites require at least one parent bead")
+
+    name_to_idx = _unique_name_index(bead_names)
+    report: list[VirtualSiteMapping] = []
+    for raw in virtual_sites:
+        spec = _normalise_virtual_site_spec(raw)
+        parents = [
+            _resolve_virtual_parent(parent, bead_names, name_to_idx, base_count)
+            for parent in spec["parents"]
+        ]
+        weights = _virtual_site_weights(spec.get("weights"), len(parents), spec["rule"])
+        parent_coords = np.asarray([bead_coords[i] for i in parents], dtype=float)
+        coord = weights @ parent_coords
+
+        first = parents[0]
+        resname = spec.get("resname")
+        if resname is None and bead_resnames is not None:
+            resname = bead_resnames[first]
+        resid = spec.get("resid")
+        if resid is None and bead_resids is not None:
+            resid = bead_resids[first]
+        chain = spec.get("chain")
+        if chain is None and bead_chains is not None:
+            chain = bead_chains[first]
+
+        index = len(bead_coords)
+        bead_coords.append(coord)
+        bead_names.append(spec["name"])
+        if bead_resnames is not None:
+            bead_resnames.append(resname or "")
+        if bead_resids is not None:
+            bead_resids.append(0 if resid is None else int(resid))
+        if bead_chains is not None:
+            bead_chains.append(chain or "")
+        report.append(
+            VirtualSiteMapping(
+                index=index,
+                name=spec["name"],
+                parents=parents,
+                parent_names=[bead_names[i] for i in parents],
+                rule=spec["rule"],
+                weights=[float(w) for w in weights],
+                resname=resname or "",
+                resid=None if resid is None else int(resid),
+                chain=chain or "",
+            )
+        )
+    return report
+
+
+def _normalise_virtual_site_spec(spec) -> dict:
+    if isinstance(spec, dict):
+        name = spec.get("name")
+        parents = spec.get("parents")
+        rule = spec.get("rule", "weighted_average")
+        weights = spec.get("weights")
+        out = {
+            "name": name,
+            "parents": parents,
+            "rule": rule,
+            "weights": weights,
+            "resname": spec.get("resname"),
+            "resid": spec.get("resid"),
+            "chain": spec.get("chain"),
+        }
+    else:
+        try:
+            name, parents = spec
+        except (TypeError, ValueError):
+            raise ValueError(
+                "virtual sites must be dicts or (name, parents) pairs"
+            ) from None
+        out = {
+            "name": name,
+            "parents": parents,
+            "rule": "weighted_average",
+            "weights": None,
+            "resname": None,
+            "resid": None,
+            "chain": None,
+        }
+
+    if not out["name"]:
+        raise ValueError("virtual site requires a name")
+    if out["parents"] is None:
+        raise ValueError(f"virtual site {out['name']!r} requires parents")
+    out["parents"] = list(out["parents"])
+    if not out["parents"]:
+        raise ValueError(f"virtual site {out['name']!r} needs at least one parent")
+    if out["rule"] not in {"weighted_average", "linear_combination"}:
+        raise ValueError(
+            f"virtual site {out['name']!r}: unsupported rule {out['rule']!r}"
+        )
+    return out
+
+
+def _resolve_virtual_parent(parent, bead_names, name_to_idx, base_count: int) -> int:
+    if isinstance(parent, str):
+        if parent in name_to_idx:
+            return name_to_idx[parent]
+        if parent in bead_names:
+            raise ValueError(
+                f"virtual-site parent bead name {parent!r} is repeated; use bead indices"
+            )
+        raise ValueError(f"unknown virtual-site parent bead {parent!r}")
+    idx = int(parent)
+    if idx < 0 or idx >= base_count:
+        raise ValueError(
+            f"virtual-site parent index {idx} is out of range for {base_count} beads"
+        )
+    return idx
+
+
+def _virtual_site_weights(weights, n_parents: int, rule: str) -> np.ndarray:
+    if weights is None:
+        weights = np.ones(n_parents, dtype=float) / n_parents
+    else:
+        weights = np.asarray(weights, dtype=float).reshape(-1)
+    if len(weights) != n_parents:
+        raise ValueError(f"{len(weights)} virtual-site weights for {n_parents} parents")
+    if rule == "weighted_average":
+        total = float(weights.sum())
+        if total == 0.0:
+            raise ValueError("weighted_average virtual-site weights must not sum to zero")
+        weights = weights / total
+    return weights
+
+
+def _virtual_site_flags(n_sites: int, virtual_sites: list[VirtualSiteMapping]) -> np.ndarray:
+    if not virtual_sites:
+        return np.empty(0, dtype=bool)
+    flags = np.zeros(n_sites, dtype=bool)
+    for site in virtual_sites:
+        flags[site.index] = True
+    return flags
 
 
 def _resolve_bonds(bonds, bead_names):
@@ -474,8 +694,8 @@ def mapping_to_dict(cg: Molecule) -> dict:
 
     The record captures, per bead, the source atom indices and names, the
     reduction used, residue metadata and the bead position, plus the bead-index
-    bond network and any dropped atoms. It is JSON-serialisable and can be
-    re-applied with :func:`apply_mapping`.
+    bond network, virtual-site construction rules and any dropped atoms. It is
+    JSON-serialisable and can be re-applied with :func:`apply_mapping`.
     """
     report = cg.coarse_grain_report
     beads = []
@@ -506,15 +726,33 @@ def mapping_to_dict(cg: Molecule) -> dict:
         }
         for atom in report.dropped_atoms
     ]
+    virtual_sites = [
+        {
+            "index": site.index,
+            "name": site.name,
+            "resname": site.resname,
+            "resid": site.resid,
+            "chain": site.chain,
+            "parents": list(site.parents),
+            "parent_names": list(site.parent_names),
+            "rule": site.rule,
+            "weights": [float(w) for w in site.weights],
+            "position": [float(x) for x in cg.coords[site.index]],
+        }
+        for site in report.virtual_sites
+    ]
     return {
         "format": _MAPPING_FORMAT,
         "version": _MAPPING_VERSION,
         "name": cg.name,
         "mapping": report.mapping,
         "n_beads": report.n_beads,
+        "n_virtual_sites": report.n_virtual_sites,
+        "n_sites": report.n_sites,
         "n_atoms_assigned": report.n_assigned,
         "n_dropped": report.n_dropped,
         "beads": beads,
+        "virtual_sites": virtual_sites,
         "bonds": bonds,
         "dropped_atoms": dropped,
     }
@@ -591,6 +829,14 @@ def apply_mapping(molecule: Molecule, record: dict) -> Molecule:
             )
         )
 
+    virtual_report = _append_virtual_sites(
+        coords,
+        names,
+        record.get("virtual_sites") or None,
+        resnames if has_residues else None,
+        resids if has_residues else None,
+        chains if has_residues else None,
+    )
     bonds = record.get("bonds") or []
     bond_index = np.array(bonds, dtype=int).reshape(-1, 2) if bonds else None
     bond_report = [
@@ -602,12 +848,15 @@ def apply_mapping(molecule: Molecule, record: dict) -> Molecule:
         beads=bead_report,
         dropped_atoms=dropped,
         bonds=bond_report,
+        virtual_sites=virtual_report,
     )
+    virtual_flags = _virtual_site_flags(len(coords), virtual_report)
     kwargs = dict(
         elements=[""] * len(coords),
         name=record.get("name") or f"{molecule.name} (CG)",
         atom_names=names,
         bond_index=bond_index,
+        virtual_sites=virtual_flags,
         _mapping_report=report,
     )
     if has_residues:
@@ -640,6 +889,14 @@ def write_index(cg: Molecule, path: str, per_line: int = 15) -> str:
         serials = [i + 1 for i in bead.atom_indices]
         for start in range(0, len(serials), per_line):
             lines.append(" ".join(str(s) for s in serials[start:start + per_line]))
+    if report.virtual_sites:
+        lines.append("; virtual sites are coordinate constructions, not source-atom groups")
+        for site in report.virtual_sites:
+            parents = ", ".join(
+                f"{name}#{idx}" for idx, name in zip(site.parents, site.parent_names)
+            )
+            weights = ", ".join(f"{w:g}" for w in site.weights)
+            lines.append(f"; {site.name} = {site.rule}({parents}; weights={weights})")
     with open(path, "w") as fh:
         fh.write("\n".join(lines) + "\n")
     return path
