@@ -29,7 +29,7 @@ classifiers = [
 dependencies = ["numpy>=1.21", "matplotlib>=3.5"]
 
 [project.optional-dependencies]
-test = ["pytest>=7"]
+test = ["pytest>=7", "pytest-cov>=4"]
 fast = ["scipy>=1.7"]          # enables the KD-tree bond search for large structures
 viz = ["py3Dmol>=2.0"]         # interactive notebook viewer (Molecule.view)
 graph = ["networkx>=2.6"]      # NetworkX exporter
@@ -60,7 +60,7 @@ molscope = "molscope.cli:main"
 # Dev tooling for `uv sync` (installed by default; PEP 735 dependency group).
 # scipy is included so the KD-tree bond path is exercised by the test suite.
 [dependency-groups]
-dev = ["pytest>=7", "scipy>=1.7", "ruff>=0.6", "py3Dmol>=2.0", "networkx>=2.6"]
+dev = ["pytest>=7", "pytest-cov>=4", "scipy>=1.7", "ruff>=0.6", "py3Dmol>=2.0", "networkx>=2.6"]
 docs = ["mkdocs-material>=9.5"]
 # Tooling to open and re-execute notebooks/molscope_tour.ipynb.
 notebook = ["jupyterlab>=4", "ipykernel>=6", "nbconvert>=7"]
@@ -77,6 +77,19 @@ version = { attr = "molscope.__version__" }
 [tool.pytest.ini_options]
 markers = [
     "validation: cross-checks against reference scientific tools (skipped unless installed)",
+]
+
+[tool.coverage.run]
+source = ["molscope"]
+branch = true
+
+[tool.coverage.report]
+# Skip files that exist only to be run, not measured for line coverage.
+omit = ["molscope/__main__.py"]
+exclude_also = [
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
 ]
 
 [tool.ruff]
