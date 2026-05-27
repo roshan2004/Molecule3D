@@ -29,7 +29,16 @@ jobs:
         run: uv run ruff check .
 
       - name: Test
-        run: uv run pytest -q
+        run: uv run pytest -q --cov --cov-report=xml
+
+      - name: Upload coverage to Codecov
+        # Only one matrix leg needs to report; 3.11 is the canonical one.
+        if: matrix.python-version == '3.11'
+        uses: codecov/codecov-action@v5
+        with:
+          files: ./coverage.xml
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false
 
   extras-smoke:
     runs-on: ubuntu-latest
