@@ -41,7 +41,7 @@ Examples
 See https://github.com/roshan2004/molscope for the full documentation.
 """
 
-from . import coarsegrain, dssp, ensemble
+from . import coarsegrain, contacts, dssp, ensemble
 from .chem import ChemicalFeatures, chemical_features, rdkit_descriptors, to_rdkit
 from .cif import CifValidationReport, validate_cif
 from .coarsegrain import (
@@ -56,8 +56,19 @@ from .coarsegrain import read_mapping as read_cg_mapping
 from .coarsegrain import write_index as write_cg_index
 from .coarsegrain import write_mapping as write_cg_mapping
 from .contactmap import ContactMap
+from .contacts import (
+    BindingSite,
+    ChainContactMatrix,
+    Interface,
+    LigandResidue,
+    Residue,
+    binding_site,
+    chain_contact_matrix,
+    interface_residues,
+    ligands,
+)
 from .descriptors import descriptor_feature_names, descriptors, featurize_many
-from .dssp import SecondaryStructure
+from .dssp import BackboneTorsions, SecondaryStructure, SSSegment, backbone_torsions
 from .ensemble import Clustering, cluster, rmsd_matrix
 from .ensemble import contact_frequency as ensemble_contact_frequency
 from .graph import MolecularGraph, edge_feature_names, node_feature_names
@@ -80,19 +91,30 @@ __all__ = [
     "Clustering",
     "ChemicalFeatures",
     "CifValidationReport",
+    "BackboneTorsions",
     "BeadMapping",
+    "BindingSite",
     "BondMapping",
+    "ChainContactMatrix",
     "CoarseGrainReport",
     "ContactMap",
     "DroppedAtom",
+    "Interface",
+    "LigandResidue",
     "Molecule",
     "MolecularGraph",
+    "Residue",
+    "SSSegment",
     "SecondaryStructure",
     "apply_cg_mapping",
+    "backbone_torsions",
+    "binding_site",
     "cg_mapping_to_dict",
+    "chain_contact_matrix",
     "cluster",
     "chemical_features",
     "coarsegrain",
+    "contacts",
     "descriptor_feature_names",
     "descriptors",
     "dssp",
@@ -101,6 +123,8 @@ __all__ = [
     "edge_feature_names",
     "featurize_many",
     "fetch",
+    "interface_residues",
+    "ligands",
     "plot_mapping",
     "plot_rmsd_heatmap",
     "plot_distance_matrix",

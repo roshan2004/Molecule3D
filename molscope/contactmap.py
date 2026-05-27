@@ -40,6 +40,24 @@ class ContactMap:
         vals = np.unique(self.matrix)
         return not np.all(np.isin(vals, (0.0, 1.0)))
 
+    @property
+    def n_contacts(self) -> int:
+        """Number of contacting pairs (non-zero entries above the diagonal)."""
+        return int((np.triu(self.matrix, 1) > 0).sum())
+
+    def contact_order(self) -> float:
+        """Relative contact order: ``mean(|i-j|) / N`` over contacts.
+
+        A standard protein-folding descriptor of how local vs. long-range the
+        contacts are (low = mostly local/helical, high = many long-range
+        contacts). Computed from row/column index separation, so it is most
+        meaningful for a single chain. Returns ``0.0`` if there are no contacts.
+        """
+        i, j = np.nonzero(np.triu(self.matrix, 1) > 0)
+        if len(i) == 0:
+            return 0.0
+        return float(np.abs(i - j).sum() / (len(i) * self.matrix.shape[0]))
+
     def plot(self, **kwargs):
         """Draw the contact map as a heatmap. See :func:`molscope.plotting.plot_contact_map`."""
         from .plotting import plot_contact_map
@@ -54,8 +72,16 @@ def contact_map(
     method: str = "ca",
     backend: str = "numpy",
     device: str | None = None,
+    min_seq_sep: int = 0,
+    chain_mode: str = "all",
 ) -> ContactMap:
-    """Compute a contact map for one structure (see :class:`ContactMap`)."""
+    """Compute a contact map for one structure (see :class:`ContactMap`).
+
+    ``min_seq_sep`` drops same-chain contacts closer than this many positions
+    apart (e.g. ``min_seq_sep=4`` removes trivial helical i,i+1..i+3 contacts).
+    ``chain_mode`` keeps ``"all"`` contacts, only ``"intra"``-chain, or only
+    ``"inter"``-chain pairs.
+    """
     if level == "atom":
         if backend == "scipy":
             mat = np.zeros((len(molecule), len(molecule)), dtype=float)
@@ -63,12 +89,13 @@ def contact_map(
             if len(pairs):
                 mat[pairs[:, 0], pairs[:, 1]] = 1.0
                 mat[pairs[:, 1], pairs[:, 0]] = 1.0
-            return ContactMap(mat, level="atom", cutoff=cutoff)
-        from .distance import contact_matrix
+        else:
+            from .distance import contact_matrix
 
-        mat = contact_matrix(
-            molecule.coords, cutoff=cutoff, backend=backend, device=device
-        )
+            mat = contact_matrix(
+                molecule.coords, cutoff=cutoff, backend=backend, device=device
+            )
+        mat = _apply_contact_filters(mat, molecule.chains, min_seq_sep, chain_mode)
         return ContactMap(mat, level="atom", cutoff=cutoff)
 
     if level != "residue":
@@ -79,8 +106,30 @@ def contact_map(
         raise ValueError("residue contact map needs residue information")
     labels = [_label(chain, resname, resid) for _, resname, resid, chain in groups]
     resids = np.array([resid for _, _, resid, _ in groups], dtype=int)
+    chains = [chain for _, _, _, chain in groups]
     mat = _residue_contacts(molecule, groups, cutoff, method, backend, device)
+    mat = _apply_contact_filters(mat, chains, min_seq_sep, chain_mode)
     return ContactMap(mat, level="residue", cutoff=cutoff, labels=labels, resids=resids)
+
+
+def _apply_contact_filters(mat: np.ndarray, chains, min_seq_sep: int, chain_mode: str):
+    """Mask a contact matrix by chain relationship and sequence separation."""
+    n = mat.shape[0]
+    # No chain labels: treat the structure as a single chain.
+    same = (
+        (np.asarray(chains)[:, None] == np.asarray(chains)[None, :])
+        if chains else np.ones((n, n), dtype=bool)
+    )
+    if chain_mode == "intra":
+        mat = mat * same
+    elif chain_mode == "inter":
+        mat = mat * ~same
+    elif chain_mode != "all":
+        raise ValueError(f"chain_mode must be 'all', 'intra' or 'inter', got {chain_mode!r}")
+    if min_seq_sep > 0:
+        sep = np.abs(np.arange(n)[:, None] - np.arange(n)[None, :])
+        mat = mat * ~(same & (sep < min_seq_sep))
+    return mat
 
 
 def _residue_contacts(molecule, groups, cutoff, method, backend, device) -> np.ndarray:
@@ -111,18 +160,20 @@ def _representative(molecule, idx, method) -> np.ndarray:
 
 
 def _min_distance_contacts(molecule, groups, cutoff, backend, device) -> np.ndarray:
+    """Residue contacts by closest inter-residue atom distance.
+
+    Residues are contiguous atom runs (see ``Molecule.residue_groups``), so one
+    full atom-atom distance matrix collapses to a residue-residue minimum with
+    two ``np.minimum.reduceat`` calls over the residue start offsets.
+    """
     from .distance import distance_matrix
 
-    n = len(groups)
-    coords = [molecule.coords[idx] for idx, *_ in groups]
-    mat = np.zeros((n, n))
-    for a in range(n):
-        for b in range(a + 1, n):
-            merged = np.concatenate([coords[a], coords[b]], axis=0)
-            dist = distance_matrix(merged, backend=backend, device=device)
-            block = dist[:len(coords[a]), len(coords[a]):]
-            if block.min() < cutoff:
-                mat[a, b] = mat[b, a] = 1.0
+    dist = distance_matrix(molecule.coords, backend=backend, device=device)
+    starts = np.array([idx[0] for idx, *_ in groups])
+    row_min = np.minimum.reduceat(dist, starts, axis=0)
+    block_min = np.minimum.reduceat(row_min, starts, axis=1)
+    mat = (block_min < cutoff).astype(float)
+    np.fill_diagonal(mat, 0.0)
     return mat
 
 

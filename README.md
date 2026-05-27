@@ -42,9 +42,14 @@ coarse-grained bead models without pulling in a full simulation stack.
   angles, dihedrals and Kabsch-aligned RMSD.
 - **Analyse** centroids, radius of gyration, the inertia tensor,
   explicit/inferred bonds, and contacts.
-- **Contact maps** at atom or residue level, with heatmap plots.
+- **Contact maps** at atom or residue level, with heatmap plots, sequence-
+  separation and chain filtering, and contact-order metrics.
 - **Secondary structure** via a self-contained, dependency-free DSSP, with
-  `plot(color_by="ss")`.
+  element/segment extraction, per-chain breakdown, backbone phi/psi/omega
+  torsions, and `plot(color_by="ss")`.
+- **Protein interfaces and binding sites**: inter-chain interface residues,
+  chain-chain contact counts, and ligand-binding-site residues (ATOM/HETATM
+  aware).
 - **Ensembles**: pairwise RMSD, RMSF, averaging, and conformer clustering.
 - **Export for ML**: flat structural descriptors and molecular graphs for
   NetworkX, PyTorch Geometric and DGL.

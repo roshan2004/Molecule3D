@@ -212,11 +212,13 @@ def spin_gif(molecule, path: str, frames: int = 36, fps: int = 15, **plot_kwargs
     return path
 
 
-def plot_contact_map(contact_map, ax=None, cmap=None, show: bool = True):
+def plot_contact_map(contact_map, ax=None, cmap=None, show: bool = True, label_ticks=False):
     """Draw a :class:`~molscope.contactmap.ContactMap` as a heatmap.
 
     Booleans render as a binary map; ensemble frequencies render with a colour
-    scale and a colourbar. Returns the matplotlib ``Axes``.
+    scale and a colourbar. ``label_ticks`` annotates the axes with the residue
+    labels (e.g. ``A:LYS8``); it is auto-enabled for small maps and can be forced
+    on or off. Returns the matplotlib ``Axes``.
     """
     import matplotlib.pyplot as plt
 
@@ -230,8 +232,15 @@ def plot_contact_map(contact_map, ax=None, cmap=None, show: bool = True):
     )
 
     unit = "residue" if contact_map.level == "residue" else "atom"
-    ax.set_xlabel(f"{unit} index")
-    ax.set_ylabel(f"{unit} index")
+    labels = contact_map.labels
+    if labels and (label_ticks or (label_ticks is False and len(labels) <= 40)):
+        ax.set_xticks(range(len(labels)))
+        ax.set_yticks(range(len(labels)))
+        ax.set_xticklabels(labels, rotation=90, fontsize=6)
+        ax.set_yticklabels(labels, fontsize=6)
+    else:
+        ax.set_xlabel(f"{unit} index")
+        ax.set_ylabel(f"{unit} index")
     label = "contact frequency" if freq else f"contact (< {contact_map.cutoff} Å)"
     ax.figure.colorbar(im, ax=ax, label=label, fraction=0.046, pad=0.04)
     ax.set_title(f"{unit} contact map ({contact_map.cutoff} Å)")

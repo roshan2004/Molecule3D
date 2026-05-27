@@ -20,6 +20,7 @@ nav:
       - Selections: user-guide/selections.md
       - Geometry and measurements: user-guide/geometry.md
       - Contact maps and distance matrices: user-guide/contact-maps.md
+      - Protein analysis: user-guide/protein-analysis.md
       - Plotting and viewing: user-guide/plotting.md
       - Ensemble analysis: user-guide/ensembles.md
       - Molecular graphs: user-guide/molecular-graphs.md
@@ -35,6 +36,7 @@ nav:
       - Coarse-grain a protein: examples/coarse-grain-protein.md
       - Export to PyTorch Geometric: examples/export-pyg.md
       - Analyze contacts: examples/analyze-contacts.md
+      - Ligand binding site: examples/binding-site.md
   - API reference: api-reference.md
   - Benchmarks: benchmarks.md
   - Limitations and validation: limitations.md

@@ -36,6 +36,10 @@ class Molecule:
     resnames: list[str] = field(default_factory=list)
     resids: np.ndarray = field(default_factory=lambda: np.empty(0, dtype=int))
     chains: list[str] = field(default_factory=list)
+    # Per-atom flag: True for atoms from PDB HETATM / mmCIF group_PDB=HETATM
+    # records (ligands, water, ions). Empty when the source carries no record
+    # type. Distinguishes polymer atoms from hetero groups for binding-site work.
+    hetero: list[bool] = field(default_factory=list)
     # Optional explicit bonds as an (E, 2) index array. When set, bonds() returns
     # these instead of inferring from geometry (used by coarse-graining and file
     # formats that carry connectivity).
@@ -64,7 +68,7 @@ class Molecule:
             object.__setattr__(self, "bond_orders", orders)
         if not self.elements:
             object.__setattr__(self, "elements", [""] * len(coords))
-        for name in ("elements", "atom_names", "resnames", "chains"):
+        for name in ("elements", "atom_names", "resnames", "chains", "hetero"):
             seq = getattr(self, name)
             if seq and len(seq) != len(coords):
                 raise ValueError(f"{len(seq)} {name} for {len(coords)} coordinates")
@@ -119,6 +123,7 @@ class Molecule:
             resnames=sub(self.resnames),
             resids=self.resids[idx] if len(self.resids) else self.resids,
             chains=sub(self.chains),
+            hetero=sub(self.hetero),
             formal_charges=(
                 self.formal_charges[idx] if len(self.formal_charges) else self.formal_charges
             ),
@@ -152,13 +157,15 @@ class Molecule:
         resname=None,
         atom_name=None,
         resid=None,
+        hetero=None,
     ) -> Molecule:
         """Return the atoms matching every supplied criterion.
 
         Each of ``element``/``chain``/``resname``/``atom_name`` accepts a single
         value or a collection. ``resid`` accepts an int, a collection of ints,
-        or a ``(low, high)`` inclusive range. Selecting on metadata the molecule
-        lacks raises ``ValueError``.
+        or a ``(low, high)`` inclusive range. ``hetero`` accepts a bool to keep
+        only HETATM (``True``) or only ATOM (``False``) atoms. Selecting on
+        metadata the molecule lacks raises ``ValueError``.
         """
         mask = np.ones(len(self), dtype=bool)
         mask &= self._field_mask(self.elements, element, "element", upper=True)
@@ -167,7 +174,19 @@ class Molecule:
         mask &= self._field_mask(self.atom_names, atom_name, "atom name", upper=True)
         if resid is not None:
             mask &= self._resid_mask(resid)
+        if hetero is not None:
+            if not self.hetero:
+                raise ValueError("no ATOM/HETATM record information in this molecule")
+            mask &= np.array(self.hetero, dtype=bool) == bool(hetero)
         return self.take(mask)
+
+    def protein(self) -> Molecule:
+        """Polymer atoms (those from ATOM records, i.e. not HETATM)."""
+        return self.select(hetero=False)
+
+    def hetero_atoms(self) -> Molecule:
+        """Hetero atoms (those from HETATM records: ligands, water, ions)."""
+        return self.select(hetero=True)
 
     def backbone(self) -> Molecule:
         """Protein backbone atoms (N, CA, C, O)."""
@@ -431,20 +450,25 @@ class Molecule:
         method: str = "ca",
         backend: str = "numpy",
         device: str | None = None,
+        min_seq_sep: int = 0,
+        chain_mode: str = "all",
     ):
         """Build a contact map. See :func:`molscope.contactmap.contact_map`.
 
         ``level`` is ``"atom"`` or ``"residue"``; for residue level ``method`` is
         ``"ca"`` (CA-CA distance), ``"com"`` (centre of mass) or ``"min"``
         (closest inter-residue atom). ``backend`` may be ``"numpy"``,
-        ``"torch"``, ``"cupy"`` or ``"auto"`` for dense distance work. Returns a
-        :class:`ContactMap`.
+        ``"torch"``, ``"cupy"`` or ``"auto"`` for dense distance work.
+        ``min_seq_sep`` drops same-chain contacts closer than that many positions;
+        ``chain_mode`` keeps ``"all"``/``"intra"``/``"inter"``-chain pairs.
+        Returns a :class:`ContactMap`.
         """
         from .contactmap import contact_map
 
         return contact_map(
             self, cutoff=cutoff, level=level, method=method,
             backend=backend, device=device,
+            min_seq_sep=min_seq_sep, chain_mode=chain_mode,
         )
 
     def plot_contact_map(self, cutoff: float = 8.0, level: str = "residue",
@@ -474,6 +498,57 @@ class Molecule:
         from .dssp import assign
 
         return assign(self)
+
+    def backbone_torsions(self):
+        """Backbone phi/psi/omega dihedrals per residue (Ramachandran angles).
+
+        Returns a :class:`molscope.dssp.BackboneTorsions` with ``(R,)`` arrays in
+        degrees, ``NaN`` at chain termini and breaks. Needs N/CA/C/O backbone
+        atoms and residue metadata (proteins read from PDB/mmCIF).
+        """
+        from .dssp import backbone_torsions
+
+        return backbone_torsions(self)
+
+    def chain_ids(self) -> list[str]:
+        """Unique chain ids in first-seen order."""
+        return list(dict.fromkeys(self.chains))
+
+    def interface(self, chain_a: str, chain_b: str, cutoff: float = 5.0):
+        """Residues across the ``chain_a``/``chain_b`` interface.
+
+        Returns a :class:`molscope.contacts.Interface`. See
+        :func:`molscope.contacts.interface_residues`.
+        """
+        from .contacts import interface_residues
+
+        return interface_residues(self, chain_a, chain_b, cutoff=cutoff)
+
+    def chain_contacts(self, cutoff: float = 5.0):
+        """Inter-chain atom-contact counts as a
+        :class:`molscope.contacts.ChainContactMatrix`."""
+        from .contacts import chain_contact_matrix
+
+        return chain_contact_matrix(self, cutoff=cutoff)
+
+    def ligands(self, exclude_water: bool = True, exclude_ions: bool = True):
+        """HETATM groups that look like ligands (skips solvent/ions by default).
+
+        Returns a list of :class:`molscope.contacts.LigandResidue`.
+        """
+        from .contacts import ligands
+
+        return ligands(self, exclude_water=exclude_water, exclude_ions=exclude_ions)
+
+    def binding_site(self, ligand=None, cutoff: float = 4.5):
+        """Protein residues surrounding a ligand HETATM group.
+
+        Returns a :class:`molscope.contacts.BindingSite`. See
+        :func:`molscope.contacts.binding_site`.
+        """
+        from .contacts import binding_site
+
+        return binding_site(self, ligand=ligand, cutoff=cutoff)
 
     def rmsd(self, other: Molecule, align: bool = False) -> float:
         """Root-mean-square deviation from ``other`` (matched by index).
