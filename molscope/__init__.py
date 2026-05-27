@@ -1,31 +1,23 @@
-"""Lightweight molecular structure analysis, visualisation, graph export, and coarse-graining.
+"""Lightweight molecular coordinate workflows for descriptors, graphs, and CG beads.
 
 molscope reads ``.xyz``, ``.pdb``, ``.cif`` and ``.sdf`` files (optionally
-gzip-compressed), lets you select and measure atoms, analyse structures and
-ensembles, export molecular graphs for machine learning, coarse-grain onto
-beads, and visualise everything in 3D.
+gzip-compressed) and turns static structures into three main outputs:
+descriptor tables, molecular graphs for machine learning, and coarse-grained
+bead representations.
 
-What it does
-------------
-- **Read and write** XYZ, PDB, mmCIF and SDF; preserve SDF/PDB explicit bonds
-  and SDF formal charges; fetch by id from RCSB; load multi-model NMR ensembles;
-  validate CIF/mmCIF with optional Gemmi support
-  (:func:`read`, :func:`fetch`, :func:`read_pdb_models`, :func:`validate_cif`).
-- **Select and measure** by chain, element or residue; distances, angles,
-  dihedrals and Kabsch-aligned RMSD (:class:`Molecule`).
-- **Analyse** centroids, radius of gyration, inertia tensor, bonds and contacts.
-- **Contact maps** at atom or residue level (:class:`ContactMap`).
-- **Ensembles**: pairwise RMSD, RMSF, averaging, conformer clustering
-  (:mod:`molscope.ensemble`, :func:`cluster`, :func:`rmsd_matrix`).
-- **Export for ML**: structural descriptors, atom/bond graphs and residue
-  contact graphs for NetworkX, PyTorch Geometric and DGL
-  (:func:`descriptors`, :class:`MolecularGraph`, :class:`ResidueContactGraph`).
-- **Chemical perception**: optional RDKit-backed valence, aromaticity, charge
-  features and descriptors (:func:`chemical_features`, :func:`rdkit_descriptors`).
-- **Coarse-grain** onto residue, Martini-style or custom bead mappings
-  (:mod:`molscope.coarsegrain`).
-- **Visualise** with 3D matplotlib plots, an interactive py3Dmol viewer, and
-  spin GIFs.
+Core workflows
+--------------
+- **PDB to descriptors**: fixed-width structural and optional RDKit-backed
+  feature tables (:func:`descriptors`, :func:`featurize_many`).
+- **PDB to graph/GNN**: atom/bond and residue-contact graphs for NetworkX,
+  PyTorch Geometric and DGL (:class:`MolecularGraph`,
+  :class:`ResidueContactGraph`).
+- **PDB to coarse-grained beads**: residue, simplified Martini-style, custom,
+  and virtual-site bead representations (:mod:`molscope.coarsegrain`).
+
+Supporting capabilities include readers/writers, RCSB fetching, mmCIF
+validation, selections, geometry, contact maps, simplified DSSP, ensemble
+summaries, Matplotlib/py3Dmol visualization, and CLI automation.
 
 Examples
 --------

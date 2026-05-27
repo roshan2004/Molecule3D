@@ -1,5 +1,5 @@
 site_name: MolScope
-site_description: Lightweight molecular structure analysis, visualization, graph export, and coarse-graining in Python.
+site_description: Lightweight molecular coordinate workflows for descriptors, graph ML, and coarse-grained beads.
 repo_url: https://github.com/roshan2004/molscope
 repo_name: roshan2004/molscope
 

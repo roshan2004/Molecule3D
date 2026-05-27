@@ -5,11 +5,21 @@ lightweight teaching, prototyping, and ML-representation toolkit; future work
 should strengthen that identity rather than turn it into a full simulation
 framework.
 
+## Product focus
+
+New work should make at least one of these workflows noticeably better:
+
+- PDB to descriptors.
+- PDB to graph/GNN.
+- PDB to coarse-grained beads.
+
+Features outside those paths should stay experimental, optional, or documented
+as supporting capabilities until they earn a clearer role.
+
 ## v0.9
 
 - Improve the documentation site structure and API reference.
-- Add more end-to-end examples around descriptors, graph export, and
-  coarse-graining.
+- Polish the three core tutorials and keep examples aligned with them.
 - Expand benchmark coverage for parsing, contact maps, graph export, and
   descriptor generation.
 - Grow scientific validation from the current `1fqy`/small-molecule checks into
