@@ -69,6 +69,60 @@ class MolecularGraph:
     def n_bonds(self) -> int:
         return len(self.edges)
 
+    def adjacency_matrix(self, weighted: bool = False) -> np.ndarray:
+        """Return the dense adjacency matrix (N, N)."""
+        adj = np.zeros((self.n_atoms, self.n_atoms), dtype=float)
+        if self.n_bonds == 0:
+            return adj
+        i, j = self.edges[:, 0], self.edges[:, 1]
+        val = self.edge_types if weighted else 1.0
+        adj[i, j] = val
+        adj[j, i] = val
+        return adj
+
+    def laplacian_pe(self, k: int = 8) -> np.ndarray:
+        """Compute Laplacian Positional Encodings (N, k).
+
+        This computes the eigenvectors of the normalized Laplacian matrix
+        L = I - D^-1/2 A D^-1/2. The first k non-trivial eigenvectors are
+        returned.
+        """
+        if self.n_atoms <= 1:
+            return np.zeros((self.n_atoms, k))
+        adj = self.adjacency_matrix()
+        deg = adj.sum(axis=1)
+        # Avoid division by zero for isolated atoms
+        with np.errstate(divide="ignore", invalid="ignore"):
+            deg_inv_sqrt = np.where(deg > 0, 1.0 / np.sqrt(deg), 0.0)
+        l_norm = np.eye(self.n_atoms) - deg_inv_sqrt[:, None] * adj * deg_inv_sqrt[None, :]
+        
+        # eigh returns eigenvalues in ascending order
+        eigvals, eigvecs = np.linalg.eigh(l_norm)
+        # Return first k eigenvectors (including the trivial one if requested, 
+        # but usually we want k non-trivial ones. Here we just take the first k).
+        return eigvecs[:, :k]
+
+    def random_walk_pe(self, k: int = 16) -> np.ndarray:
+        """Compute Random Walk Structural Encodings (N, k).
+
+        The features are the diagonal elements [P_ii, P^2_ii, ..., P^k_ii] of 
+        the transition matrix P = A D^-1.
+        """
+        if self.n_atoms == 0:
+            return np.zeros((0, k))
+        adj = self.adjacency_matrix()
+        deg = adj.sum(axis=1)
+        with np.errstate(divide="ignore", invalid="ignore"):
+            p = np.where(deg[:, None] > 0, adj / deg[:, None], 0.0)
+        
+        pe = np.zeros((self.n_atoms, k))
+        pk = p.copy()
+        for i in range(k):
+            pe[:, i] = np.diag(pk)
+            if i < k - 1:
+                pk = pk @ p
+        return pe
+
     @property
     def atomic_numbers(self) -> np.ndarray:
         return np.array([elements.atomic_number(e) for e in self.elements])
@@ -192,49 +246,186 @@ class MolecularGraph:
             )
         return g
 
-    def to_pyg_data(self, node_preset: str = "default", edge_preset: str = "default"):
+    def to_pyg_data(
+        self,
+        node_preset: str = "default",
+        edge_preset: str = "default",
+        include_self_loops: bool = False,
+        include_global_node: bool = False,
+        include_pe: Optional[str] = None,
+        pe_k: int = 8,
+    ):
         """Return a ``torch_geometric.data.Data`` object.
 
         Populates ``x`` (node features), ``z`` (atomic numbers), ``pos`` (3D
-        coordinates), ``edge_index`` and ``edge_attr``. Edges are made
-        bidirectional for message passing.
+        coordinates), ``edge_index`` and ``edge_attr``.
+
+        Args:
+            node_preset: Node feature preset ("default", "basic", "ml").
+            edge_preset: Edge feature preset ("default", "basic", "ml").
+            include_self_loops: If True, add (i, i) edges to edge_index.
+            include_global_node: If True, add a virtual node connected to all others.
+            include_pe: Optional positional encoding to include ("laplacian" or "random_walk").
+            pe_k: Dimension of the positional encoding.
         """
         torch = _require("torch", "PyTorch Geometric", "pip install torch torch_geometric")
         Data = _require(
             "torch_geometric.data", "PyTorch Geometric",
             "pip install torch torch_geometric", attr="Data",
         )
+        x = self.node_features(node_preset)
+        pos = self.coords
+        z = self.atomic_numbers
+        formal_charge = self._formal_charges_or_zero()
         src, dst, dist, order = self._directed_edges()
-        return Data(
-            x=torch.tensor(self.node_features(node_preset), dtype=torch.float),
+        e = self._directed_edge_features(edge_preset)
+
+        if include_global_node:
+            # Add a virtual node at the end
+            g_idx = len(x)
+            x_g = x.mean(axis=0, keepdims=True)
+            pos_g = pos.mean(axis=0, keepdims=True)
+            x = np.concatenate([x, x_g], axis=0)
+            pos = np.concatenate([pos, pos_g], axis=0)
+            z = np.concatenate([z, [0]])  # 0 for global node
+            formal_charge = np.concatenate([formal_charge, [0]])
+            
+            # Connect global node to all other nodes (bidirectional)
+            others = np.arange(g_idx)
+            g_src = np.concatenate([others, np.full(g_idx, g_idx)])
+            g_dst = np.concatenate([np.full(g_idx, g_idx), others])
+            src = np.concatenate([src, g_src])
+            dst = np.concatenate([dst, g_dst])
+            
+            # Pad edge features for global edges (zeros)
+            g_e = np.zeros((len(g_src), e.shape[1]))
+            e = np.concatenate([e, g_e], axis=0)
+            dist = np.concatenate([dist, np.zeros(len(g_src))])
+            order = np.concatenate([order, np.zeros(len(g_src))])
+
+        if include_self_loops:
+            n = len(x)
+            s_idx = np.arange(n)
+            src = np.concatenate([src, s_idx])
+            dst = np.concatenate([dst, s_idx])
+            s_e = np.zeros((n, e.shape[1]))
+            e = np.concatenate([e, s_e], axis=0)
+            dist = np.concatenate([dist, np.zeros(n)])
+            order = np.concatenate([order, np.ones(n)])
+
+        data = Data(
+            x=torch.tensor(x, dtype=torch.float),
             node_feature_names=node_feature_names(node_preset),
-            z=torch.tensor(self.atomic_numbers, dtype=torch.long),
-            formal_charge=torch.tensor(self._formal_charges_or_zero(), dtype=torch.long),
-            pos=torch.tensor(self.coords, dtype=torch.float),
+            z=torch.tensor(z, dtype=torch.long),
+            formal_charge=torch.tensor(formal_charge, dtype=torch.long),
+            pos=torch.tensor(pos, dtype=torch.float),
             edge_index=torch.tensor(np.stack([src, dst]), dtype=torch.long),
-            edge_attr=torch.tensor(self._directed_edge_features(edge_preset), dtype=torch.float),
+            edge_attr=torch.tensor(e, dtype=torch.float),
             edge_feature_names=edge_feature_names(edge_preset),
             bond_order=torch.tensor(order, dtype=torch.float),
-            num_nodes=self.n_atoms,
+            num_nodes=len(x),
         )
 
-    def to_dgl_graph(self, node_preset: str = "default", edge_preset: str = "default"):
-        """Return a ``dgl.DGLGraph`` with node/edge feature tensors."""
+
+        if include_pe == "laplacian":
+            pe = self.laplacian_pe(k=pe_k)
+            if include_global_node:
+                pe = np.concatenate([pe, np.zeros((1, pe_k))], axis=0)
+            data.pe = torch.tensor(pe, dtype=torch.float)
+        elif include_pe == "random_walk":
+            pe = self.random_walk_pe(k=pe_k)
+            if include_global_node:
+                pe = np.concatenate([pe, np.zeros((1, pe_k))], axis=0)
+            data.pe = torch.tensor(pe, dtype=torch.float)
+
+        return data
+
+
+    def to_dgl_graph(
+        self,
+        node_preset: str = "default",
+        edge_preset: str = "default",
+        include_self_loops: bool = False,
+        include_global_node: bool = False,
+        include_pe: Optional[str] = None,
+        pe_k: int = 8,
+    ):
+        """Return a ``dgl.DGLGraph`` with node/edge feature tensors.
+
+        Args:
+            node_preset: Node feature preset ("default", "basic", "ml").
+            edge_preset: Edge feature preset ("default", "basic", "ml").
+            include_self_loops: If True, add (i, i) edges.
+            include_global_node: If True, add a virtual node connected to all others.
+            include_pe: Optional positional encoding to include ("laplacian" or "random_walk").
+            pe_k: Dimension of the positional encoding.
+        """
         dgl = _require("dgl", "DGL", "pip install dgl")
         torch = _require("torch", "DGL", "pip install dgl torch")
+        
+        x = self.node_features(node_preset)
+        pos = self.coords
+        z = self.atomic_numbers
+        formal_charge = self._formal_charges_or_zero()
         src, dst, dist, order = self._directed_edges()
+        e = self._directed_edge_features(edge_preset)
+
+        if include_global_node:
+            g_idx = len(x)
+            x_g = x.mean(axis=0, keepdims=True)
+            pos_g = pos.mean(axis=0, keepdims=True)
+            x = np.concatenate([x, x_g], axis=0)
+            pos = np.concatenate([pos, pos_g], axis=0)
+            z = np.concatenate([z, [0]])
+            formal_charge = np.concatenate([formal_charge, [0]])
+            
+            others = np.arange(g_idx)
+            g_src = np.concatenate([others, np.full(g_idx, g_idx)])
+            g_dst = np.concatenate([np.full(g_idx, g_idx), others])
+            src = np.concatenate([src, g_src])
+            dst = np.concatenate([dst, g_dst])
+            
+            g_e = np.zeros((len(g_src), e.shape[1]))
+            e = np.concatenate([e, g_e], axis=0)
+            dist = np.concatenate([dist, np.zeros(len(g_src))])
+            order = np.concatenate([order, np.zeros(len(g_src))])
+
+        if include_self_loops:
+            n = len(x)
+            s_idx = np.arange(n)
+            src = np.concatenate([src, s_idx])
+            dst = np.concatenate([dst, s_idx])
+            s_e = np.zeros((n, e.shape[1]))
+            e = np.concatenate([e, s_e], axis=0)
+            dist = np.concatenate([dist, np.zeros(n)])
+            order = np.concatenate([order, np.ones(n)])
+
         g = dgl.graph(
             (torch.tensor(src, dtype=torch.long), torch.tensor(dst, dtype=torch.long)),
-            num_nodes=self.n_atoms,
+            num_nodes=len(x),
         )
-        g.ndata["feat"] = torch.tensor(self.node_features(node_preset), dtype=torch.float)
-        g.ndata["z"] = torch.tensor(self.atomic_numbers, dtype=torch.long)
-        g.ndata["formal_charge"] = torch.tensor(self._formal_charges_or_zero(), dtype=torch.long)
-        g.ndata["pos"] = torch.tensor(self.coords, dtype=torch.float)
-        g.edata["feat"] = torch.tensor(self._directed_edge_features(edge_preset), dtype=torch.float)
+        g.ndata["feat"] = torch.tensor(x, dtype=torch.float)
+        g.ndata["z"] = torch.tensor(z, dtype=torch.long)
+        g.ndata["formal_charge"] = torch.tensor(formal_charge, dtype=torch.long)
+        g.ndata["pos"] = torch.tensor(pos, dtype=torch.float)
+
+        g.edata["feat"] = torch.tensor(e, dtype=torch.float)
         g.edata["distance"] = torch.tensor(dist, dtype=torch.float)
         g.edata["bond_order"] = torch.tensor(order, dtype=torch.float)
+
+        if include_pe == "laplacian":
+            pe = self.laplacian_pe(k=pe_k)
+            if include_global_node:
+                pe = np.concatenate([pe, np.zeros((1, pe_k))], axis=0)
+            g.ndata["pe"] = torch.tensor(pe, dtype=torch.float)
+        elif include_pe == "random_walk":
+            pe = self.random_walk_pe(k=pe_k)
+            if include_global_node:
+                pe = np.concatenate([pe, np.zeros((1, pe_k))], axis=0)
+            g.ndata["pe"] = torch.tensor(pe, dtype=torch.float)
+
         return g
+
 
     def _directed_edges(self):
         """Edges in both directions: (src, dst, distance) for message passing."""
@@ -301,6 +492,46 @@ class ResidueContactGraph:
     @property
     def n_contacts(self) -> int:
         return len(self.edges)
+
+    def adjacency_matrix(self, weighted: bool = False) -> np.ndarray:
+        """Return the dense adjacency matrix (R, R)."""
+        adj = np.zeros((self.n_residues, self.n_residues), dtype=float)
+        if self.n_contacts == 0:
+            return adj
+        i, j = self.edges[:, 0], self.edges[:, 1]
+        val = self.edge_distances if weighted else 1.0
+        adj[i, j] = val
+        adj[j, i] = val
+        return adj
+
+    def laplacian_pe(self, k: int = 8) -> np.ndarray:
+        """Compute Laplacian Positional Encodings (R, k)."""
+        if self.n_residues <= 1:
+            return np.zeros((self.n_residues, k))
+        adj = self.adjacency_matrix()
+        deg = adj.sum(axis=1)
+        with np.errstate(divide="ignore", invalid="ignore"):
+            deg_inv_sqrt = np.where(deg > 0, 1.0 / np.sqrt(deg), 0.0)
+        l_norm = np.eye(self.n_residues) - deg_inv_sqrt[:, None] * adj * deg_inv_sqrt[None, :]
+        eigvals, eigvecs = np.linalg.eigh(l_norm)
+        return eigvecs[:, :k]
+
+    def random_walk_pe(self, k: int = 16) -> np.ndarray:
+        """Compute Random Walk Structural Encodings (R, k)."""
+        if self.n_residues == 0:
+            return np.zeros((0, k))
+        adj = self.adjacency_matrix()
+        deg = adj.sum(axis=1)
+        with np.errstate(divide="ignore", invalid="ignore"):
+            p = np.where(deg[:, None] > 0, adj / deg[:, None], 0.0)
+        
+        pe = np.zeros((self.n_residues, k))
+        pk = p.copy()
+        for i in range(k):
+            pe[:, i] = np.diag(pk)
+            if i < k - 1:
+                pk = pk @ p
+        return pe
 
     def node_features(
         self,
@@ -411,44 +642,178 @@ class ResidueContactGraph:
             )
         return g
 
-    def to_pyg_data(self, node_preset: str = "default", edge_preset: str = "default"):
-        """Return a ``torch_geometric.data.Data`` object for residue contacts."""
+    def to_pyg_data(
+        self,
+        node_preset: str = "default",
+        edge_preset: str = "default",
+        include_self_loops: bool = False,
+        include_global_node: bool = False,
+        include_pe: Optional[str] = None,
+        pe_k: int = 8,
+    ):
+        """Return a ``torch_geometric.data.Data`` object for residue contacts.
+
+        Args:
+            node_preset: Node feature preset ("default", "ml").
+            edge_preset: Edge feature preset ("default", "ml").
+            include_self_loops: If True, add (i, i) edges.
+            include_global_node: If True, add a virtual node connected to all others.
+            include_pe: Optional positional encoding to include ("laplacian" or "random_walk").
+            pe_k: Dimension of the positional encoding.
+        """
         torch = _require("torch", "PyTorch Geometric", "pip install torch torch_geometric")
         Data = _require(
             "torch_geometric.data", "PyTorch Geometric",
             "pip install torch torch_geometric", attr="Data",
         )
+        x = self.node_features(node_preset)
+        pos = self.coords
+        resids = self.resids
+        residue_sizes = self.residue_sizes
+        labels = list(self.labels)
         src, dst, dist = self._directed_edges()
-        return Data(
-            x=torch.tensor(self.node_features(node_preset), dtype=torch.float),
+        e = self._directed_edge_features(edge_preset)
+
+        if include_global_node:
+            g_idx = len(x)
+            x_g = x.mean(axis=0, keepdims=True)
+            pos_g = pos.mean(axis=0, keepdims=True)
+            x = np.concatenate([x, x_g], axis=0)
+            pos = np.concatenate([pos, pos_g], axis=0)
+            resids = np.concatenate([resids, [0]])
+            residue_sizes = np.concatenate([residue_sizes, [0]])
+            labels.append("GLOBAL")
+            
+            others = np.arange(g_idx)
+            g_src = np.concatenate([others, np.full(g_idx, g_idx)])
+            g_dst = np.concatenate([np.full(g_idx, g_idx), others])
+            src = np.concatenate([src, g_src])
+            dst = np.concatenate([dst, g_dst])
+            
+            g_e = np.zeros((len(g_src), e.shape[1]))
+            e = np.concatenate([e, g_e], axis=0)
+            dist = np.concatenate([dist, np.zeros(len(g_src))])
+
+        if include_self_loops:
+            n = len(x)
+            s_idx = np.arange(n)
+            src = np.concatenate([src, s_idx])
+            dst = np.concatenate([dst, s_idx])
+            s_e = np.zeros((n, e.shape[1]))
+            e = np.concatenate([e, s_e], axis=0)
+            dist = np.concatenate([dist, np.zeros(n)])
+
+        data = Data(
+            x=torch.tensor(x, dtype=torch.float),
             node_feature_names=residue_node_feature_names(node_preset),
-            pos=torch.tensor(self.coords, dtype=torch.float),
+            pos=torch.tensor(pos, dtype=torch.float),
             edge_index=torch.tensor(np.stack([src, dst]), dtype=torch.long),
-            edge_attr=torch.tensor(self._directed_edge_features(edge_preset), dtype=torch.float),
+            edge_attr=torch.tensor(e, dtype=torch.float),
             edge_feature_names=residue_edge_feature_names(edge_preset),
             distance=torch.tensor(dist, dtype=torch.float),
-            resid=torch.tensor(self.resids, dtype=torch.long),
-            residue_size=torch.tensor(self.residue_sizes, dtype=torch.long),
-            residue_labels=list(self.labels),
-            num_nodes=self.n_residues,
+            resid=torch.tensor(resids, dtype=torch.long),
+            residue_size=torch.tensor(residue_sizes, dtype=torch.long),
+            residue_labels=labels,
+            num_nodes=len(x),
         )
 
-    def to_dgl_graph(self, node_preset: str = "default", edge_preset: str = "default"):
-        """Return a ``dgl.DGLGraph`` with residue/contact feature tensors."""
+
+        if include_pe == "laplacian":
+            pe = self.laplacian_pe(k=pe_k)
+            if include_global_node:
+                pe = np.concatenate([pe, np.zeros((1, pe_k))], axis=0)
+            data.pe = torch.tensor(pe, dtype=torch.float)
+        elif include_pe == "random_walk":
+            pe = self.random_walk_pe(k=pe_k)
+            if include_global_node:
+                pe = np.concatenate([pe, np.zeros((1, pe_k))], axis=0)
+            data.pe = torch.tensor(pe, dtype=torch.float)
+
+        return data
+
+
+    def to_dgl_graph(
+        self,
+        node_preset: str = "default",
+        edge_preset: str = "default",
+        include_self_loops: bool = False,
+        include_global_node: bool = False,
+        include_pe: Optional[str] = None,
+        pe_k: int = 8,
+    ):
+        """Return a ``dgl.DGLGraph`` with residue/contact feature tensors.
+
+        Args:
+            node_preset: Node feature preset ("default", "ml").
+            edge_preset: Edge feature preset ("default", "ml").
+            include_self_loops: If True, add (i, i) edges.
+            include_global_node: If True, add a virtual node connected to all others.
+            include_pe: Optional positional encoding to include ("laplacian" or "random_walk").
+            pe_k: Dimension of the positional encoding.
+        """
         dgl = _require("dgl", "DGL", "pip install dgl")
         torch = _require("torch", "DGL", "pip install dgl torch")
+        
+        x = self.node_features(node_preset)
+        pos = self.coords
+        resids = self.resids
+        residue_sizes = self.residue_sizes
         src, dst, dist = self._directed_edges()
+        e = self._directed_edge_features(edge_preset)
+
+        if include_global_node:
+            g_idx = len(x)
+            x_g = x.mean(axis=0, keepdims=True)
+            pos_g = pos.mean(axis=0, keepdims=True)
+            x = np.concatenate([x, x_g], axis=0)
+            pos = np.concatenate([pos, pos_g], axis=0)
+            resids = np.concatenate([resids, [0]])
+            residue_sizes = np.concatenate([residue_sizes, [0]])
+            
+            others = np.arange(g_idx)
+            g_src = np.concatenate([others, np.full(g_idx, g_idx)])
+            g_dst = np.concatenate([np.full(g_idx, g_idx), others])
+            src = np.concatenate([src, g_src])
+            dst = np.concatenate([dst, g_dst])
+            
+            g_e = np.zeros((len(g_src), e.shape[1]))
+            e = np.concatenate([e, g_e], axis=0)
+            dist = np.concatenate([dist, np.zeros(len(g_src))])
+
+        if include_self_loops:
+            n = len(x)
+            s_idx = np.arange(n)
+            src = np.concatenate([src, s_idx])
+            dst = np.concatenate([dst, s_idx])
+            s_e = np.zeros((n, e.shape[1]))
+            e = np.concatenate([e, s_e], axis=0)
+            dist = np.concatenate([dist, np.zeros(n)])
+
         g = dgl.graph(
             (torch.tensor(src, dtype=torch.long), torch.tensor(dst, dtype=torch.long)),
-            num_nodes=self.n_residues,
+            num_nodes=len(x),
         )
-        g.ndata["feat"] = torch.tensor(self.node_features(node_preset), dtype=torch.float)
-        g.ndata["pos"] = torch.tensor(self.coords, dtype=torch.float)
-        g.ndata["resid"] = torch.tensor(self.resids, dtype=torch.long)
-        g.ndata["residue_size"] = torch.tensor(self.residue_sizes, dtype=torch.long)
-        g.edata["feat"] = torch.tensor(self._directed_edge_features(edge_preset), dtype=torch.float)
+        g.ndata["feat"] = torch.tensor(x, dtype=torch.float)
+        g.ndata["pos"] = torch.tensor(pos, dtype=torch.float)
+        g.ndata["resid"] = torch.tensor(resids, dtype=torch.long)
+        g.ndata["residue_size"] = torch.tensor(residue_sizes, dtype=torch.long)
+        g.edata["feat"] = torch.tensor(e, dtype=torch.float)
         g.edata["distance"] = torch.tensor(dist, dtype=torch.float)
+
+
+        if include_pe == "laplacian":
+            pe = self.laplacian_pe(k=pe_k)
+            if include_global_node:
+                pe = np.concatenate([pe, np.zeros((1, pe_k))], axis=0)
+            g.ndata["pe"] = torch.tensor(pe, dtype=torch.float)
+        elif include_pe == "random_walk":
+            pe = self.random_walk_pe(k=pe_k)
+            if include_global_node:
+                pe = np.concatenate([pe, np.zeros((1, pe_k))], axis=0)
+            g.ndata["pe"] = torch.tensor(pe, dtype=torch.float)
+
         return g
+
 
     def _directed_edges(self):
         """Edges in both directions for message passing."""
