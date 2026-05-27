@@ -6,8 +6,13 @@ import numpy as np
 import pytest
 
 import molscope as ms
-from molscope import MolecularGraph, Molecule
-from molscope.graph import edge_feature_names, node_feature_names
+from molscope import MolecularGraph, Molecule, ResidueContactGraph
+from molscope.graph import (
+    edge_feature_names,
+    node_feature_names,
+    residue_edge_feature_names,
+    residue_node_feature_names,
+)
 
 DATA = os.path.join(os.path.dirname(os.path.dirname(__file__)), "examples", "data")
 
@@ -15,6 +20,25 @@ DATA = os.path.join(os.path.dirname(os.path.dirname(__file__)), "examples", "dat
 def water():
     coords = np.array([[0.0, 0.0, 0.0], [0.96, 0.0, 0.0], [-0.24, 0.93, 0.0]])
     return Molecule(coords, ["O", "H", "H"], name="water")
+
+
+def residue_toy():
+    coords = np.array([
+        [0.0, 0.0, 0.0],
+        [0.5, 0.0, 0.0],
+        [3.0, 0.0, 0.0],
+        [3.5, 0.0, 0.0],
+        [10.0, 0.0, 0.0],
+    ])
+    return Molecule(
+        coords,
+        ["C", "O", "N", "C", "S"],
+        name="residue-toy",
+        atom_names=["CA", "CB", "CA", "CB", "CA"],
+        resnames=["ALA", "ALA", "GLY", "GLY", "SER"],
+        resids=[1, 1, 2, 2, 3],
+        chains=["A", "A", "A", "A", "A"],
+    )
 
 
 # -- core graph (no optional deps) ------------------------------------------
@@ -165,6 +189,88 @@ def test_networkx_includes_formal_charge():
     assert G.nodes[0]["formal_charge"] == 1
 
 
+# -- residue contact graph --------------------------------------------------
+
+
+def test_residue_contact_graph_nodes_edges_and_features():
+    g = residue_toy().to_residue_contact_graph(cutoff=4.0, method="ca")
+    assert isinstance(g, ResidueContactGraph)
+    assert g.n_residues == 3
+    assert g.n_contacts == 1
+    assert g.labels == ["A:ALA1", "A:GLY2", "A:SER3"]
+    np.testing.assert_array_equal(g.edges, [[0, 1]])
+    np.testing.assert_array_equal(g.residue_sizes, [2, 2, 1])
+    assert g.edge_distances[0] == pytest.approx(3.0)
+
+    x, e, node_names, edge_names = g.feature_matrices(return_names=True)
+    assert node_names == residue_node_feature_names("ml")
+    assert edge_names == residue_edge_feature_names("ml")
+    assert x.shape == (3, len(node_names))
+    assert e.shape == (1, len(edge_names))
+    assert x[0, node_names.index("residue_ALA")] == 1.0
+    assert e[0, edge_names.index("contact_ca")] == 1.0
+
+
+def test_residue_contact_graph_filters_sequence_local_contacts():
+    g = residue_toy().to_residue_contact_graph(cutoff=4.0, method="ca", min_seq_sep=2)
+    assert g.n_contacts == 0
+
+
+def test_residue_contact_graph_min_method_uses_closest_atom_distance():
+    g = residue_toy().to_residue_contact_graph(cutoff=2.6, method="min")
+    assert g.n_contacts == 1
+    assert g.edge_distances[0] == pytest.approx(2.5)
+    assert g.edge_types == ["min"]
+
+
+def test_residue_contact_graph_requires_residue_metadata():
+    with pytest.raises(ValueError, match="residue contact graph needs residue information"):
+        water().to_residue_contact_graph()
+
+
+def test_residue_contact_graph_to_networkx():
+    nx = pytest.importorskip("networkx")
+    G = residue_toy().to_residue_contact_graph(cutoff=4.0).to_networkx()
+    assert isinstance(G, nx.Graph)
+    assert G.number_of_nodes() == 3
+    assert G.number_of_edges() == 1
+    assert G.nodes[0]["resname"] == "ALA"
+    assert G.nodes[0]["label"] == "A:ALA1"
+    edge = G.edges[0, 1]
+    assert edge["contact_type"] == "ca"
+    assert edge["distance"] == pytest.approx(3.0)
+
+
+def test_molecule_ml_shortcuts_forward_feature_presets(monkeypatch):
+    seen = {}
+
+    class FakeGraph:
+        def to_pyg_data(self, node_preset="default", edge_preset="default"):
+            seen["pyg"] = (node_preset, edge_preset)
+            return "pyg-data"
+
+        def to_dgl_graph(self, node_preset="default", edge_preset="default"):
+            seen["dgl"] = (node_preset, edge_preset)
+            return "dgl-graph"
+
+    def fake_to_graph(self, **kwargs):
+        seen["graph_kwargs"] = kwargs
+        return FakeGraph()
+
+    monkeypatch.setattr(Molecule, "to_graph", fake_to_graph)
+    mol = water()
+
+    assert (
+        mol.to_pyg_data(node_preset="ml", edge_preset="basic", tolerance=1.1)
+        == "pyg-data"
+    )
+    assert seen["graph_kwargs"] == {"tolerance": 1.1}
+    assert seen["pyg"] == ("ml", "basic")
+
+    assert mol.to_dgl_graph(node_preset="basic", edge_preset="ml") == "dgl-graph"
+    assert seen["dgl"] == ("basic", "ml")
+
+
 # -- PyTorch Geometric / DGL (skipped unless installed) ---------------------
 
 
@@ -191,3 +297,30 @@ def test_to_dgl_graph():
     assert g.ndata["feat"].shape == (3, 2)
     assert g.ndata["formal_charge"].shape == (3,)
     assert g.edata["bond_order"].shape == (4,)
+
+
+def test_residue_contact_graph_to_pyg_data():
+    pytest.importorskip("torch")
+    pytest.importorskip("torch_geometric")
+    data = residue_toy().to_residue_contact_graph(cutoff=4.0).to_pyg_data(
+        node_preset="ml",
+        edge_preset="ml",
+    )
+    assert data.num_nodes == 3
+    assert data.x.shape == (3, len(residue_node_feature_names("ml")))
+    assert data.edge_index.shape == (2, 2)
+    assert data.edge_attr.shape == (2, len(residue_edge_feature_names("ml")))
+    assert data.residue_size.tolist() == [2, 2, 1]
+
+
+def test_residue_contact_graph_to_dgl_graph():
+    pytest.importorskip("dgl")
+    pytest.importorskip("torch")
+    g = residue_toy().to_residue_contact_graph(cutoff=4.0).to_dgl_graph(
+        node_preset="ml",
+        edge_preset="ml",
+    )
+    assert g.num_nodes() == 3
+    assert g.num_edges() == 2
+    assert g.ndata["feat"].shape == (3, len(residue_node_feature_names("ml")))
+    assert g.edata["feat"].shape == (2, len(residue_edge_feature_names("ml")))

@@ -114,6 +114,9 @@ See [Benchmarks](benchmarks.md) for a small reproducible timing page.
 
 ## Validation suite
 
+See [Scientific validation](validation.md) for the current reference-tool and
+invariant tables, including assumptions, failure modes and tolerances.
+
 Run validation locally with:
 
 ```bash

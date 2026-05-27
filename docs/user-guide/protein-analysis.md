@@ -1,18 +1,77 @@
-# Protein analysis: secondary structure, interfaces, binding sites
+# Protein analysis: structured coordinate data
 
-Beyond contact maps, MolScope offers protein-specific analysis built on the
-chain/residue metadata and the ATOM/HETATM flag preserved when reading PDB and
-mmCIF files. None of it needs extra dependencies.
+MolScope treats proteins read from PDB/mmCIF as structured coordinate data:
+coordinates plus atom names, residue names, residue ids, chain ids and
+ATOM/HETATM records. Those fields make protein-specific questions possible.
+None of the tools on this page need extra dependencies.
 
-## Secondary structure elements
+## Backbone atoms, residues and chains
 
-`secondary_structure()` runs the built-in DSSP and returns a
-[`SecondaryStructure`][]; on top of the per-residue codes you can extract
-elements, reduce to three states, and break the assignment down by chain.
+Protein backbone atoms use the standard atom names `N`, `CA`, `C` and `O`.
+Alpha carbons (`CA`) are a common residue-level proxy for contact maps, RMSD and
+coarse structural comparison.
 
 ```python
 import molscope as ms
 
+mol = ms.read("examples/data/1fqy.pdb")
+
+len(list(mol.residue_groups()))     # 226 residue groups
+mol.chain_ids()                     # ['A']
+mol.backbone()                      # N, CA, C, O atoms
+mol.alpha_carbons()                 # one CA per residue for this protein
+```
+
+For structures with HETATM records, MolScope separates polymer atoms from
+ligands, waters and ions:
+
+```python
+trypsin = ms.read("examples/data/3ptb.pdb")
+
+trypsin.protein()                   # ATOM atoms only
+trypsin.hetero_atoms()              # HETATM atoms: ligand, waters, calcium
+trypsin.select(resname="HOH")       # waters
+trypsin.ligands()                   # non-solvent, non-ion HETATM groups
+```
+
+The tutorial notebook
+[`notebooks/protein_analysis_from_scratch.ipynb`](https://github.com/roshan2004/molscope/blob/main/notebooks/protein_analysis_from_scratch.ipynb)
+walks this from raw files through contacts, ligands and secondary structure
+using the bundled `1fqy`, `1aml` and `3ptb` examples.
+
+## Contact maps
+
+Residue contact maps summarize which residue pairs are close in 3D:
+
+```python
+cmap = mol.contact_map(cutoff=8.0, level="residue", method="ca", min_seq_sep=4)
+cmap.matrix.shape                  # (226, 226)
+cmap.n_contacts                    # non-local contact count
+cmap.contact_order()               # local vs long-range contact metric
+```
+
+For NMR ensembles, contact frequency reports how often each pair is in contact:
+
+```python
+models = ms.read_pdb_models("examples/data/1aml.pdb")
+freq = ms.ensemble_contact_frequency(models, cutoff=8.0)
+freq.matrix                         # values in [0, 1]
+```
+
+## Secondary structure elements
+
+`secondary_structure()` runs MolScope's built-in simplified DSSP-style
+assignment and returns a [`SecondaryStructure`][]. It is designed for teaching
+and prototyping: it follows the Kabsch-Sander hydrogen-bond idea and is
+cross-checked against `mkdssp`, but it is not bit-identical to canonical
+reference DSSP on every edge case.
+
+Use it for lightweight structure inspection. Use a reference `mkdssp`
+installation when production-grade secondary-structure labels are required.
+On top of the per-residue codes, you can extract elements, reduce to three
+states, and break the assignment down by chain.
+
+```python
 ss = ms.read("examples/data/1fqy.pdb").secondary_structure()
 
 ss.string            # 8-state codes, e.g. '--HHHHH--EEEE--'

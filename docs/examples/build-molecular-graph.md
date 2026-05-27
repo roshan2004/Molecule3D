@@ -16,3 +16,10 @@ For NetworkX:
 G = mol.to_networkx()
 print(G.number_of_nodes(), G.number_of_edges())
 ```
+
+For a residue-level spatial graph:
+
+```python
+rg = mol.to_residue_contact_graph(cutoff=8.0, method="ca", min_seq_sep=4)
+print(rg.n_residues, rg.n_contacts)
+```

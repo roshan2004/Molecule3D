@@ -31,8 +31,10 @@ nav:
   - Examples:
       - Overview: examples/index.md
       - Molecular geometry tour: examples/geometry-tour.md
+      - Protein analysis from scratch: examples/protein-analysis-from-scratch.md
       - Compare NMR models: examples/compare-nmr-models.md
       - Build a molecular graph: examples/build-molecular-graph.md
+      - Residue contact graphs: examples/residue-contact-graphs.md
       - PDB to graph and CG beads: examples/pdb-to-graph-cg.md
       - PDB to PyG ML toy model: examples/pdb-to-pyg-ml.md
       - Coarse-grain a protein: examples/coarse-grain-protein.md
@@ -41,6 +43,7 @@ nav:
       - Ligand binding site: examples/binding-site.md
   - API reference: api-reference.md
   - Benchmarks: benchmarks.md
+  - Scientific validation: validation.md
   - Limitations and validation: limitations.md
   - Roadmap: roadmap.md
   - Contributing: contributing.md

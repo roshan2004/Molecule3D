@@ -147,6 +147,11 @@ python scripts/build_user_guide_pdf.py
 Docs source lives in `docs/`; the site configuration is `mkdocs.yml`. The PDF
 builder requires Pandoc and a LaTeX engine such as `xelatex`.
 
+Scientific validation is documented in
+[`docs/validation.md`](docs/validation.md): reference tools, assumptions,
+failure modes, and tolerances for MDAnalysis, RDKit, `mkdssp`, and invariant
+checks.
+
 ## Quickstart
 
 A runnable end-to-end tour over the bundled sample structures lives in
@@ -170,6 +175,12 @@ For coarse-graining as a teaching workflow, run
 [`examples/coarse_graining.py`](examples/coarse_graining.py): residue
 centre-of-mass beads, residue centroids, and a simplified backbone/sidechain
 mapping with a visual atomistic-to-CG comparison.
+
+For protein-coordinate analysis from scratch, see
+[`docs/examples/protein-analysis-from-scratch.md`](docs/examples/protein-analysis-from-scratch.md)
+and [`notebooks/protein_analysis_from_scratch.ipynb`](notebooks/protein_analysis_from_scratch.ipynb):
+backbone atoms, residues, chains, alpha carbons, contact maps, NMR ensemble
+contacts, ligands, waters, binding sites, and simplified DSSP.
 
 For a runnable, narrated version of that ML walkthrough, open the notebook
 [`notebooks/pdb_to_gnn.ipynb`](notebooks/pdb_to_gnn.ipynb): structure file to a
@@ -273,7 +284,8 @@ mol.contact_map(level="residue", backend="torch", device="cuda")  # optional GPU
 ### Secondary structure (DSSP)
 
 Assign protein secondary structure from backbone hydrogen-bond patterns with a
-self-contained, pure-NumPy DSSP (no external `mkdssp` binary needed):
+self-contained, pure-NumPy, **simplified DSSP-style** implementation (no
+external `mkdssp` binary needed):
 
 ```python
 mol = ms.read("examples/data/1fqy.pdb")
@@ -286,8 +298,8 @@ ss.summary()                        # helix/strand/coil counts and fractions
 mol.plot(color_by="ss")             # colour the 3D view by secondary structure
 ```
 
-Codes follow DSSP: `H`/`G`/`I` helices, `E`/`B` strands, `T` turn, `S` bend,
-`-` coil. This is a simplified **educational** implementation of the
+Codes follow DSSP notation: `H`/`G`/`I` helices, `E`/`B` strands, `T` turn, `S`
+bend, `-` coil. This is a simplified **educational** implementation of the
 Kabsch-Sander hydrogen-bond model: not bit-identical to the reference `mkdssp`
 on every edge case, but validated against it. A CI cross-check
 (`tests/validation`) puts it at **~99% per-residue 3-state agreement**
@@ -379,6 +391,18 @@ Graph feature presets are also available through
 `mol.to_graph(include_chemical_features=True)` to attach optional RDKit-backed
 aromatic atom and bond flags.
 
+For protein-scale spatial graphs, build a residue contact graph instead:
+
+```python
+rg = mol.to_residue_contact_graph(cutoff=8.0, method="ca", min_seq_sep=4)
+RG = rg.to_networkx()
+residue_data = rg.to_pyg_data(node_preset="ml", edge_preset="ml")
+```
+
+Use atom/bond graphs when covalent chemistry is the signal. Use residue or
+bead contact graphs when 3D neighborhoods, interfaces, folded shape or
+long-range contacts are the signal.
+
 ### Coarse-graining
 
 Map an atomistic structure onto a smaller set of beads. The result is an
@@ -433,14 +457,30 @@ meant for teaching and prototyping CG mappings, not as a replacement for
 production Martini preparation: the JSON and `.ndx` exports describe a bead
 assignment for inspection and reuse, not a validated simulation topology.
 
-## Command line
+## Command-line interface
 
+MolScope provides a powerful CLI for visualization, batch analysis, and ML graph export.
+
+### View (default)
+Visualize a structure, apply transformations, and save images or animations.
 ```bash
-molscope examples/data/helix_201.xyz --translate 1 2 -1
 molscope examples/data/1fqy.pdb --select atom_name=CA --color-by residue --save ca.png
 molscope --fetch 1aml --center --gif amyloid.gif
-python -m molscope examples/data/1fqy.pdb          # equivalent if not pip-installed
 ```
+
+### Analyze
+Batch compute molecular descriptors for many files and save to a CSV table.
+```bash
+molscope analyze examples/data/*.pdb --out results.csv --preset native-3d --jobs 4
+```
+
+### Export
+Batch export molecular graphs to PyTorch Geometric, DGL, or NetworkX formats.
+```bash
+molscope export "data/*.cif" --to pyg --out-dir pyg_graphs/ --pe laplacian --jobs 8
+```
+Supports advanced features like `--self-loops`, `--global-node`, and `--pe` (positional encodings).
+
 
 ## Sample structures
 
