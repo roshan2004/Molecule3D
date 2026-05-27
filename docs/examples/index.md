@@ -1,7 +1,10 @@
 # Examples
 
 The examples here are small scripts that can be copied into notebooks or Python
-files. The repository also includes:
+files. For more guided workflows, see the [Tutorials](../tutorials/index.md):
+PDB to descriptors, PDB to graph/GNN, and PDB to coarse-grained beads.
+
+The repository also includes:
 
 - `examples/tour.py`: an end-to-end tour over the bundled sample structures.
 - `examples/geometry.py`: a tour of every geometry quantity (see [Molecular geometry tour](geometry-tour.md)).
