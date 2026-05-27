@@ -76,6 +76,32 @@ def test_distance_angle_dihedral_match_mdanalysis(both):
     )
 
 
+def test_ca_distance_matrix_matches_mdanalysis(both):
+    from MDAnalysis.lib import distances as mdadist
+
+    mine, u = both
+    mine_ca = mine.alpha_carbons()
+    ref_ca = u.select_atoms("name CA")
+    assert len(mine_ca) == len(ref_ca)
+    ref = mdadist.distance_array(ref_ca.positions, ref_ca.positions)
+    assert np.allclose(mine_ca.distance_matrix(), ref, atol=1e-5)
+
+
+def test_ca_contacts_match_mdanalysis_distance_threshold(both):
+    from MDAnalysis.lib import distances as mdadist
+
+    mine, u = both
+    cutoff = 8.0
+    mine_pairs = {tuple(map(int, pair)) for pair in mine.alpha_carbons().contacts(cutoff=cutoff)}
+
+    ref_ca = u.select_atoms("name CA")
+    ref_dist = mdadist.distance_array(ref_ca.positions, ref_ca.positions)
+    i, j = np.nonzero(np.triu(ref_dist < cutoff, k=1))
+    ref_pairs = set(zip(i.tolist(), j.tolist()))
+
+    assert mine_pairs == ref_pairs
+
+
 def test_rmsf_matches_mdanalysis(mda):
     from MDAnalysis.analysis import align, rms
 

@@ -34,6 +34,8 @@ G = cg.to_networkx()
 - Export atom/bond and residue-contact graphs to NetworkX, PyTorch Geometric,
   or DGL.
 - Prototype interpretable coarse-grained mappings.
+- Document scientific validation against MDAnalysis, RDKit, `mkdssp`, and
+  invariant checks with explicit assumptions and tolerances.
 
 ## Install
 
