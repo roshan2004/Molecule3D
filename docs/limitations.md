@@ -90,6 +90,8 @@ What it does not do:
 - It does not assign production force-field parameters.
 - It does not build simulation-ready topologies.
 - It does not validate bead chemistry, elastic networks, or force constants.
+- It does not claim thermodynamic, kinetic, or structural fidelity for a CG
+  model without external validation.
 
 Use these tools for teaching, mapping inspection, and graph prototyping before
 moving to a production coarse-grained workflow.

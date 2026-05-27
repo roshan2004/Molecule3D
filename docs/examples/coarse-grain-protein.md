@@ -1,5 +1,8 @@
 # Coarse-Grain A Protein
 
+This example is for learning and inspection. It does not create production
+simulation topologies or validated Martini parameters.
+
 ```python
 import molscope as ms
 
@@ -19,6 +22,12 @@ cg = mol.coarse_grain("martini")
 G = cg.to_graph()
 ```
 
+Conceptually, Martini-style coarse-graining groups atoms into interaction sites
+such as backbone and sidechain beads. MolScope's `"martini"` mode only teaches
+that mapping idea: it creates `BB`/`SC` bead coordinates and a simple bead graph.
+Real Martini force fields additionally require validated bead types, bonded and
+nonbonded parameters, charges, exclusions, and simulation-engine topology files.
+
 ## See the mapping
 
 `plot_mapping` overlays the beads on the atoms they replace, colouring each atom
@@ -28,6 +37,14 @@ by its bead. A short fragment reads most clearly:
 fragment = mol.select(resid=(8, 12))
 ms.plot_mapping(fragment, fragment.coarse_grain("martini"))
 ```
+
+For a side-by-side residue COM vs backbone/sidechain visual:
+
+```bash
+uv run python examples/coarse_graining.py
+```
+
+![Residue COM and simplified BB/SC mappings for the same Aquaporin-1 fragment](../assets/coarsegrain/1fqy-cg-mapping-comparison.png)
 
 ## Inspect and export the assignment
 
