@@ -1,6 +1,9 @@
 # Coarse-Graining
 
-Coarse-graining maps an atomistic structure onto beads:
+Coarse-graining maps an atomistic structure onto a smaller set of beads. In
+MolScope this is deliberately educational: it helps you inspect mappings,
+compare representations, and build graph prototypes. It does **not** generate
+validated production simulation topologies.
 
 ```python
 cg = mol.coarse_grain("residue_com")
@@ -10,6 +13,52 @@ cg = mol.coarse_grain("martini")
 
 The result is still a `Molecule`, so it can be plotted, transformed, converted
 to a graph, and analyzed.
+
+## Built-in teaching mappings
+
+### Residue centre of mass
+
+`"residue_com"` collapses each residue to one bead at the mass-weighted centre
+of all atoms in that residue:
+
+```python
+mol = ms.read("examples/data/1fqy.pdb")
+cg = mol.coarse_grain("residue_com")
+
+len(mol), len(cg)        # 1661 atoms -> 226 residue beads
+cg.atom_names[:5]        # residue names carried as bead names
+```
+
+Mass weighting matters: a centre of mass is pulled toward heavier atoms, while a
+centroid is the unweighted average of coordinates. Use `"residue_centroid"` when
+you want the geometric centre instead:
+
+```python
+com = mol.coarse_grain("residue_com")
+centroid = mol.coarse_grain("residue_centroid")
+```
+
+### Backbone/sidechain beads
+
+`"martini"` is a simplified backbone/sidechain split inspired by Martini-style
+coarse-graining:
+
+```python
+bb_sc = mol.coarse_grain("martini")
+bb_sc.atom_names[:6]     # ['BB', 'SC', 'BB', 'SC', ...]
+```
+
+For each residue, backbone atoms (`N`, `CA`, `C`, `O`, `OXT`) become a `BB`
+bead and non-hydrogen sidechain atoms become an `SC` bead when present. MolScope
+then adds a simple bead graph: within-residue `BB-SC` bonds plus sequential
+`BB-BB` links along each chain.
+
+This is the useful concept to learn from Martini: represent groups of atoms as
+interaction sites, preserve an interpretable molecular shape, and work at lower
+resolution. Real Martini models also require bead types, bonded terms,
+nonbonded parameters, charges, exclusions, validation against reference
+atomistic/experimental behavior, and toolchain-specific topology files. MolScope
+does not attempt those production steps.
 
 ## Custom residue mappings
 
@@ -48,6 +97,14 @@ ms.plot_mapping(fragment, cg)     # or: cg.plot_mapping(fragment)
 ```
 
 ![Martini bead mapping of an Aquaporin-1 fragment, atoms coloured by bead](../assets/coarsegrain/1fqy-martini-mapping.png)
+
+To compare mapping resolutions side by side, run:
+
+```bash
+uv run python examples/coarse_graining.py
+```
+
+![Residue COM and simplified BB/SC mappings for the same Aquaporin-1 fragment](../assets/coarsegrain/1fqy-cg-mapping-comparison.png)
 
 Pass the structure the CG model was built from (same atom order). The
 atom-to-bead lines are drawn automatically for small structures; toggle them
@@ -114,8 +171,18 @@ print(cg.mapping_report())
 cg, report = mol.coarse_grain(mapping, return_report=True)
 ```
 
-MolScope is useful for interpretable coarse-graining prototypes and teaching.
-It is not a complete force-field engine with bonded, nonbonded, angle, dihedral,
-charge, exclusion, or topology export parameter handling. The `.ndx` and JSON
-exports describe a bead assignment for inspection and reuse; they are not
-validated simulation topologies.
+## Limitations
+
+MolScope is useful for interpretable coarse-graining prototypes, visual mapping
+inspection, and graph/ML representations.
+
+It does not:
+
+- assign Martini bead types or force-field parameters,
+- create angle, dihedral, nonbonded, charge or exclusion terms,
+- build validated production simulation topologies,
+- validate elastic networks, bead chemistry, or thermodynamic behavior,
+- replace a Martini preparation workflow.
+
+The `.ndx` and JSON exports describe a bead assignment for inspection and reuse;
+they are not simulation-ready topology files.

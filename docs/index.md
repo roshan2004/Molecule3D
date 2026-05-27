@@ -29,7 +29,8 @@ G = cg.to_networkx()
   and descriptors.
 - Visualize molecules with Matplotlib or py3Dmol.
 - Export molecular graphs to NetworkX, PyTorch Geometric, or DGL.
-- Prototype interpretable coarse-grained mappings.
+- Prototype interpretable coarse-grained mappings for teaching, inspection, and
+  graph representations without claiming production simulation readiness.
 
 ## Install
 

@@ -166,6 +166,10 @@ from PDB to molecular graph and coarse-grained beads in about 10 minutes.
 For an ML-oriented walkthrough, see
 [`docs/examples/pdb-to-pyg-ml.md`](docs/examples/pdb-to-pyg-ml.md):
 PDB ensemble to PyTorch Geometric classifier/regressor toy model.
+For coarse-graining as a teaching workflow, run
+[`examples/coarse_graining.py`](examples/coarse_graining.py): residue
+centre-of-mass beads, residue centroids, and a simplified backbone/sidechain
+mapping with a visual atomistic-to-CG comparison.
 
 For a runnable, narrated version of that ML walkthrough, open the notebook
 [`notebooks/pdb_to_gnn.ipynb`](notebooks/pdb_to_gnn.ipynb): structure file to a
@@ -422,10 +426,12 @@ generated automatically (within a residue, plus a backbone chain between
 residues); pass `bonds=` to define them yourself. Name-based bonds are intended
 for unique bead names such as `head`/`tail`; repeated names such as `BB`/`SC`
 are ambiguous, so use bead indices for those. Atoms you leave unassigned are
-dropped with a warning. This is meant
-for teaching and prototyping CG mappings, not as a replacement for production
-Martini parameters: the JSON and `.ndx` exports describe a bead assignment for
-inspection and reuse, not a validated simulation topology.
+dropped with a warning. The `"martini"` mapping teaches the idea of backbone and
+sidechain beads; it does not assign Martini bead types, bonded/nonbonded
+parameters, charges, exclusions, or simulation-engine topology files. This is
+meant for teaching and prototyping CG mappings, not as a replacement for
+production Martini preparation: the JSON and `.ndx` exports describe a bead
+assignment for inspection and reuse, not a validated simulation topology.
 
 ## Command line
 

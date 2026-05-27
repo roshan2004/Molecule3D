@@ -212,3 +212,22 @@ def test_cg_result_is_a_usable_molecule():
     g = cg.to_graph()                  # the CG model graphs like any molecule
     assert g.n_atoms == 226
     assert g.n_bonds == len(cg.bonds())
+
+
+def test_educational_cg_workflow_on_aquaporin_fragment():
+    fragment = ms.read_pdb(os.path.join(DATA, "1fqy.pdb")).select(resid=(8, 12))
+
+    residue_com = fragment.coarse_grain("residue_com")
+    residue_centroid = fragment.coarse_grain("residue_centroid")
+    bb_sc = fragment.coarse_grain("martini")
+
+    assert len(fragment) == 53
+    assert len(residue_com) == 5
+    assert len(residue_centroid) == 5
+    assert len(bb_sc) == 10
+    assert len(residue_com.bonds()) == 4
+    assert len(bb_sc.bonds()) == 9
+    assert residue_com.coarse_grain_report.coverage() == "5 beads from 53/53 atoms"
+    assert bb_sc.coarse_grain_report.coverage() == "10 beads from 53/53 atoms"
+    assert bb_sc.atom_names == ["BB", "SC"] * 5
+    assert not np.allclose(residue_com.coords, residue_centroid.coords)

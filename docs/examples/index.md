@@ -5,6 +5,7 @@ files. The repository also includes:
 
 - `examples/tour.py`: an end-to-end tour over the bundled sample structures.
 - `examples/geometry.py`: a tour of every geometry quantity (see [Molecular geometry tour](geometry-tour.md)).
+- `examples/coarse_graining.py`: residue COM, centroid, and simplified BB/SC coarse-graining with a visual mapping comparison.
 - `examples/data/`: small bundled structures used by the examples and tests.
 - `notebooks/molscope_tour.ipynb`: a notebook version of the tour.
 - `docs/examples/pdb-to-graph-cg.md`: a focused PDB to graph and coarse-grain walkthrough.
