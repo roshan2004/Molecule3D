@@ -25,6 +25,9 @@ G = cg.to_networkx()
 - Validate CIF/mmCIF syntax and atom-site columns with optional Gemmi support.
 - Select atoms by element, chain, residue name, atom name, and residue id.
 - Compute geometry, RMSD, contacts, contact maps, ensembles, and descriptors.
+- Analyze protein structures through backbone/alpha-carbon selections, ligands,
+  waters, binding sites, contact maps, and simplified DSSP-style secondary
+  structure.
 - Preserve SDF formal charges and expose optional RDKit-backed chemical features
   and descriptors.
 - Visualize molecules with Matplotlib or py3Dmol.
