@@ -53,6 +53,52 @@ def distance_matrix(
     raise ValueError(f"unsupported dense backend {backend!r}")
 
 
+def cdist(
+    coords1,
+    coords2,
+    *,
+    backend: DenseBackend = "numpy",
+    device: str | None = None,
+    dtype=None,
+    as_numpy: bool = True,
+):
+    """Return the dense ``(N, M)`` pairwise distance matrix between two sets.
+
+    Parameters
+    ----------
+    coords1:
+        ``(N, 3)`` coordinates.
+    coords2:
+        ``(M, 3)`` coordinates.
+    backend, device, dtype, as_numpy:
+        See :func:`distance_matrix`.
+    """
+    coords1 = np.asarray(coords1, dtype=float).reshape(-1, 3)
+    coords2 = np.asarray(coords2, dtype=float).reshape(-1, 3)
+    backend = _resolve_backend(backend, device)
+    if backend == "numpy":
+        coords1 = coords1.astype(dtype or float, copy=False)
+        coords2 = coords2.astype(dtype or float, copy=False)
+        deltas = coords1[:, None, :] - coords2[None, :, :]
+        return np.sqrt((deltas ** 2).sum(axis=-1))
+    if backend == "torch":
+        torch = _import_torch()
+        torch_device = device or _default_torch_device(torch)
+        torch_dtype = dtype or torch.float32
+        x1 = torch.as_tensor(coords1, dtype=torch_dtype, device=torch_device)
+        x2 = torch.as_tensor(coords2, dtype=torch_dtype, device=torch_device)
+        mat = torch.cdist(x1, x2)
+        return mat.detach().cpu().numpy() if as_numpy else mat
+    if backend == "cupy":
+        cp = _import_cupy()
+        x1 = cp.asarray(coords1, dtype=dtype or cp.float32)
+        x2 = cp.asarray(coords2, dtype=dtype or cp.float32)
+        deltas = x1[:, None, :] - x2[None, :, :]
+        mat = cp.sqrt((deltas ** 2).sum(axis=-1))
+        return cp.asnumpy(mat) if as_numpy else mat
+    raise ValueError(f"unsupported dense backend {backend!r}")
+
+
 def contact_matrix(
     coords,
     *,

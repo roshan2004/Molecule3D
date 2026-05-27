@@ -47,6 +47,9 @@ class Molecule:
     bond_orders: Optional[np.ndarray] = None
     formal_charges: np.ndarray = field(default_factory=lambda: np.empty(0, dtype=int))
     _mapping_report: Optional[Any] = field(default=None, repr=False, compare=False)
+    # Track selection lineage to enable boolean logic (e.g. mol1 & mol2).
+    _parent: Optional[Molecule] = field(default=None, repr=False, compare=False)
+    _indices: Optional[np.ndarray] = field(default=None, repr=False, compare=False)
 
     def __post_init__(self):
         coords = np.asarray(self.coords, dtype=float).reshape(-1, 3)
@@ -100,6 +103,40 @@ class Molecule:
         """``mol[mask]`` / ``mol[indices]`` -> a subset molecule (see :meth:`take`)."""
         return self.take(selector)
 
+    def __and__(self, other: Molecule) -> Molecule:
+        """Intersection: atoms present in both subsets of the same parent."""
+        self._check_same_parent(other)
+        mask = np.isin(self._indices, other._indices)
+        return self.take(mask)
+
+    def __or__(self, other: Molecule) -> Molecule:
+        """Union: atoms present in either subset of the same parent."""
+        self._check_same_parent(other)
+        # We need to maintain the parent's order.
+        combined_idx = np.union1d(self._indices, other._indices)
+        return self._parent.take(combined_idx)
+
+    def __sub__(self, other: Molecule) -> Molecule:
+        """Difference: atoms in this subset but not the other."""
+        self._check_same_parent(other)
+        mask = ~np.isin(self._indices, other._indices)
+        return self.take(mask)
+
+    def __invert__(self) -> Molecule:
+        """Complement: atoms in the parent molecule NOT in this subset."""
+        if self._parent is None:
+            # Complement of a root molecule is an empty molecule.
+            return self.take(np.zeros(len(self), dtype=bool))
+        mask = np.ones(len(self._parent), dtype=bool)
+        mask[self._indices] = False
+        return self._parent.take(mask)
+
+    def _check_same_parent(self, other: Molecule):
+        if not isinstance(other, Molecule):
+            raise TypeError(f"cannot combine Molecule with {type(other).__name__}")
+        if self._parent is None or self._parent is not other._parent:
+            raise ValueError("boolean operations only supported on subsets of the same molecule")
+
     @property
     def has_topology(self) -> bool:
         """True if per-atom names/residues/chains were parsed."""
@@ -130,7 +167,10 @@ class Molecule:
             bond_index=bond_index,
             bond_orders=bond_orders,
             _mapping_report=None,
+            _parent=self,
+            _indices=idx,
         )
+
 
     def _subset_bonds(self, idx):
         """Restrict explicit bonds to a kept-atom index set and renumber them."""
@@ -179,6 +219,25 @@ class Molecule:
                 raise ValueError("no ATOM/HETATM record information in this molecule")
             mask &= np.array(self.hetero, dtype=bool) == bool(hetero)
         return self.take(mask)
+
+    def select_within(self, radius: float, target: Any) -> Molecule:
+        """Return the atoms within ``radius`` of a target.
+
+        The target can be another ``Molecule``, a single ``(3,)`` coordinate, or
+        an ``(M, 3)`` array of coordinates.
+        """
+        from .distance import cdist
+
+        if isinstance(target, Molecule):
+            other_coords = target.coords
+        else:
+            other_coords = np.asarray(target).reshape(-1, 3)
+
+        # dists is (N, M)
+        dists = cdist(self.coords, other_coords)
+        mask = np.any(dists < radius, axis=1)
+        return self.take(mask)
+
 
     def protein(self) -> Molecule:
         """Polymer atoms (those from ATOM records, i.e. not HETATM)."""
