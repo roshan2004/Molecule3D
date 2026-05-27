@@ -451,14 +451,30 @@ for teaching and prototyping CG mappings, not as a replacement for production
 Martini parameters: the JSON and `.ndx` exports describe a bead assignment for
 inspection and reuse, not a validated simulation topology.
 
-## Command line
+## Command-line interface
 
+MolScope provides a powerful CLI for visualization, batch analysis, and ML graph export.
+
+### View (default)
+Visualize a structure, apply transformations, and save images or animations.
 ```bash
-molscope examples/data/helix_201.xyz --translate 1 2 -1
 molscope examples/data/1fqy.pdb --select atom_name=CA --color-by residue --save ca.png
 molscope --fetch 1aml --center --gif amyloid.gif
-python -m molscope examples/data/1fqy.pdb          # equivalent if not pip-installed
 ```
+
+### Analyze
+Batch compute molecular descriptors for many files and save to a CSV table.
+```bash
+molscope analyze examples/data/*.pdb --out results.csv --preset native-3d --jobs 4
+```
+
+### Export
+Batch export molecular graphs to PyTorch Geometric, DGL, or NetworkX formats.
+```bash
+molscope export "data/*.cif" --to pyg --out-dir pyg_graphs/ --pe laplacian --jobs 8
+```
+Supports advanced features like `--self-loops`, `--global-node`, and `--pe` (positional encodings).
+
 
 ## Sample structures
 
