@@ -190,7 +190,7 @@ def _read_cif_builtin(path: str) -> Molecule:
                 return row[idx[nm]]
         return default
 
-    coords, els, anames, rnames, rids, chains = [], [], [], [], [], []
+    coords, els, anames, rnames, rids, chains, heteros = [], [], [], [], [], [], []
     for row in rows:
         coords.append((
             float(row[idx["Cartn_x"]]),
@@ -203,11 +203,12 @@ def _read_cif_builtin(path: str) -> Molecule:
         chains.append(col(row, "auth_asym_id", "label_asym_id"))
         rid = col(row, "auth_seq_id", "label_seq_id", default="0")
         rids.append(int(rid) if rid.lstrip("-").isdigit() else 0)
+        heteros.append(col(row, "group_PDB", default="ATOM").upper() == "HETATM")
 
     return Molecule(
         np.array(coords, dtype=float), els, name=_stem(path),
         atom_names=anames, resnames=rnames, resids=np.array(rids, dtype=int),
-        chains=chains,
+        chains=chains, hetero=heteros,
     )
 
 
@@ -242,7 +243,7 @@ def _molecule_from_cif_rows(columns: list[str], rows: list[list[str]], name: str
                 return row[idx[nm]]
         return default
 
-    coords, els, anames, rnames, rids, chains = [], [], [], [], [], []
+    coords, els, anames, rnames, rids, chains, heteros = [], [], [], [], [], [], []
     for row in rows:
         coords.append((
             float(row[idx["Cartn_x"]]),
@@ -255,11 +256,12 @@ def _molecule_from_cif_rows(columns: list[str], rows: list[list[str]], name: str
         chains.append(col(row, "auth_asym_id", "label_asym_id"))
         rid = col(row, "auth_seq_id", "label_seq_id", default="0")
         rids.append(int(rid) if rid.lstrip("-").isdigit() else 0)
+        heteros.append(col(row, "group_PDB", default="ATOM").upper() == "HETATM")
 
     return Molecule(
         np.array(coords, dtype=float), els, name=name,
         atom_names=anames, resnames=rnames, resids=np.array(rids, dtype=int),
-        chains=chains,
+        chains=chains, hetero=heteros,
     )
 
 
@@ -327,10 +329,12 @@ def _molecule_to_pdb_string(molecule: Molecule) -> str:
     resnames = molecule.resnames or ["MOL"] * n
     chains = molecule.chains or ["A"] * n
     resids = molecule.resids if len(molecule.resids) else np.ones(n, dtype=int)
+    heteros = molecule.hetero if len(molecule.hetero) else [False] * n
     lines = [
         _pdb_atom_line(
             serial + 1, names[serial], resnames[serial], chains[serial] or "A",
             int(resids[serial]), molecule.elements[serial], *molecule.coords[serial],
+            hetero=heteros[serial],
         )
         for serial in range(n)
     ]
@@ -474,7 +478,9 @@ def _parse_pdb_models(path: str, altloc: str = "primary") -> list[dict]:
             if record in ("MODEL", "ENDMDL"):
                 flush()
             elif record in ("ATOM", "HETATM"):
-                cur["atoms"].append(_parse_pdb_atom(line, len(cur["atoms"]) + 1))
+                atom = _parse_pdb_atom(line, len(cur["atoms"]) + 1)
+                atom["hetero"] = record == "HETATM"
+                cur["atoms"].append(atom)
             elif record == "CONECT":
                 pairs = _parse_conect(line)
                 if cur["atoms"]:
@@ -530,6 +536,7 @@ def _record_from_atoms(atoms: list[dict], conect: list[tuple[int, int]], altloc:
         "chains": [atom["chain"] for atom in selected],
         "resids": [atom["resid"] for atom in selected],
         "serials": [atom["serial"] for atom in selected],
+        "heteros": [atom.get("hetero", False) for atom in selected],
         "conect": list(conect),
     }
 
@@ -594,6 +601,7 @@ def _molecule_from_record(rec: dict, name: str) -> Molecule:
         np.array(rec["coords"], dtype=float), rec["elements"], name=name,
         atom_names=rec["atom_names"], resnames=rec["resnames"],
         resids=np.array(rec["resids"], dtype=int), chains=rec["chains"],
+        hetero=rec.get("heteros", []),
         bond_index=bond_index if len(bond_index) else None,
     )
 
@@ -638,14 +646,14 @@ def _pdb_conect_bonds(rec: dict) -> np.ndarray:
     return np.array(bonds, dtype=int).reshape(-1, 2)
 
 
-def _pdb_atom_line(serial, atom_name, resname, chain, resid, element, x, y, z):
-    """Build a single fixed-column ``ATOM`` record (80 columns)."""
+def _pdb_atom_line(serial, atom_name, resname, chain, resid, element, x, y, z, hetero=False):
+    """Build a single fixed-column ``ATOM``/``HETATM`` record (80 columns)."""
     line = list(" " * 80)
 
     def put(value: str, start: int):  # start is 1-based
         line[start - 1:start - 1 + len(value)] = value
 
-    put("ATOM", 1)
+    put("HETATM" if hetero else "ATOM", 1)
     put(f"{serial:>5}", 7)
     put(f"{(atom_name or 'X')[:4]:<4}", 13)
     put(f"{(resname or 'MOL')[:3]:>3}", 18)

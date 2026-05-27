@@ -79,6 +79,57 @@ def test_invalid_level_and_method():
         ca_chain().contact_map(level="residue", method="bogus")
 
 
+def two_chain():
+    """Chains A (resid 1,2) and B (resid 1): A2 and B1 are 4 A apart."""
+    return Molecule(
+        np.array([[0.0, 0, 0], [5.0, 0, 0], [9.0, 0, 0]]), ["C", "C", "C"],
+        atom_names=["CA", "CA", "CA"], resnames=["ALA", "ALA", "ALA"],
+        resids=np.array([1, 2, 1]), chains=["A", "A", "B"],
+    )
+
+
+def test_contact_metrics():
+    cm = ca_chain().contact_map(cutoff=8.0, level="residue", method="ca")
+    assert cm.n_contacts == 2                       # 0-1 and 1-2
+    # mean |i-j| over contacts = 1; normalised by R = 3.
+    assert cm.contact_order() == pytest.approx(1.0 / 3.0)
+    empty = ca_chain().contact_map(cutoff=1.0, level="residue", method="ca")
+    assert empty.n_contacts == 0 and empty.contact_order() == 0.0
+
+
+def test_min_seq_sep_drops_local_contacts():
+    full = ca_chain().contact_map(cutoff=8.0, level="residue", method="ca")
+    sep = ca_chain().contact_map(cutoff=8.0, level="residue", method="ca", min_seq_sep=2)
+    assert full.n_contacts == 2
+    assert sep.n_contacts == 0                       # both contacts are i,i+1
+
+
+def test_chain_mode_splits_intra_and_inter():
+    mol = two_chain()
+    allc = mol.contact_map(cutoff=8.0, level="residue", method="ca", chain_mode="all")
+    intra = mol.contact_map(cutoff=8.0, level="residue", method="ca", chain_mode="intra")
+    inter = mol.contact_map(cutoff=8.0, level="residue", method="ca", chain_mode="inter")
+    assert allc.n_contacts == intra.n_contacts + inter.n_contacts
+    assert intra.n_contacts == 1                     # A1-A2 (5 A)
+    assert inter.n_contacts == 1                     # A2-B1 (4 A)
+    with pytest.raises(ValueError):
+        mol.contact_map(level="residue", chain_mode="bogus")
+
+
+def test_min_method_matches_brute_force():
+    mol = ms.read_pdb(os.path.join(DATA, "1fqy.pdb"))
+    groups = list(mol.residue_groups())[:30]         # a contiguous slice for speed
+    sub = mol.take(np.concatenate([np.array(idx) for idx, *_ in groups]))
+    new = sub.contact_map(cutoff=4.5, level="residue", method="min").matrix
+    blocks = [sub.coords[idx] for idx, *_ in sub.residue_groups()]
+    ref = np.zeros_like(new)
+    for a in range(len(blocks)):
+        for b in range(a + 1, len(blocks)):
+            d = np.linalg.norm(blocks[a][:, None] - blocks[b][None, :], axis=-1).min()
+            ref[a, b] = ref[b, a] = 1.0 if d < 4.5 else 0.0
+    np.testing.assert_array_equal(new, ref)
+
+
 def test_ensemble_contact_frequency():
     models = ms.read_pdb_models(os.path.join(DATA, "1aml.pdb"))
     freq = ms.ensemble_contact_frequency(models, cutoff=8.0)

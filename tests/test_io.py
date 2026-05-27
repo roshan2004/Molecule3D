@@ -11,18 +11,19 @@ from molscope.io import read_pdb, read_pdb_models, read_xyz, write_pdb, write_xy
 DATA = os.path.join(os.path.dirname(os.path.dirname(__file__)), "examples", "data")
 
 
-def _atom_line(serial, altloc, x, y, z, element="N", occupancy=1.0):
-    """Build a fixed-column ATOM record with an explicit altLoc at column 17."""
+def _atom_line(serial, altloc, x, y, z, element="N", occupancy=1.0,
+               record_type="ATOM", resname="ASP"):
+    """Build a fixed-column ATOM/HETATM record with an explicit altLoc at column 17."""
     line = list(" " * 80)
 
     def put(value, start):
         line[start - 1:start - 1 + len(value)] = value
 
-    put("ATOM", 1)
+    put(record_type, 1)
     put(f"{serial:>5}", 7)
     put(" N  ", 13)
     put(altloc, 17)
-    put("ASP", 18)
+    put(f"{resname:>3}", 18)
     put("A", 22)
     put(f"{1:>4}", 23)
     put(f"{x:8.3f}", 31)
@@ -175,6 +176,33 @@ def test_pdb_round_trip(tmp_path):
     back = read_pdb(path)
     np.testing.assert_allclose(back.coords, mol.coords, atol=1e-3)
     assert back.elements == ["C", "O"]
+
+
+def test_pdb_reads_hetatm_flag(tmp_path):
+    f = tmp_path / "hetero.pdb"
+    f.write_text(
+        _atom_line(1, " ", 0.0, 0.0, 0.0, element="C", record_type="ATOM")
+        + _atom_line(2, " ", 1.0, 1.0, 1.0, element="O", record_type="HETATM",
+                     resname="LIG")
+    )
+    mol = read_pdb(str(f))
+    assert mol.hetero == [False, True]
+    assert len(mol.protein()) == 1
+    assert len(mol.hetero_atoms()) == 1
+    assert mol.hetero_atoms().resnames == ["LIG"]
+
+
+def test_pdb_round_trip_preserves_hetatm(tmp_path):
+    f = tmp_path / "hetero.pdb"
+    f.write_text(
+        _atom_line(1, " ", 0.0, 0.0, 0.0, element="C", record_type="ATOM")
+        + _atom_line(2, " ", 1.0, 1.0, 1.0, element="O", record_type="HETATM")
+    )
+    mol = read_pdb(str(f))
+    out = str(tmp_path / "rt.pdb")
+    write_pdb(mol, out)
+    back = read_pdb(out)
+    assert back.hetero == [False, True]
 
 
 def test_pdb_conect_records_create_explicit_bonds(tmp_path):

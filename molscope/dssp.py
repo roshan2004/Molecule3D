@@ -49,6 +49,41 @@ SS_COLORS = {
 }
 
 
+# 8-state -> 3-state (helix / strand / coil) reduction.
+_THREE_STATE = {"H": "H", "G": "H", "I": "H", "E": "E", "B": "E"}
+
+
+def _ss_counts(codes: np.ndarray) -> dict:
+    """Helix/strand/coil counts and fractions for a sequence of DSSP codes."""
+    helix = int(np.isin(codes, ["H", "G", "I"]).sum())
+    strand = int(np.isin(codes, ["E", "B"]).sum())
+    total = len(codes)
+    coil = total - helix - strand
+    denom = total or 1
+    return {
+        "residues": total,
+        "helix": helix, "strand": strand, "coil": coil,
+        "helix_fraction": helix / denom,
+        "strand_fraction": strand / denom,
+        "coil_fraction": coil / denom,
+    }
+
+
+@dataclass(frozen=True)
+class SSSegment:
+    """A contiguous run of one DSSP code within a single chain."""
+
+    code: str          # the DSSP code shared by the run
+    chain: str         # chain id
+    start: int         # first residue id (inclusive)
+    end: int           # last residue id (inclusive)
+    length: int        # number of residues in the run
+
+    def __repr__(self) -> str:
+        loc = f"{self.chain}:" if self.chain else ""
+        return f"SSSegment({self.code} {loc}{self.start}-{self.end}, len={self.length})"
+
+
 @dataclass(frozen=True)
 class SecondaryStructure:
     """Per-residue DSSP assignment for a structure.
@@ -70,20 +105,45 @@ class SecondaryStructure:
         """The assignment as a single string, e.g. ``'--HHHHH--EEEE--'``."""
         return "".join(self.codes.tolist())
 
+    def simplified(self) -> str:
+        """The assignment reduced to 3 states: ``H`` helix, ``E`` strand, ``C`` coil."""
+        return "".join(_THREE_STATE.get(c, "C") for c in self.codes.tolist())
+
     def summary(self) -> dict:
         """Counts and fractions for helix, strand, and coil/other."""
-        helix = int(np.isin(self.codes, ["H", "G", "I"]).sum())
-        strand = int(np.isin(self.codes, ["E", "B"]).sum())
-        total = len(self.codes)
-        coil = total - helix - strand
-        denom = total or 1
-        return {
-            "residues": total,
-            "helix": helix, "strand": strand, "coil": coil,
-            "helix_fraction": helix / denom,
-            "strand_fraction": strand / denom,
-            "coil_fraction": coil / denom,
-        }
+        return _ss_counts(self.codes)
+
+    def per_chain(self) -> dict:
+        """``{chain: summary-dict}`` with the :meth:`summary` breakdown per chain."""
+        out: dict[str, dict] = {}
+        chains = np.asarray(self.chains)
+        for chain in dict.fromkeys(self.chains):  # preserve first-seen order
+            out[chain] = _ss_counts(self.codes[chains == chain])
+        return out
+
+    def segments(self, include_coil: bool = False) -> list[SSSegment]:
+        """Contiguous runs of one code within a chain, as :class:`SSSegment` list.
+
+        Coil (``'-'``) runs are omitted unless ``include_coil`` is true.
+        """
+        segments: list[SSSegment] = []
+        n = len(self.codes)
+        if n == 0:
+            return segments
+        codes = self.codes.tolist()
+        start = 0
+        for i in range(1, n + 1):
+            split = i == n or codes[i] != codes[i - 1] or self.chains[i] != self.chains[i - 1]
+            if split:
+                code = codes[start]
+                if include_coil or code != "-":
+                    segments.append(SSSegment(
+                        code=code, chain=self.chains[start],
+                        start=int(self.resids[start]), end=int(self.resids[i - 1]),
+                        length=i - start,
+                    ))
+                start = i
+        return segments
 
 
 def _backbone_residues(molecule: Molecule):
@@ -230,3 +290,66 @@ def per_atom_ss(molecule: Molecule) -> list:
     chains = molecule.chains or [""] * len(molecule)
     return [by_residue.get((chains[i], int(molecule.resids[i])), "-")
             for i in range(len(molecule))]
+
+
+@dataclass(frozen=True)
+class BackboneTorsions:
+    """Per-residue backbone dihedral angles in degrees, in chain/residue order.
+
+    ``phi``/``psi``/``omega`` are ``(R,)`` arrays aligned with ``resids``/``chains``.
+    Angles are ``NaN`` where they are undefined: phi at a chain's first residue,
+    psi/omega at its last, and across chain breaks.
+    """
+
+    resids: np.ndarray
+    chains: list
+    phi: np.ndarray
+    psi: np.ndarray
+    omega: np.ndarray
+
+    def __len__(self) -> int:
+        return len(self.resids)
+
+
+def _dihedrals(p0, p1, p2, p3) -> np.ndarray:
+    """Vectorised dihedral (degrees) for stacks of four points, each ``(K, 3)``."""
+    b0 = p0 - p1
+    b1 = p2 - p1
+    b2 = p3 - p2
+    b1n = b1 / np.linalg.norm(b1, axis=1, keepdims=True)
+    v = b0 - np.sum(b0 * b1n, axis=1, keepdims=True) * b1n
+    w = b2 - np.sum(b2 * b1n, axis=1, keepdims=True) * b1n
+    x = np.sum(v * w, axis=1)
+    y = np.sum(np.cross(b1n, v) * w, axis=1)
+    return np.degrees(np.arctan2(y, x))
+
+
+def backbone_torsions(molecule: Molecule) -> BackboneTorsions:
+    """Backbone phi/psi/omega torsions per residue (see :class:`BackboneTorsions`).
+
+    Reuses the same N/CA/C/O backbone extraction as :func:`assign`, so it needs a
+    protein with backbone atoms (PDB/mmCIF, not a bare ``.xyz``).
+    """
+    N, CA, C, O, resids, chains, _ = _backbone_residues(molecule)
+    R = len(resids)
+    chain_arr = np.array(chains)
+
+    # connected[i]: residue i is peptide-bonded to i-1 (same chain, real C-N bond).
+    connected = np.zeros(R, dtype=bool)
+    if R > 1:
+        cn = np.linalg.norm(C[:-1] - N[1:], axis=1)
+        connected[1:] = (chain_arr[1:] == chain_arr[:-1]) & (cn < _CHAIN_BREAK)
+
+    phi = np.full(R, np.nan)
+    psi = np.full(R, np.nan)
+    omega = np.full(R, np.nan)
+    if R > 1:
+        link = connected[1:]  # whether residue i is bonded to i-1, for i in 1..R-1
+        # phi(i)   = C(i-1)-N(i)-CA(i)-C(i),     defined when i bonded to i-1
+        phi[1:][link] = _dihedrals(C[:-1], N[1:], CA[1:], C[1:])[link]
+        # omega(i) = CA(i-1)-C(i-1)-N(i)-CA(i),  defined when i bonded to i-1
+        omega[1:][link] = _dihedrals(CA[:-1], C[:-1], N[1:], CA[1:])[link]
+        # psi(i)   = N(i)-CA(i)-C(i)-N(i+1),     defined when i+1 bonded to i
+        psi[:-1][link] = _dihedrals(N[:-1], CA[:-1], C[:-1], N[1:])[link]
+
+    return BackboneTorsions(resids=resids, chains=chains, phi=phi, psi=psi, omega=omega)

@@ -85,6 +85,43 @@ cmap = mol.contact_map(cutoff=8.0, level="residue", backend="torch", device="cud
 atom_map = mol.contact_map(cutoff=5.0, level="atom", backend="cupy")
 ```
 
+### Filtering by sequence separation and chain
+
+Two filters narrow a map to the contacts you care about:
+
+```python
+# Drop trivial local contacts (i, i+1 ... i+3 within a chain).
+longrange = mol.contact_map(cutoff=8.0, level="residue", min_seq_sep=4)
+
+# Keep only intra-chain or only inter-chain pairs (multi-chain structures).
+intra = mol.contact_map(cutoff=8.0, level="residue", chain_mode="intra")
+inter = mol.contact_map(cutoff=8.0, level="residue", chain_mode="inter")
+```
+
+`min_seq_sep` removes same-chain pairs closer than that many positions in
+sequence; `chain_mode` is `"all"` (default), `"intra"`, or `"inter"`.
+
+### Contact metrics
+
+```python
+cmap = mol.contact_map(cutoff=8.0, level="residue", min_seq_sep=4)
+cmap.n_contacts          # number of contacting residue pairs
+cmap.contact_order()     # relative contact order (local vs long-range)
+```
+
+Relative contact order is the mean sequence separation of contacts divided by
+chain length: low for helical/local folds, higher when many long-range contacts
+are present. It is most meaningful for a single chain.
+
+### Labelled heatmaps
+
+For small maps, `plot()` annotates the axes with residue labels (e.g.
+`A:LYS8`); force this on or off with `label_ticks`:
+
+```python
+peptide.contact_map(level="residue").plot(label_ticks=True, show=False)
+```
+
 ## Ensemble contact frequency
 
 For NMR ensembles or conformer sets, contact frequency reports how often each
