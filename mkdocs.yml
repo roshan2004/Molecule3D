@@ -33,6 +33,7 @@ nav:
       - Molecular geometry tour: examples/geometry-tour.md
       - Compare NMR models: examples/compare-nmr-models.md
       - Build a molecular graph: examples/build-molecular-graph.md
+      - Residue contact graphs: examples/residue-contact-graphs.md
       - PDB to graph and CG beads: examples/pdb-to-graph-cg.md
       - PDB to PyG ML toy model: examples/pdb-to-pyg-ml.md
       - Coarse-grain a protein: examples/coarse-grain-protein.md

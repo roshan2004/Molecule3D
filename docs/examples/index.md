@@ -8,9 +8,11 @@ files. The repository also includes:
 - `examples/data/`: small bundled structures used by the examples and tests.
 - `notebooks/molscope_tour.ipynb`: a notebook version of the tour.
 - `docs/examples/pdb-to-graph-cg.md`: a focused PDB to graph and coarse-grain walkthrough.
+- `docs/examples/residue-contact-graphs.md`: residue nodes plus spatial contact edges.
 - `docs/examples/pdb-to-pyg-ml.md`: PDB to PyTorch Geometric classifier/regressor.
 - `examples/graph_to_gnn.py`: graph export and a PyTorch Geometric GNN forward pass.
 - `examples/pdb_to_pyg_ml.py`: runnable graph-level PyG toy ML example.
+- `examples/residue_contact_graph.py`: runnable residue-contact graph drawing example.
 
 Suggested notebook examples for future work:
 

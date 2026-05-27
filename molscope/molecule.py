@@ -817,13 +817,56 @@ class Molecule:
         """Shortcut for ``self.to_graph(...).to_networkx()``."""
         return self.to_graph(**kwargs).to_networkx()
 
-    def to_pyg_data(self, **kwargs):
+    def to_pyg_data(
+        self,
+        node_preset: str = "default",
+        edge_preset: str = "default",
+        **kwargs,
+    ):
         """Shortcut for ``self.to_graph(...).to_pyg_data()`` (PyTorch Geometric)."""
-        return self.to_graph(**kwargs).to_pyg_data()
+        return self.to_graph(**kwargs).to_pyg_data(
+            node_preset=node_preset,
+            edge_preset=edge_preset,
+        )
 
-    def to_dgl_graph(self, **kwargs):
+    def to_dgl_graph(
+        self,
+        node_preset: str = "default",
+        edge_preset: str = "default",
+        **kwargs,
+    ):
         """Shortcut for ``self.to_graph(...).to_dgl_graph()`` (DGL)."""
-        return self.to_graph(**kwargs).to_dgl_graph()
+        return self.to_graph(**kwargs).to_dgl_graph(
+            node_preset=node_preset,
+            edge_preset=edge_preset,
+        )
+
+    def to_residue_contact_graph(
+        self,
+        cutoff: float = 8.0,
+        method: str = "ca",
+        backend: str = "numpy",
+        device: str | None = None,
+        min_seq_sep: int = 0,
+        chain_mode: str = "all",
+    ):
+        """Build a residue-level spatial contact graph for graph ML.
+
+        Residues become nodes and residue-residue contacts become edges. See
+        :func:`molscope.graph.residue_contact_graph` for the construction
+        methods and exporters.
+        """
+        from .graph import residue_contact_graph
+
+        return residue_contact_graph(
+            self,
+            cutoff=cutoff,
+            method=method,
+            backend=backend,
+            device=device,
+            min_seq_sep=min_seq_sep,
+            chain_mode=chain_mode,
+        )
 
     def plot(self, **kwargs):
         """Render the molecule in 3D. See :func:`molscope.plotting.plot`."""

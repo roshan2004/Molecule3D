@@ -9,7 +9,8 @@
 - `molscope.write_pdb(molecule, path)`, `write_xyz(molecule, path)`.
 - `molscope.featurize_many(paths, return_names=False)`: build an ML feature matrix.
 - `molscope.descriptor_feature_names(preset)`: stable flattened descriptor columns.
-- `molscope.node_feature_names(preset)`, `edge_feature_names(preset)`: graph preset columns.
+- `molscope.node_feature_names(preset)`, `edge_feature_names(preset)`: atom/bond graph preset columns.
+- `molscope.residue_node_feature_names(preset)`, `residue_edge_feature_names(preset)`: residue contact graph preset columns.
 - `molscope.interface_residues(mol, chain_a, chain_b, cutoff=5.0)`, `chain_contact_matrix(mol, cutoff=5.0)`: chain interfaces.
 - `molscope.ligands(mol, ...)`, `binding_site(mol, ligand=None, cutoff=4.5)`: ligand detection and binding-site residues.
 - `molscope.backbone_torsions(mol)`: per-residue phi/psi/omega.
@@ -36,6 +37,7 @@ Common methods:
 - `chemical_features(...)`
 - `coarse_grain(...)`, `mapping_report()`
 - `to_graph()`, `to_networkx()`, `to_pyg_data()`, `to_dgl_graph()`
+- `to_residue_contact_graph()`
 - `plot(...)`, `view(...)`, `spin_gif(...)`
 
 ## Other modules

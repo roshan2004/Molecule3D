@@ -28,7 +28,8 @@ G = cg.to_networkx()
 - Preserve SDF formal charges and expose optional RDKit-backed chemical features
   and descriptors.
 - Visualize molecules with Matplotlib or py3Dmol.
-- Export molecular graphs to NetworkX, PyTorch Geometric, or DGL.
+- Export atom/bond and residue-contact graphs to NetworkX, PyTorch Geometric,
+  or DGL.
 - Prototype interpretable coarse-grained mappings.
 
 ## Install

@@ -17,8 +17,9 @@ What it does
 - **Contact maps** at atom or residue level (:class:`ContactMap`).
 - **Ensembles**: pairwise RMSD, RMSF, averaging, conformer clustering
   (:mod:`molscope.ensemble`, :func:`cluster`, :func:`rmsd_matrix`).
-- **Export for ML**: structural descriptors and molecular graphs for NetworkX,
-  PyTorch Geometric and DGL (:func:`descriptors`, :class:`MolecularGraph`).
+- **Export for ML**: structural descriptors, atom/bond graphs and residue
+  contact graphs for NetworkX, PyTorch Geometric and DGL
+  (:func:`descriptors`, :class:`MolecularGraph`, :class:`ResidueContactGraph`).
 - **Chemical perception**: optional RDKit-backed valence, aromaticity, charge
   features and descriptors (:func:`chemical_features`, :func:`rdkit_descriptors`).
 - **Coarse-grain** onto residue, Martini-style or custom bead mappings
@@ -71,7 +72,15 @@ from .descriptors import descriptor_feature_names, descriptors, featurize_many, 
 from .dssp import BackboneTorsions, SecondaryStructure, SSSegment, backbone_torsions
 from .ensemble import Clustering, cluster, rmsd_matrix
 from .ensemble import contact_frequency as ensemble_contact_frequency
-from .graph import MolecularGraph, edge_feature_names, node_feature_names
+from .graph import (
+    MolecularGraph,
+    ResidueContactGraph,
+    edge_feature_names,
+    node_feature_names,
+    residue_contact_graph,
+    residue_edge_feature_names,
+    residue_node_feature_names,
+)
 from .io import (
     fetch,
     read,
@@ -104,6 +113,7 @@ __all__ = [
     "Molecule",
     "MolecularGraph",
     "Residue",
+    "ResidueContactGraph",
     "SSSegment",
     "SecondaryStructure",
     "apply_cg_mapping",
@@ -138,6 +148,9 @@ __all__ = [
     "read_xyz",
     "read_xyz_frames",
     "rdkit_descriptors",
+    "residue_contact_graph",
+    "residue_edge_feature_names",
+    "residue_node_feature_names",
     "rmsd_matrix",
     "node_feature_names",
     "to_rdkit",
