@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "molscope"
-version = "0.8.1"
+dynamic = ["version"]
 description = "Lightweight molecular structure analysis, visualisation, graph export, and coarse-graining in Python."
 readme = "README.md"
 requires-python = ">=3.9"
@@ -67,6 +67,12 @@ notebook = ["jupyterlab>=4", "ipykernel>=6", "nbconvert>=7"]
 
 [tool.setuptools]
 packages = ["molscope"]
+
+# Single source of truth for the version: molscope/__init__.py (__version__).
+# setuptools parses it statically at build time, so there is nothing to keep in
+# sync with [project] above.
+[tool.setuptools.dynamic]
+version = { attr = "molscope.__version__" }
 
 [tool.pytest.ini_options]
 markers = [
