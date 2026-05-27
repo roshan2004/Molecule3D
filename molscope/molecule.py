@@ -55,7 +55,11 @@ class UnitCell:
         return np.array([
             [self.a, 0, 0],
             [self.b * cos_gamma, self.b * sin_gamma, 0],
-            [self.c * cos_beta, self.c * (cos_alpha - cos_beta * cos_gamma) / sin_gamma, self.c * v / sin_gamma]
+            [
+                self.c * cos_beta,
+                self.c * (cos_alpha - cos_beta * cos_gamma) / sin_gamma,
+                self.c * v / sin_gamma,
+            ],
         ])
 
     def __repr__(self) -> str:
@@ -496,6 +500,7 @@ class Molecule:
         backend: str = "numpy",
         device: str | None = None,
         as_numpy: bool = True,
+        pbc: bool = False,
     ):
         """Full ``(N, N)`` pairwise distance matrix (angstrom).
 
@@ -504,12 +509,18 @@ class Molecule:
         a CPU/GPU array stack installed. Results are converted to NumPy by
         default for compatibility; pass ``as_numpy=False`` to keep a backend
         array.
+
+        ``pbc`` defaults to ``False``: distances are computed in open space even
+        when the molecule carries a :class:`UnitCell`, since a PDB ``CRYST1``
+        record is often a crystallographic artefact rather than a periodic box.
+        Set ``pbc=True`` to apply the minimum-image convention using
+        ``self.unit_cell`` (numpy backend only).
         """
         from .distance import distance_matrix
 
         return distance_matrix(
             self.coords, backend=backend, device=device, as_numpy=as_numpy,
-            unit_cell=self.unit_cell,
+            unit_cell=self.unit_cell if pbc else None,
         )
 
     def contacts(
@@ -517,6 +528,7 @@ class Molecule:
         cutoff: float = 5.0,
         backend: str = "scipy",
         device: str | None = None,
+        pbc: bool = False,
     ) -> np.ndarray:
         """Atom index pairs ``(i, j)`` closer than ``cutoff`` angstrom.
 
@@ -526,18 +538,22 @@ class Molecule:
         ``"torch"``, ``"cupy"``, ``"auto"``) materialize a full contact matrix first,
         which is convenient for CPU/GPU dense workflows but scales as ``O(N^2)``
         memory.
+
+        ``pbc`` defaults to ``False``; set it to ``True`` to apply the
+        minimum-image convention using ``self.unit_cell``.
         """
         n = len(self)
         if n < 2:
             return np.empty((0, 2), dtype=int)
         if cutoff <= 0.0:
             return np.empty((0, 2), dtype=int)
+        cell = self.unit_cell if pbc else None
         if backend in {"numpy", "torch", "cupy", "auto"}:
             from .distance import contact_matrix, contacts_from_matrix
 
             mat = contact_matrix(
                 self.coords, cutoff=cutoff, backend=backend, device=device,
-                unit_cell=self.unit_cell,
+                unit_cell=cell,
             )
             return contacts_from_matrix(mat)
         if backend != "scipy":
@@ -547,7 +563,7 @@ class Molecule:
             )
         try:
             # KD-tree doesn't natively support general PBC MIC
-            if self.unit_cell is not None:
+            if cell is not None:
                 raise ImportError("mocking for PBC")
             from scipy.spatial import cKDTree
 
@@ -555,7 +571,7 @@ class Molecule:
         except ImportError:
             from .distance import find_contacts
 
-            return find_contacts(self.coords, cutoff, unit_cell=self.unit_cell)
+            return find_contacts(self.coords, cutoff, unit_cell=cell)
 
 
     def contact_count(
@@ -563,20 +579,26 @@ class Molecule:
         cutoff: float = 5.0,
         backend: str = "scipy",
         device: str | None = None,
+        pbc: bool = False,
     ) -> int:
-        """Count atom pairs closer than ``cutoff`` without returning the pairs."""
+        """Count atom pairs closer than ``cutoff`` without returning the pairs.
+
+        ``pbc`` defaults to ``False``; set it to ``True`` to apply the
+        minimum-image convention using ``self.unit_cell``.
+        """
         n = len(self)
         if n < 2 or cutoff <= 0.0:
             return 0
+        cell = self.unit_cell if pbc else None
         if backend in {"numpy", "torch", "cupy", "auto"}:
-            return int(len(self.contacts(cutoff=cutoff, backend=backend, device=device)))
+            return int(len(self.contacts(cutoff=cutoff, backend=backend, device=device, pbc=pbc)))
         if backend != "scipy":
             raise ValueError(
                 "backend must be 'scipy', 'numpy', 'torch', 'cupy' or 'auto', "
                 f"got {backend!r}"
             )
         try:
-            if self.unit_cell is not None:
+            if cell is not None:
                 raise ImportError("mocking for PBC")
             from scipy.spatial import cKDTree
 
@@ -587,7 +609,7 @@ class Molecule:
         except ImportError:
             from .distance import find_contact_count
 
-            return find_contact_count(self.coords, cutoff, unit_cell=self.unit_cell)
+            return find_contact_count(self.coords, cutoff, unit_cell=cell)
 
 
 

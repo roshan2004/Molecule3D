@@ -587,7 +587,9 @@ def _apply_sdf_charge_line(line: str, charges: list[int]) -> None:
             charges[atom_idx] = charge
 
 
-def _parse_pdb_models(path: str, altloc: str = "primary") -> tuple[list[dict], Optional[Molecule.UnitCell]]:
+def _parse_pdb_models(
+    path: str, altloc: str = "primary"
+) -> tuple[list[dict], Optional[Molecule.UnitCell]]:
     """Return a tuple of (list of per-model records, unit_cell)."""
     from .molecule import UnitCell
 

@@ -9,7 +9,6 @@ import argparse
 import glob
 import os
 import sys
-from typing import Any, Optional
 
 from .io import fetch, read
 
@@ -134,6 +133,7 @@ def _run_view(args: argparse.Namespace) -> int:
 def _run_analyze(args: argparse.Namespace) -> int:
     import csv
     from multiprocessing import Pool
+
     from .descriptors import descriptors, flatten_descriptors
 
     paths = _expand_globs(args.files)
@@ -201,8 +201,9 @@ def _run_export(args: argparse.Namespace) -> int:
                 out_path = os.path.join(args.out_dir, f"{stem}.bin")
                 save_graphs(out_path, [dg])
             elif args.to == "nx":
-                import networkx as nx
                 import json
+
+                import networkx as nx
                 # NetworkX exporter doesn't support the new options yet
                 ng = g.to_networkx()
                 out_path = os.path.join(args.out_dir, f"{stem}.json")

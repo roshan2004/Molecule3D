@@ -8,9 +8,12 @@ MolScope plotting and analysis code keeps working.
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import TYPE_CHECKING, Literal, Optional
 
 import numpy as np
+
+if TYPE_CHECKING:
+    from .molecule import Molecule
 
 DenseBackend = Literal["auto", "numpy", "torch", "cupy"]
 
@@ -156,7 +159,9 @@ def contacts_from_matrix(matrix) -> np.ndarray:
     return np.stack([i, j], axis=1).astype(int) if len(i) else np.empty((0, 2), dtype=int)
 
 
-def find_contacts(coords, cutoff: float, unit_cell: Optional[Molecule.UnitCell] = None) -> np.ndarray:
+def find_contacts(
+    coords, cutoff: float, unit_cell: Optional[Molecule.UnitCell] = None
+) -> np.ndarray:
     """Find atom index pairs (i, j) within a cutoff using a pure-NumPy cell list.
 
     This provides O(n) scaling and is the primary fallback for large structures
@@ -261,7 +266,10 @@ def find_contacts(coords, cutoff: float, unit_cell: Optional[Molecule.UnitCell] 
                         pairs.append(np.stack([orig_idx_i[row], orig_idx_j[col]], axis=1))
             else:
                 # Non-PBC: half-space check (optimization)
-                if offset[0] < 0 or (offset[0] == 0 and (offset[1] < 0 or (offset[1] == 0 and offset[2] < 0))):
+                if offset[0] < 0 or (
+                    offset[0] == 0
+                    and (offset[1] < 0 or (offset[1] == 0 and offset[2] < 0))
+                ):
                     continue
                     
                 neigh_cell = tuple(neigh_cell_coord)
