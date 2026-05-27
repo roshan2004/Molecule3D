@@ -1,9 +1,8 @@
 # Tutorials
 
-These tutorials are guided, copy-pasteable workflows over the bundled example
-structures. They start from ordinary PDB files and end with the three outputs
-MolScope is most often used for: descriptor tables, graph ML inputs, and
-coarse-grained bead models.
+These tutorials are the main MolScope paths. They start from ordinary PDB files
+and end with the three outputs the project is designed to make polished:
+descriptor tables, graph ML inputs, and coarse-grained bead models.
 
 ## Choose a workflow
 

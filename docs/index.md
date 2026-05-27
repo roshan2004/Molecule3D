@@ -1,12 +1,16 @@
 # MolScope documentation
 
 MolScope is a lightweight Python toolkit for molecular coordinate analysis,
-visualization, coarse-graining prototypes, and graph-based molecular
-representations.
+graph-based molecular representations, and coarse-graining prototypes.
 
-It is designed for teaching, exploratory research, and early-stage molecular
-machine-learning workflows where users want a simple path from PDB, XYZ, CIF, or
-SDF files to geometric descriptors, coarse-grained beads, and graph-ready data.
+It is designed around three core workflows for teaching, exploratory research,
+and early-stage molecular machine learning:
+
+| Workflow | Output |
+| --- | --- |
+| [PDB to descriptors](tutorials/pdb-to-descriptors.md) | Fixed-width structural and optional RDKit-backed feature tables. |
+| [PDB to graph/GNN](tutorials/pdb-to-graph-gnn.md) | Atom/bond, residue-contact, and PyTorch Geometric-ready graph data. |
+| [PDB to coarse-grained beads](tutorials/pdb-to-coarse-grained-beads.md) | Residue, simplified Martini-style, custom, and virtual-site bead models. |
 
 ```python
 import molscope as ms
@@ -18,7 +22,7 @@ cg = mol.coarse_grain("residue_com")
 G = cg.to_networkx()
 ```
 
-## What it does
+## What supports those workflows
 
 - Read `.pdb`, `.xyz`, `.cif` atom-site loops, and `.sdf` files, preserving
   explicit SDF/PDB bonds where present.

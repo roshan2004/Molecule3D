@@ -7,20 +7,27 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](LICENSE)
 [![Code style: Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 
-Lightweight molecular structure analysis, visualisation, graph export, and
-coarse-graining in Python. Read `.xyz`, `.pdb`, `.cif` and `.sdf` files
-(optionally gzip-compressed), select and analyse atoms, and visualise them in
-3D. The `.cif` reader handles standard `_atom_site` coordinate loops, including
-quoted values; optional Gemmi-backed validation is available through
-`pip install "molscope[cif]"`.
+Lightweight molecular structure analysis, graph export, and coarse-graining in
+Python. MolScope is built around three polished workflows: turn coordinate
+files into descriptor tables, graph-ML inputs, or coarse-grained bead
+representations without pulling in a full simulation stack.
 
-MolScope is a small scientific Python toolkit for turning molecular coordinate
-files into inspectable structures, descriptors, ML-ready graphs, and
-coarse-grained bead models without pulling in a full simulation stack.
+Read `.xyz`, `.pdb`, `.cif` and `.sdf` files, select and analyse atoms, and
+visualise structures in 3D. Optional extras add Gemmi validation, RDKit chemical
+features, PyTorch Geometric, DGL, and other backend integrations only when a
+workflow needs them.
 
 | 3D structure (element) | Secondary structure (DSSP) | Residue contact map | Coarse-grained beads |
 | --- | --- | --- | --- |
 | ![Aquaporin-1 rendered as a 3D element-coloured molecular structure](https://raw.githubusercontent.com/roshan2004/molscope/main/docs/assets/readme/aquaporin-structure-v2.png) | ![Aquaporin-1 coloured by DSSP secondary structure: helices red, turns cyan, coil grey](https://raw.githubusercontent.com/roshan2004/molscope/main/docs/assets/readme/secondary-structure.png) | ![Residue-level contact map heatmap for Aquaporin-1](https://raw.githubusercontent.com/roshan2004/molscope/main/docs/assets/readme/residue-contact-map.png) | ![Coarse-grained bead model of Aquaporin-1](https://raw.githubusercontent.com/roshan2004/molscope/main/docs/assets/readme/coarse-grained-beads-v2.png) |
+
+## Core workflows
+
+| Workflow | Start here | Output |
+| --- | --- | --- |
+| **PDB to descriptors** | [`docs/tutorials/pdb-to-descriptors.md`](docs/tutorials/pdb-to-descriptors.md) | Fixed-width structural and optional RDKit-backed feature tables for screening, QC, and classical ML. |
+| **PDB to graph/GNN** | [`docs/tutorials/pdb-to-graph-gnn.md`](docs/tutorials/pdb-to-graph-gnn.md) | Atom/bond, residue-contact, and PyTorch Geometric-ready graph data for message-passing experiments. |
+| **PDB to coarse-grained beads** | [`docs/tutorials/pdb-to-coarse-grained-beads.md`](docs/tutorials/pdb-to-coarse-grained-beads.md) | Residue, simplified Martini-style, custom, and virtual-site bead models for inspection and graph prototyping. |
 
 ## Who is this for?
 
@@ -31,34 +38,22 @@ coarse-grained bead models without pulling in a full simulation stack.
 - ML-for-molecules learners who need deterministic descriptors and graph exports
   before moving to larger chemistry or simulation frameworks.
 
-## What it does
+## Supporting capabilities
 
-- **Read and write** XYZ, PDB, mmCIF and SDF (gzip-aware), preserve SDF/PDB
-  explicit bonds and SDF formal charges where present, fetch structures by id
-  from RCSB, and load multi-model NMR ensembles.
-- **Validate mmCIF** syntax, atom-site coordinate columns, and supplied
-  dictionary files with optional Gemmi support.
-- **Select and measure** by chain, element or residue; compute distances,
-  angles, dihedrals and Kabsch-aligned RMSD.
-- **Analyse** centroids, radius of gyration, the inertia tensor,
-  explicit/inferred bonds, and contacts.
-- **Contact maps** at atom or residue level, with heatmap plots, sequence-
-  separation and chain filtering, and contact-order metrics.
-- **Secondary structure** via a self-contained, dependency-free DSSP, with
-  element/segment extraction, per-chain breakdown, backbone phi/psi/omega
-  torsions, and `plot(color_by="ss")`.
-- **Protein interfaces and binding sites**: inter-chain interface residues,
-  chain-chain contact counts, and ligand-binding-site residues (ATOM/HETATM
-  aware).
-- **Ensembles**: pairwise RMSD, RMSF, averaging, and conformer clustering.
-- **Export for ML**: flat structural descriptors and molecular graphs for
-  NetworkX, PyTorch Geometric and DGL.
-- **Chemical perception and descriptors**: optional RDKit-backed formal charge,
-  valence, aromaticity and scalar descriptor features with
-  `pip install "molscope[chem]"`.
-- **Coarse-grain** onto residue, Martini-style or custom bead mappings.
-- **Visualise** with 3D matplotlib plots, an interactive py3Dmol viewer, spin
-  GIFs, and a command-line interface.
+MolScope keeps the broad feature surface organized around those workflows:
+
+- **Input layer**: read and write XYZ, PDB, mmCIF and SDF, preserve explicit
+  bonds and charges where present, fetch structures from RCSB, and validate
+  mmCIF files with optional Gemmi support.
+- **Structure analysis**: select atoms by metadata, compute geometry, RMSD,
+  contacts, contact maps, interfaces, binding sites, and ensemble summaries.
+- **Annotations and descriptors**: run dependency-free secondary-structure
+  assignment, native structural descriptors, and optional RDKit-backed
+  chemistry descriptors.
+- **Representation outputs**: export descriptor tables, atom/bond graphs,
+  residue-contact graphs, and coarse-grained bead graphs to common ML backends.
+- **Inspection and automation**: visualize with Matplotlib or py3Dmol and use
+  the CLI for view, analyze, and export workflows.
 
 ## Architecture
 
@@ -74,11 +69,12 @@ graph LR
 
 ## Why MolScope?
 
-MolScope takes you from a structure file to analysis, a machine-learning graph,
-or a coarse-grained model with the smallest install that gets the job done. The
-core depends only on NumPy and Matplotlib, so `pip install molscope` stays light.
-Everything heavier (RDKit, PyTorch, PyTorch Geometric, DGL, MDAnalysis, Gemmi)
-is an opt-in [extra](#install) you add only when you reach for it.
+MolScope takes you from a structure file to a descriptor table, a
+machine-learning graph, or a coarse-grained model with the smallest install that
+gets the job done. The core depends only on NumPy and Matplotlib, so
+`pip install molscope` stays light. Everything heavier (RDKit, PyTorch, PyTorch
+Geometric, DGL, MDAnalysis, Gemmi) is an opt-in [extra](#install) you add only
+when one of those workflows needs it.
 
 That makes it an on-ramp rather than a framework:
 
@@ -86,6 +82,12 @@ That makes it an on-ramp rather than a framework:
   dependencies; `mol.to_pyg_data()`, `mol.to_networkx()` and `mol.to_dgl_graph()`
   hand off to the ecosystem when you want it. This is the path MolScope is built
   to make easy.
+- **Descriptor tables without a framework.** Native structural descriptors and
+  optional RDKit-backed chemistry descriptors share the same `Molecule` and
+  batch-featurization APIs.
+- **CG as a representation tool.** Residue, simplified Martini-style, custom
+  bead, and virtual-site mappings are inspectable molecules and bead graphs,
+  not hidden simulation setup state.
 - **Light enough to teach and prototype with.** A readable, Python-first API over
   static structures, with no trajectory engine or build step to wrestle.
 - **Honest about its numbers.** Bonds, geometry and DSSP are cross-checked against

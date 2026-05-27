@@ -1,8 +1,10 @@
 # Examples
 
 The examples here are small scripts that can be copied into notebooks or Python
-files. For more guided workflows, see the [Tutorials](../tutorials/index.md):
-PDB to descriptors, PDB to graph/GNN, and PDB to coarse-grained beads.
+files. They support the three main tutorials rather than introducing separate
+product pillars: [PDB to descriptors](../tutorials/pdb-to-descriptors.md),
+[PDB to graph/GNN](../tutorials/pdb-to-graph-gnn.md), and
+[PDB to coarse-grained beads](../tutorials/pdb-to-coarse-grained-beads.md).
 
 The repository also includes:
 
