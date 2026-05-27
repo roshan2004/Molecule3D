@@ -30,6 +30,20 @@ uv sync --extra validation
 The secondary-structure reference additionally needs a system `mkdssp` or
 `dssp` executable on `PATH`.
 
+## Current panel scope
+
+The current reference checks are deliberately small. They are best read as
+targeted scientific smoke tests: `1fqy` exercises a mostly helical protein for
+DSSP-style secondary structure, `1aml` exercises a compact NMR ensemble, and
+the RDKit checks cover a handful of embedded small molecules. That is useful
+for catching regressions, but it is not yet a benchmark panel.
+
+Future validation should expand these examples into a curated mini-panel:
+helix-rich, beta-rich and mixed alpha/beta proteins for DSSP; several NMR
+ensembles for alignment metrics; and a broader small-molecule chemistry set
+covering rings, heteroatoms, charged/zwitterionic species, strained geometry
+and known cases where distance-only bond perception should fail.
+
 ## Reference-tool checks
 
 | Area | Reference | Validation file | Panel | Tolerance / threshold | Rationale |
