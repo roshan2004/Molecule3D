@@ -26,8 +26,7 @@ framework.
 
 - Trajectory-lite support for small multi-frame XYZ/PDB workflows.
 - Better CIF/mmCIF coverage while keeping Gemmi optional.
-- More graph features for ML, including residue-level graphs and configurable
-  edge construction.
+- More configurable graph edge construction for ML workflows.
 - More explicit coarse-grained topology objects and export formats for
   prototyping.
 - Optional generated API documentation from docstrings.
@@ -40,5 +39,6 @@ framework.
 - Optional Gemmi-backed mmCIF syntax, atom-site, and dictionary validation hooks.
 - Stable descriptor presets for native structural and RDKit-backed feature sets.
 - Graph node/edge featurization presets for ML workflows.
+- Residue-level contact graphs with NetworkX, PyG and DGL exporters.
 - Convenience extras for NetworkX, PyTorch Geometric, DGL, RDKit, and Gemmi.
 - Chunked distance histograms and contact-count paths for larger structures.

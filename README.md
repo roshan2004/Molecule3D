@@ -375,6 +375,18 @@ Graph feature presets are also available through
 `mol.to_graph(include_chemical_features=True)` to attach optional RDKit-backed
 aromatic atom and bond flags.
 
+For protein-scale spatial graphs, build a residue contact graph instead:
+
+```python
+rg = mol.to_residue_contact_graph(cutoff=8.0, method="ca", min_seq_sep=4)
+RG = rg.to_networkx()
+residue_data = rg.to_pyg_data(node_preset="ml", edge_preset="ml")
+```
+
+Use atom/bond graphs when covalent chemistry is the signal. Use residue or
+bead contact graphs when 3D neighborhoods, interfaces, folded shape or
+long-range contacts are the signal.
+
 ### Coarse-graining
 
 Map an atomistic structure onto a smaller set of beads. The result is an
