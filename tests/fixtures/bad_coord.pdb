@@ -1,0 +1,3 @@
+REMARK  the x coordinate field holds letters instead of a number
+ATOM      1  N   ASP A   1       ABCDE   5.340  -7.914  1.00  0.00           N
+END

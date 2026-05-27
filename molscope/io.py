@@ -13,6 +13,7 @@ import gzip
 import os
 import tempfile
 from typing import Optional
+from urllib.error import HTTPError, URLError
 from urllib.request import urlopen
 
 import numpy as np
@@ -22,6 +23,12 @@ from .molecule import Molecule
 # altLoc codes we accept: blank (no alternates) or the primary "A" conformation.
 _PRIMARY_ALTLOCS = (" ", "A", "")
 _ALTLOC_POLICIES = ("primary", "first", "highest_occupancy", "all")
+
+
+def _parse_error(path, fmt: str, detail: str, lineno: Optional[int] = None) -> ValueError:
+    """Build a ValueError that names the file, format, line, and what went wrong."""
+    where = f" (line {lineno})" if lineno else ""
+    return ValueError(f"{path}: invalid {fmt} file{where}: {detail}")
 
 
 def read(path: str) -> Molecule:
@@ -56,8 +63,18 @@ def fetch(pdb_id: str, fmt: str = "pdb", cache_dir: Optional[str] = None) -> Mol
     os.makedirs(cache_dir, exist_ok=True)
     dest = os.path.join(cache_dir, f"{pdb_id}.{fmt}")
     if not os.path.exists(dest):
-        with urlopen(f"https://files.rcsb.org/download/{pdb_id}.{fmt}") as resp:
-            data = resp.read()
+        url = f"https://files.rcsb.org/download/{pdb_id}.{fmt}"
+        try:
+            with urlopen(url) as resp:
+                data = resp.read()
+        except HTTPError as exc:
+            if exc.code == 404:
+                raise ValueError(
+                    f"PDB id {pdb_id!r} not found at RCSB as {fmt} (HTTP 404)"
+                ) from exc
+            raise ValueError(f"failed to download {url} (HTTP {exc.code})") from exc
+        except URLError as exc:
+            raise ValueError(f"could not reach RCSB to download {url}: {exc.reason}") from exc
         with open(dest, "wb") as fh:
             fh.write(data)
     return read(dest)
@@ -93,11 +110,14 @@ def read_xyz_frames(path: str) -> list[Molecule]:
         if tokens and tokens[0].isdigit():
             count = int(tokens[0])
             block = lines[i + 2:i + 2 + count]
-            frames.append(_xyz_block(block, name=f"{stem}#{len(frames) + 1}"))
+            frames.append(_xyz_block(
+                block, name=f"{stem}#{len(frames) + 1}", path=path,
+                expected=count, first_line=i + 3,
+            ))
             i += 2 + count
         else:
             # Bare coordinate dump (no header): consume the rest as one frame.
-            frames.append(_xyz_block(lines[i:], name=stem))
+            frames.append(_xyz_block(lines[i:], name=stem, path=path, first_line=i + 1))
             break
     return frames
 
@@ -146,6 +166,31 @@ def read_cif(path: str, parser: str = "builtin") -> Molecule:
     return _read_cif_builtin(path)
 
 
+def _require_cif_coord_columns(idx: dict, path) -> None:
+    """Ensure the atom-site loop declares the Cartesian coordinate columns."""
+    missing = [c for c in ("Cartn_x", "Cartn_y", "Cartn_z") if c not in idx]
+    if missing:
+        raise _parse_error(
+            path, "mmCIF",
+            f"_atom_site loop is missing coordinate column(s) {missing}; "
+            f"found columns {sorted(idx)}",
+        )
+
+
+def _cif_coords(row, idx: dict, path, rownum: int) -> tuple:
+    """Read one atom's x/y/z from a CIF row, with a clear error on failure."""
+    try:
+        return (
+            float(row[idx["Cartn_x"]]),
+            float(row[idx["Cartn_y"]]),
+            float(row[idx["Cartn_z"]]),
+        )
+    except (ValueError, IndexError):
+        raise _parse_error(
+            path, "mmCIF", f"could not read coordinates from _atom_site row {rownum}",
+        ) from None
+
+
 def _read_cif_builtin(path: str) -> Molecule:
     """Read a CIF/mmCIF atom-site loop with MolScope's lightweight tokenizer."""
     with _open(path) as f:
@@ -181,7 +226,7 @@ def _read_cif_builtin(path: str) -> Molecule:
         break
 
     if not columns or not rows:
-        raise ValueError(f"no _atom_site records found in {path}")
+        raise _parse_error(path, "mmCIF", "no _atom_site coordinate loop found")
     idx = {name: i for i, name in enumerate(columns)}
 
     def col(row, *names, default=""):
@@ -190,13 +235,10 @@ def _read_cif_builtin(path: str) -> Molecule:
                 return row[idx[nm]]
         return default
 
+    _require_cif_coord_columns(idx, path)
     coords, els, anames, rnames, rids, chains, heteros = [], [], [], [], [], [], []
-    for row in rows:
-        coords.append((
-            float(row[idx["Cartn_x"]]),
-            float(row[idx["Cartn_y"]]),
-            float(row[idx["Cartn_z"]]),
-        ))
+    for r, row in enumerate(rows, 1):
+        coords.append(_cif_coords(row, idx, path, r))
         els.append(col(row, "type_symbol"))
         anames.append(col(row, "label_atom_id", "auth_atom_id"))
         rnames.append(col(row, "label_comp_id", "auth_comp_id"))
@@ -243,13 +285,10 @@ def _molecule_from_cif_rows(columns: list[str], rows: list[list[str]], name: str
                 return row[idx[nm]]
         return default
 
+    _require_cif_coord_columns(idx, name)
     coords, els, anames, rnames, rids, chains, heteros = [], [], [], [], [], [], []
-    for row in rows:
-        coords.append((
-            float(row[idx["Cartn_x"]]),
-            float(row[idx["Cartn_y"]]),
-            float(row[idx["Cartn_z"]]),
-        ))
+    for r, row in enumerate(rows, 1):
+        coords.append(_cif_coords(row, idx, name, r))
         els.append(col(row, "type_symbol"))
         anames.append(col(row, "label_atom_id", "auth_atom_id"))
         rnames.append(col(row, "label_comp_id", "auth_comp_id"))
@@ -274,21 +313,52 @@ def read_sdf(path: str) -> Molecule:
     with _open(path) as f:
         lines = f.readlines()
     if len(lines) < 4:
-        raise ValueError(f"{path}: too short to be a MOL file")
+        raise _parse_error(path, "SDF", "file has fewer than the 4 required header lines")
     counts = lines[3]
-    n_atoms = int(counts[:3])
-    n_bonds = int(counts[3:6])
+    if "V3000" in counts.upper():
+        raise _parse_error(
+            path, "SDF",
+            "V3000 connection tables are not supported (only V2000); "
+            "convert the file with RDKit or OpenBabel first", 4,
+        )
+    try:
+        n_atoms = int(counts[:3])
+        n_bonds = int(counts[3:6])
+    except ValueError:
+        raise _parse_error(
+            path, "SDF", f"malformed counts line: {counts.rstrip()!r}", 4,
+        ) from None
+    if len(lines) < 4 + n_atoms + n_bonds:
+        raise _parse_error(
+            path, "SDF",
+            f"counts line declares {n_atoms} atoms and {n_bonds} bonds, "
+            f"but the file has only {len(lines) - 4} block lines after it",
+            4,
+        )
+
     coords, els, formal_charges = [], [], []
-    for line in lines[4:4 + n_atoms]:
-        coords.append((float(line[0:10]), float(line[10:20]), float(line[20:30])))
+    for offset, line in enumerate(lines[4:4 + n_atoms]):
+        try:
+            coords.append((float(line[0:10]), float(line[10:20]), float(line[20:30])))
+        except ValueError:
+            raise _parse_error(
+                path, "SDF", f"could not read atom coordinates from {line.rstrip()!r}",
+                5 + offset,
+            ) from None
         els.append(line[31:34].strip())
         formal_charges.append(_sdf_charge_from_code(line[36:39].strip()))
 
     bonds, orders = [], []
-    for line in lines[4 + n_atoms:4 + n_atoms + n_bonds]:
-        a = int(line[0:3]) - 1
-        b = int(line[3:6]) - 1
-        order = int(line[6:9])
+    for offset, line in enumerate(lines[4 + n_atoms:4 + n_atoms + n_bonds]):
+        try:
+            a = int(line[0:3]) - 1
+            b = int(line[3:6]) - 1
+            order = int(line[6:9])
+        except ValueError:
+            raise _parse_error(
+                path, "SDF", f"could not read bond record from {line.rstrip()!r}",
+                5 + n_atoms + offset,
+            ) from None
         bonds.append((a, b))
         orders.append(_sdf_bond_order(order))
 
@@ -350,20 +420,34 @@ def _molecule_to_pdb_string(molecule: Molecule) -> str:
 # -- internals --------------------------------------------------------------
 
 
-def _xyz_block(block: list[str], name: str) -> Molecule:
+def _xyz_block(block: list[str], name: str, path=None, expected=None,
+               first_line: int = 1) -> Molecule:
+    path = path if path is not None else name
     coords, elements = [], []
-    for line in block:
+    for offset, line in enumerate(block):
         stripped = line.strip()
         if not stripped or stripped.startswith("#"):
             continue
         tokens = stripped.split()
-        if len(tokens) >= 4 and not _is_float(tokens[0]):
-            elements.append(tokens[0])
-            coords.append(tuple(float(t) for t in tokens[1:4]))
-        else:
-            elements.append("")
-            coords.append(tuple(float(t) for t in tokens[:3]))
-    return Molecule(np.array(coords, dtype=float), elements, name=name)
+        try:
+            if len(tokens) >= 4 and not _is_float(tokens[0]):
+                elements.append(tokens[0])
+                coords.append(tuple(float(t) for t in tokens[1:4]))
+            else:
+                elements.append("")
+                coords.append(tuple(float(t) for t in tokens[:3]))
+        except (ValueError, IndexError):
+            raise _parse_error(
+                path, "XYZ", f"could not read x/y/z coordinates from {stripped!r}",
+                first_line + offset,
+            ) from None
+    if expected is not None and len(coords) != expected:
+        raise _parse_error(
+            path, "XYZ",
+            f"header declares {expected} atoms but {len(coords)} were found",
+            first_line - 2,
+        )
+    return Molecule(np.array(coords, dtype=float).reshape(-1, 3), elements, name=name)
 
 
 def _cif_tokens(text: str) -> list[str]:
@@ -473,12 +557,12 @@ def _parse_pdb_models(path: str, altloc: str = "primary") -> list[dict]:
             cur = _new_record()
 
     with _open(path) as f:
-        for line in f:
+        for lineno, line in enumerate(f, 1):
             record = line[:6].strip()
             if record in ("MODEL", "ENDMDL"):
                 flush()
             elif record in ("ATOM", "HETATM"):
-                atom = _parse_pdb_atom(line, len(cur["atoms"]) + 1)
+                atom = _parse_pdb_atom(line, len(cur["atoms"]) + 1, path, lineno)
                 atom["hetero"] = record == "HETATM"
                 cur["atoms"].append(atom)
             elif record == "CONECT":
@@ -504,7 +588,7 @@ def _validate_altloc_policy(altloc: str) -> None:
         raise ValueError(f"altloc must be one of '{choices}', got {altloc!r}")
 
 
-def _parse_pdb_atom(line: str, fallback_serial: int) -> dict:
+def _parse_pdb_atom(line: str, fallback_serial: int, path=None, lineno=None) -> dict:
     serial = line[6:11].strip()
     serial_value = int(serial) if serial.lstrip("-").isdigit() else fallback_serial
     element = line[76:78].strip()
@@ -512,9 +596,17 @@ def _parse_pdb_atom(line: str, fallback_serial: int) -> dict:
     if not element:
         element = atom_name.lstrip("0123456789")[:2]
     resid = line[22:26].strip()
+    try:
+        coords = (float(line[30:38]), float(line[38:46]), float(line[46:54]))
+    except ValueError:
+        raise _parse_error(
+            path, "PDB",
+            f"could not read coordinate columns 31-54 from record: {line.rstrip()!r}",
+            lineno,
+        ) from None
     return {
         "serial": serial_value,
-        "coords": (float(line[30:38]), float(line[38:46]), float(line[46:54])),
+        "coords": coords,
         "element": element,
         "atom_name": atom_name,
         "resname": line[17:20].strip(),

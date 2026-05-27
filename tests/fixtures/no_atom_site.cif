@@ -1,0 +1,10 @@
+data_NOATOMSITE
+_cell.length_a   10.0
+_cell.length_b   10.0
+_cell.length_c   10.0
+#
+loop_
+_citation.id
+_citation.title
+1 'a CIF with metadata loops but no _atom_site coordinates'
+#

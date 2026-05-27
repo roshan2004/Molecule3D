@@ -20,6 +20,9 @@ Supported formats:
 | SDF/MOL | V2000 atom and bond block reader; preserves bond orders and formal charges. |
 | CIF/mmCIF | Reader for standard `_atom_site` coordinate loops, including quoted values. |
 
+For what each format stores, which metadata is reliable, and why PDB and mmCIF
+differ, see [Coordinate formats compared](coordinate-formats.md).
+
 PDB alternate conformations can be selected explicitly:
 
 ```python

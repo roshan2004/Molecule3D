@@ -9,4 +9,5 @@ recursive-include examples/data *.pdb *.xyz
 recursive-include notebooks *.ipynb
 recursive-include scripts *.py
 recursive-include tests *.py
+recursive-include tests/fixtures *.xyz *.pdb *.cif *.sdf
 prune notebooks/.ipynb_checkpoints
