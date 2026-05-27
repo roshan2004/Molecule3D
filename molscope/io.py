@@ -285,10 +285,33 @@ def _read_cif_builtin(path: str) -> Molecule:
 
 
 
-def _read_cif_gemmi(path: str) -> Molecule:
-    """Read a CIF/mmCIF atom-site loop with Gemmi when the optional extra exists."""
+def _gemmi_unit_cell(block):
+    """Return a UnitCell from a gemmi CIF block's _cell.* items, or None.
+
+    gemmi's ``cif.Block`` exposes no ``.cell`` attribute, so the parameters are
+    read tag by tag. Missing length items mean no cell was recorded.
+    """
+    import gemmi
+
     from .molecule import UnitCell
 
+    def value(tag: str):
+        raw = block.find_value(tag)
+        return gemmi.cif.as_number(raw) if raw not in (None, ".", "?") else None
+
+    a, b, c = (value(f"_cell.length_{axis}") for axis in ("a", "b", "c"))
+    if a is None or b is None or c is None or a <= 0:
+        return None
+    return UnitCell(
+        a=a, b=b, c=c,
+        alpha=value("_cell.angle_alpha") or 90.0,
+        beta=value("_cell.angle_beta") or 90.0,
+        gamma=value("_cell.angle_gamma") or 90.0,
+    )
+
+
+def _read_cif_gemmi(path: str) -> Molecule:
+    """Read a CIF/mmCIF atom-site loop with Gemmi when the optional extra exists."""
     try:
         import gemmi
     except ImportError as exc:  # pragma: no cover - exercised only when missing
@@ -300,13 +323,9 @@ def _read_cif_gemmi(path: str) -> Molecule:
     doc = gemmi.cif.read_file(path)
     unit_cell = None
     for block in doc:
-        # Gemmi cell parameters
-        cell = block.cell
-        if cell and cell.a > 0:
-            unit_cell = UnitCell(
-                a=cell.a, b=cell.b, c=cell.c,
-                alpha=cell.alpha, beta=cell.beta, gamma=cell.gamma
-            )
+        # gemmi's cif.Block has no .cell attribute; read the _cell.* items
+        # directly (absent items leave unit_cell unset).
+        unit_cell = _gemmi_unit_cell(block) or unit_cell
 
         col = block.find_loop("_atom_site.Cartn_x")
         if not col:
