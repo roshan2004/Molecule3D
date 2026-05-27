@@ -465,6 +465,7 @@ MolScope provides a powerful CLI for visualization, batch analysis, and ML graph
 Visualize a structure, apply transformations, and save images or animations.
 ```bash
 molscope examples/data/1fqy.pdb --select atom_name=CA --color-by residue --save ca.png
+molscope examples/data/1fqy.pdb --select "chain=A and atom_name=CA" --save chain-a-ca.png
 molscope --fetch 1aml --center --gif amyloid.gif
 ```
 

@@ -8,9 +8,12 @@ from __future__ import annotations
 import argparse
 import glob
 import os
+import re
 import sys
 
 from .io import fetch, read
+
+_SELECTION_KEYS = {"element", "chain", "resname", "atom_name", "resid", "hetero"}
 
 
 def main(argv=None) -> int:
@@ -29,8 +32,11 @@ def main(argv=None) -> int:
     src.add_argument("--fetch", metavar="PDBID", help="download from RCSB by id")
 
     view_parser.add_argument(
-        "--select", metavar="SPEC",
-        help="atom selection, e.g. 'chain=A' or 'atom_name=CA'",
+        "--select", metavar="SPEC", action="append",
+        help=(
+            "atom selection; repeat or combine with 'and', e.g. "
+            "'chain=A and atom_name=CA'"
+        ),
     )
     view_parser.add_argument(
         "--color-by", choices=["element", "chain", "residue"], default="element",
@@ -86,8 +92,7 @@ def main(argv=None) -> int:
     # Default to 'view' if no subcommand provided
     if argv is None:
         argv = sys.argv[1:]
-    if not argv or (argv[0] not in subparsers.choices and not argv[0].startswith("-")):
-        argv = ["view"] + argv
+    argv = _default_to_view(argv, subparsers.choices)
 
     args = parser.parse_args(argv)
 
@@ -101,11 +106,27 @@ def main(argv=None) -> int:
     return 0
 
 
+def _default_to_view(argv, subcommands) -> list[str]:
+    if not argv:
+        return ["view"]
+    if argv[0] in subcommands or argv[0] in {"-h", "--help"}:
+        return list(argv)
+    return ["view"] + list(argv)
+
+
 def _run_view(args: argparse.Namespace) -> int:
     mol = fetch(args.fetch) if args.fetch else read(args.file)
     if args.select:
-        key, _, value = args.select.partition("=")
-        mol = mol.select(**{key.strip(): value.strip()})
+        try:
+            selection = _parse_selection(args.select)
+        except ValueError as e:
+            print(f"Invalid --select: {e}", file=sys.stderr)
+            return 2
+        try:
+            mol = mol.select(**selection)
+        except ValueError as e:
+            print(f"Selection failed: {e}", file=sys.stderr)
+            return 2
     if args.center:
         mol = mol.centered()
     if args.translate:
@@ -127,6 +148,66 @@ def _run_view(args: argparse.Namespace) -> int:
         ax.figure.savefig(args.save, dpi=150, bbox_inches="tight")
         print(f"saved {args.save}")
     return 0
+
+
+def _parse_selection(specs) -> dict:
+    """Parse CLI selection specs into ``Molecule.select`` keyword arguments."""
+    if isinstance(specs, str):
+        specs = [specs]
+
+    selection = {}
+    for spec in specs:
+        parts = [
+            part.strip()
+            for part in re.split(r"\s+and\s+", spec.strip(), flags=re.IGNORECASE)
+        ]
+        for part in parts:
+            if not part:
+                continue
+            if "=" not in part:
+                raise ValueError(f"{part!r} is not key=value")
+            key, value = [piece.strip() for piece in part.split("=", 1)]
+            if not key or not value:
+                raise ValueError(f"{part!r} is not key=value")
+            if key not in _SELECTION_KEYS:
+                supported = ", ".join(sorted(_SELECTION_KEYS))
+                raise ValueError(f"unsupported field {key!r}; use one of: {supported}")
+            if key in selection:
+                raise ValueError(f"field {key!r} was specified more than once")
+            selection[key] = _parse_selection_value(key, value)
+
+    if not selection:
+        raise ValueError("selection is empty")
+    return selection
+
+
+def _parse_selection_value(key: str, value: str):
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+        value = value[1:-1]
+
+    if key == "resid":
+        try:
+            if ":" in value:
+                low, high = value.split(":", 1)
+                return (int(low), int(high))
+            if "-" in value and not value.startswith("-"):
+                low, high = value.split("-", 1)
+                return (int(low), int(high))
+            return int(value)
+        except ValueError as exc:
+            raise ValueError(
+                "resid expects an integer or inclusive range like 10-20"
+            ) from exc
+
+    if key == "hetero":
+        lowered = value.lower()
+        if lowered in {"1", "true", "yes", "hetatm", "hetero"}:
+            return True
+        if lowered in {"0", "false", "no", "atom", "protein"}:
+            return False
+        raise ValueError("hetero expects true/false")
+
+    return value
 
 
 

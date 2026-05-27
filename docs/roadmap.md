@@ -12,6 +12,8 @@ framework.
   coarse-graining.
 - Expand benchmark coverage for parsing, contact maps, graph export, and
   descriptor generation.
+- Grow scientific validation from the current `1fqy`/small-molecule checks into
+  a curated mini-panel for DSSP, geometry, ensembles, and bond perception.
 - Make validation results easier to inspect from CI logs and docs.
 
 ## v1.0

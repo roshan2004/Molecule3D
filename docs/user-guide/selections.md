@@ -24,3 +24,10 @@ first_ten = mol[list(range(10))]
 ```
 
 Selections return new `Molecule` objects.
+
+The command-line viewer accepts the same basic fields for quick inspection:
+
+```bash
+molscope examples/data/1fqy.pdb --select "chain=A and atom_name=CA"
+molscope examples/data/1fqy.pdb --select chain=A --select atom_name=CA
+```
