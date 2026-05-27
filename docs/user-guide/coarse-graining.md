@@ -53,12 +53,29 @@ bead and non-hydrogen sidechain atoms become an `SC` bead when present. MolScope
 then adds a simple bead graph: within-residue `BB-SC` bonds plus sequential
 `BB-BB` links along each chain.
 
+Virtual sites can be added explicitly when you want a coordinate derived from
+existing beads without treating it as another atom-assignment bead:
+
+```python
+bb_sc = mol.coarse_grain(
+    "martini",
+    virtual_sites=[{"name": "MID", "parents": [0, 2]}],
+)
+```
+
+The virtual site is appended to the CG coordinates, marked with
+`cg.virtual_sites`, preserved in mapping JSON, drawn as a distinct marker, and
+exposed as a `virtual_site` flag in graph exports. Parent references are bead
+indices in the CG model before virtual sites are appended; names are accepted
+only when they are unique.
+
 This is the useful concept to learn from Martini: represent groups of atoms as
 interaction sites, preserve an interpretable molecular shape, and work at lower
 resolution. Real Martini models also require bead types, bonded terms,
-nonbonded parameters, charges, exclusions, validation against reference
-atomistic/experimental behavior, and toolchain-specific topology files. MolScope
-does not attempt those production steps.
+nonbonded parameters, charges, exclusions, virtual-site topology sections,
+validation against reference atomistic/experimental behavior, and
+toolchain-specific topology files. MolScope does not attempt those production
+steps.
 
 ## Custom residue mappings
 
@@ -128,6 +145,10 @@ print(first.name, first.resname, first.resid, first.chain)
 print(first.atom_indices)         # source-atom indices, in order
 print(first.atom_names)           # ["N", "CA", "C", "O"]
 print(first.reduction)            # "centre of mass"
+
+if report.virtual_sites:
+    site = report.virtual_sites[0]
+    print(site.name, site.parents, site.rule, site.weights)
 ```
 
 `print(cg.mapping_report())` formats the whole thing as text (beads, dropped
@@ -181,6 +202,7 @@ It does not:
 - assign Martini bead types or force-field parameters,
 - create angle, dihedral, nonbonded, charge or exclusion terms,
 - build validated production simulation topologies,
+- write GROMACS `[ virtual_sites* ]` topology sections,
 - validate elastic networks, bead chemistry, or thermodynamic behavior,
 - replace a Martini preparation workflow.
 

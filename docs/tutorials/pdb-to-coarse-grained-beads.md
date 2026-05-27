@@ -72,6 +72,31 @@ The bead names are intentionally familiar (`BB`, `SC`) but this is not a
 complete Martini model: real production models also need bead types, charges,
 bonded terms, nonbonded parameters, exclusions, and validation.
 
+## Add an explicit virtual site
+
+Some Martini/GROMACS workflows use virtual sites: coordinates derived from other
+particles rather than ordinary integrated beads. MolScope supports that mapping
+metadata explicitly for inspection and graph prototyping:
+
+```python
+bb_sc_vs = fragment.coarse_grain(
+    "martini",
+    virtual_sites=[{"name": "MID", "parents": [0, 2]}],
+)
+
+site = bb_sc_vs.coarse_grain_report.virtual_sites[0]
+print(site.name, site.parents, site.rule, site.weights)
+print(bb_sc_vs.virtual_sites.tolist())
+```
+
+The virtual site is appended after the real beads and marked in
+`bb_sc_vs.virtual_sites`. Parent references are bead indices in the CG model
+before virtual sites are appended. For repeated bead names such as `BB` and
+`SC`, use indices rather than names.
+
+Virtual sites are preserved in mapping JSON and graph exports, but MolScope does
+not write production GROMACS `[ virtual_sites* ]` topology sections.
+
 ## Visualize the atom-to-bead mapping
 
 ```python

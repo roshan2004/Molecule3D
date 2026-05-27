@@ -96,6 +96,51 @@ def test_martini_backbone_and_sidechain():
     assert pairs == {frozenset({0, 1}), frozenset({2, 3}), frozenset({0, 2})}
 
 
+def test_virtual_site_is_computed_from_parent_beads():
+    cg = two_alanines().coarse_grain(
+        "martini",
+        virtual_sites=[{"name": "MID", "parents": [0, 2]}],
+    )
+    assert len(cg) == 5
+    assert cg.atom_names == ["BB", "SC", "BB", "SC", "MID"]
+    assert cg.virtual_sites.tolist() == [False, False, False, False, True]
+    np.testing.assert_allclose(cg.coords[4], (cg.coords[0] + cg.coords[2]) / 2)
+
+    report = cg.coarse_grain_report
+    assert report.n_beads == 4
+    assert report.n_virtual_sites == 1
+    assert report.n_sites == 5
+    assert report.coverage() == "4 beads from 10/10 atoms + 1 virtual site"
+    assert report.virtual_sites[0].parent_names == ["BB", "BB"]
+
+
+def test_virtual_site_supports_unique_parent_names():
+    helix = ms.read(os.path.join(DATA, "helix_201.xyz"))
+    with pytest.warns(UserWarning, match="not assigned"):
+        cg = helix.coarse_grain(
+            {"A": [0, 1], "B": [2, 3]},
+            virtual_sites=[("MID", ["A", "B"])],
+        )
+    np.testing.assert_allclose(cg.coords[2], (cg.coords[0] + cg.coords[1]) / 2)
+    assert cg.coarse_grain_report.virtual_sites[0].parents == [0, 1]
+
+
+def test_virtual_site_rejects_repeated_parent_names():
+    with pytest.raises(ValueError, match="repeated"):
+        two_alanines().coarse_grain(
+            "martini",
+            virtual_sites=[{"name": "MID", "parents": ["BB", "SC"]}],
+        )
+
+
+def test_virtual_site_rejects_bad_weights():
+    with pytest.raises(ValueError, match="weights"):
+        two_alanines().coarse_grain(
+            "martini",
+            virtual_sites=[{"name": "MID", "parents": [0, 2], "weights": [1.0]}],
+        )
+
+
 def test_mapping_report_explains_martini_mapping():
     cg = alanine_with_hydrogens().coarse_grain("martini")
     report = cg.mapping_report()
@@ -105,6 +150,16 @@ def test_mapping_report_explains_martini_mapping():
     assert "Residue 1 ALA A: H" in report
     assert "Residue 1 ALA A: HB3" in report
     assert "BB-SC within residue" in report
+
+
+def test_mapping_report_explains_virtual_sites():
+    cg = two_alanines().coarse_grain(
+        "martini",
+        virtual_sites=[{"name": "MID", "parents": [0, 2], "weights": [2, 1]}],
+    )
+    report = cg.mapping_report()
+    assert "Virtual sites:" in report
+    assert "MID site: weighted_average(BB#0, BB#2; weights=0.666667, 0.333333)" in report
 
 
 def test_custom_mapping():
@@ -206,12 +261,16 @@ def test_user_defined_bonds_override_residue_topology():
 
 def test_cg_result_is_a_usable_molecule():
     mol = ms.read_pdb(os.path.join(DATA, "1fqy.pdb"))
-    cg = mol.coarse_grain("residue_com")
+    cg = mol.coarse_grain(
+        "residue_com",
+        virtual_sites=[{"name": "CENTER", "parents": [0, 1, 2]}],
+    )
     assert isinstance(cg, Molecule)
-    assert len(cg) == 226              # one bead per residue
+    assert len(cg) == 227              # one bead per residue, plus one virtual site
     g = cg.to_graph()                  # the CG model graphs like any molecule
-    assert g.n_atoms == 226
+    assert g.n_atoms == 227
     assert g.n_bonds == len(cg.bonds())
+    assert g.virtual_sites[-1]
 
 
 def test_educational_cg_workflow_on_aquaporin_fragment():

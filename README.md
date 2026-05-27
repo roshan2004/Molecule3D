@@ -413,6 +413,7 @@ mol = ms.read("examples/data/1fqy.pdb")
 cg = mol.coarse_grain("residue_com")        # one bead per residue (centre of mass)
 cg = mol.coarse_grain("residue_centroid")   # ...or geometric centroid
 cg = mol.coarse_grain("martini")            # simplified backbone + side-chain beads
+cg = mol.coarse_grain("martini", virtual_sites=[{"name": "MID", "parents": [0, 2]}])
 cg.plot(scale=200)                          # beads + backbone topology
 print(cg.mapping_report())                  # explain beads, dropped atoms, and bonds
 
@@ -449,11 +450,13 @@ residues); pass `bonds=` to define them yourself. Name-based bonds are intended
 for unique bead names such as `head`/`tail`; repeated names such as `BB`/`SC`
 are ambiguous, so use bead indices for those. Atoms you leave unassigned are
 dropped with a warning. The `"martini"` mapping teaches the idea of backbone and
-sidechain beads; it does not assign Martini bead types, bonded/nonbonded
-parameters, charges, exclusions, or simulation-engine topology files. This is
-meant for teaching and prototyping CG mappings, not as a replacement for
-production Martini preparation: the JSON and `.ndx` exports describe a bead
-assignment for inspection and reuse, not a validated simulation topology.
+sidechain beads. Virtual sites are represented explicitly as derived coordinate
+sites and graph flags, but MolScope does not assign Martini bead types,
+bonded/nonbonded parameters, charges, exclusions, GROMACS virtual-site topology
+sections, or simulation-engine topology files. This is meant for teaching and
+prototyping CG mappings, not as a replacement for production Martini
+preparation: the JSON and `.ndx` exports describe a bead assignment for
+inspection and reuse, not a validated simulation topology.
 
 ## Command-line interface
 

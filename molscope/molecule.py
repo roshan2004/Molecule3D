@@ -89,6 +89,7 @@ class Molecule:
     bond_index: Optional[np.ndarray] = None
     bond_orders: Optional[np.ndarray] = None
     formal_charges: np.ndarray = field(default_factory=lambda: np.empty(0, dtype=int))
+    virtual_sites: np.ndarray = field(default_factory=lambda: np.empty(0, dtype=bool))
     unit_cell: Optional[UnitCell] = None
     _mapping_report: Optional[Any] = field(default=None, repr=False, compare=False)
 
@@ -101,6 +102,7 @@ class Molecule:
         object.__setattr__(self, "coords", coords)
         object.__setattr__(self, "resids", np.asarray(self.resids, dtype=int))
         object.__setattr__(self, "formal_charges", np.asarray(self.formal_charges, dtype=int))
+        object.__setattr__(self, "virtual_sites", np.asarray(self.virtual_sites, dtype=bool))
         if self.bond_index is not None:
             object.__setattr__(
                 self, "bond_index", np.asarray(self.bond_index, dtype=int).reshape(-1, 2)
@@ -126,6 +128,10 @@ class Molecule:
             raise ValueError(
                 f"{len(self.formal_charges)} formal_charges for {len(coords)} coordinates"
             )
+        if len(self.virtual_sites) and len(self.virtual_sites) != len(coords):
+            raise ValueError(
+                f"{len(self.virtual_sites)} virtual_sites for {len(coords)} coordinates"
+            )
 
     def __len__(self) -> int:
         return len(self.coords)
@@ -140,6 +146,7 @@ class Molecule:
             and self.elements == other.elements
             and np.array_equal(self.coords, other.coords)
             and np.array_equal(self.formal_charges, other.formal_charges)
+            and np.array_equal(self.virtual_sites, other.virtual_sites)
         )
 
     __hash__ = None
@@ -208,6 +215,9 @@ class Molecule:
             hetero=sub(self.hetero),
             formal_charges=(
                 self.formal_charges[idx] if len(self.formal_charges) else self.formal_charges
+            ),
+            virtual_sites=(
+                self.virtual_sites[idx] if len(self.virtual_sites) else self.virtual_sites
             ),
             bond_index=bond_index,
             bond_orders=bond_orders,
@@ -803,7 +813,7 @@ class Molecule:
     # -- coarse-graining ----------------------------------------------------
 
     def coarse_grain(self, mapping="residue_com", weighted: bool = True,
-                     bonds=None, return_report: bool = False):
+                     bonds=None, virtual_sites=None, return_report: bool = False):
         """Map this structure onto CG beads. See :mod:`molscope.coarsegrain`.
 
         ``mapping`` is ``"residue_com"``, ``"residue_centroid"``, ``"martini"``,
@@ -813,13 +823,15 @@ class Molecule:
         or bead names when those names are unique. Repeated residue bead names
         such as ``BB``/``SC`` are ambiguous; use indices for those. Returns a
         new ``Molecule`` of beads with CG bonds attached, or ``(molecule,
-        report)`` when ``return_report=True``.
+        report)`` when ``return_report=True``. ``virtual_sites`` may define
+        coordinate sites derived from already-built bead indices without
+        turning them into ordinary bead assignments.
         """
         from .coarsegrain import coarse_grain
 
         return coarse_grain(
             self, mapping=mapping, weighted=weighted, bonds=bonds,
-            return_report=return_report,
+            virtual_sites=virtual_sites, return_report=return_report,
         )
 
     @property
@@ -945,7 +957,8 @@ class Molecule:
             atom_names=self.atom_names, resnames=self.resnames,
             resids=self.resids, chains=self.chains,
             formal_charges=self.formal_charges, aromatic_atoms=aromatic_atoms,
-            aromatic_bonds=aromatic_bonds, name=self.name,
+            aromatic_bonds=aromatic_bonds, virtual_sites=self.virtual_sites,
+            name=self.name,
         )
 
     def to_networkx(self, **kwargs):
