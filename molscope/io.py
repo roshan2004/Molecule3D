@@ -12,6 +12,7 @@ from __future__ import annotations
 import gzip
 import os
 import tempfile
+from dataclasses import replace
 from typing import Optional
 from urllib.error import HTTPError, URLError
 from urllib.request import urlopen
@@ -133,21 +134,24 @@ def read_pdb(path: str, model: int = 1, altloc: str = "primary") -> Molecule:
     (NMR) files the 1-based ``model`` is returned; files without ``MODEL``
     records are read in full.
     """
-    models = _parse_pdb_models(path, altloc=altloc)
+    models, unit_cell = _parse_pdb_models(path, altloc=altloc)
     if not models:
         return Molecule(np.empty((0, 3)), [], name=_stem(path))
     if not 1 <= model <= len(models):
         raise ValueError(f"model {model} out of range (1..{len(models)})")
-    return _molecule_from_record(models[model - 1], _stem(path))
+    mol = _molecule_from_record(models[model - 1], _stem(path))
+    return replace(mol, unit_cell=unit_cell)
 
 
 def read_pdb_models(path: str, altloc: str = "primary") -> list[Molecule]:
     """Read every model from a ``.pdb`` file as a list of molecules."""
     stem = _stem(path)
+    models, unit_cell = _parse_pdb_models(path, altloc=altloc)
     return [
-        _molecule_from_record(rec, f"{stem}#{i + 1}")
-        for i, rec in enumerate(_parse_pdb_models(path, altloc=altloc))
+        replace(_molecule_from_record(rec, f"{stem}#{i + 1}"), unit_cell=unit_cell)
+        for i, rec in enumerate(models)
     ]
+
 
 
 def read_cif(path: str, parser: str = "builtin") -> Molecule:
@@ -193,37 +197,63 @@ def _cif_coords(row, idx: dict, path, rownum: int) -> tuple:
 
 def _read_cif_builtin(path: str) -> Molecule:
     """Read a CIF/mmCIF atom-site loop with MolScope's lightweight tokenizer."""
+    from .molecule import UnitCell
+
     with _open(path) as f:
         tokens = _cif_tokens(f.read())
 
     columns: list[str] = []
     rows: list[list[str]] = []
+    unit_cell = None
     i = 0
     while i < len(tokens):
-        if tokens[i].lower() != "loop_":
+        token_lower = tokens[i].lower()
+        if token_lower == "loop_":
             i += 1
-            continue
+            loop_columns = []
+            while i < len(tokens) and tokens[i].startswith("_"):
+                loop_columns.append(tokens[i])
+                i += 1
 
-        i += 1
-        loop_columns = []
-        while i < len(tokens) and tokens[i].startswith("_"):
-            loop_columns.append(tokens[i])
-            i += 1
-
-        if not any(col.lower().startswith("_atom_site.") for col in loop_columns):
+            if any(col.lower().startswith("_atom_site.") for col in loop_columns):
+                width = len(loop_columns)
+                columns = [col.split(".", 1)[1] if "." in col else col for col in loop_columns]
+                while i + width <= len(tokens) and not _cif_control_token(tokens[i]):
+                    row = tokens[i:i + width]
+                    if any(_cif_control_token(tok) for tok in row):
+                        break
+                    rows.append(row)
+                    i += width
+                continue
+            
+            # Skip other loops
             while i < len(tokens) and not _cif_control_token(tokens[i]):
                 i += 1
             continue
 
-        width = len(loop_columns)
-        columns = [col.split(".", 1)[1] if "." in col else col for col in loop_columns]
-        while i + width <= len(tokens) and not _cif_control_token(tokens[i]):
-            row = tokens[i:i + width]
-            if any(_cif_control_token(tok) for tok in row):
-                break
-            rows.append(row)
-            i += width
-        break
+        if tokens[i].startswith("_cell."):
+            cell_data = {}
+            while i < len(tokens) and tokens[i].startswith("_cell."):
+                key = tokens[i].lower()
+                i += 1
+                if i < len(tokens) and not _cif_control_token(tokens[i]):
+                    cell_data[key] = tokens[i]
+                    i += 1
+            
+            try:
+                unit_cell = UnitCell(
+                    a=float(cell_data["_cell.length_a"]),
+                    b=float(cell_data["_cell.length_b"]),
+                    c=float(cell_data["_cell.length_c"]),
+                    alpha=float(cell_data.get("_cell.angle_alpha", 90.0)),
+                    beta=float(cell_data.get("_cell.angle_beta", 90.0)),
+                    gamma=float(cell_data.get("_cell.angle_gamma", 90.0)),
+                )
+            except (KeyError, ValueError):
+                pass
+            continue
+
+        i += 1
 
     if not columns or not rows:
         raise _parse_error(path, "mmCIF", "no _atom_site coordinate loop found")
@@ -250,12 +280,15 @@ def _read_cif_builtin(path: str) -> Molecule:
     return Molecule(
         np.array(coords, dtype=float), els, name=_stem(path),
         atom_names=anames, resnames=rnames, resids=np.array(rids, dtype=int),
-        chains=chains, hetero=heteros,
+        chains=chains, hetero=heteros, unit_cell=unit_cell,
     )
+
 
 
 def _read_cif_gemmi(path: str) -> Molecule:
     """Read a CIF/mmCIF atom-site loop with Gemmi when the optional extra exists."""
+    from .molecule import UnitCell
+
     try:
         import gemmi
     except ImportError as exc:  # pragma: no cover - exercised only when missing
@@ -265,15 +298,26 @@ def _read_cif_gemmi(path: str) -> Molecule:
         ) from exc
 
     doc = gemmi.cif.read_file(path)
+    unit_cell = None
     for block in doc:
+        # Gemmi cell parameters
+        cell = block.cell
+        if cell and cell.a > 0:
+            unit_cell = UnitCell(
+                a=cell.a, b=cell.b, c=cell.c,
+                alpha=cell.alpha, beta=cell.beta, gamma=cell.gamma
+            )
+
         col = block.find_loop("_atom_site.Cartn_x")
         if not col:
             continue
         loop = col.get_loop()
         tags = [tag.split(".", 1)[1] if "." in tag else tag for tag in loop.tags]
         rows = _gemmi_loop_rows(loop)
-        return _molecule_from_cif_rows(tags, rows, _stem(path))
+        mol = _molecule_from_cif_rows(tags, rows, _stem(path))
+        return replace(mol, unit_cell=unit_cell)
     raise ValueError(f"no _atom_site records found in {path}")
+
 
 
 def _molecule_from_cif_rows(columns: list[str], rows: list[list[str]], name: str) -> Molecule:
@@ -543,12 +587,15 @@ def _apply_sdf_charge_line(line: str, charges: list[int]) -> None:
             charges[atom_idx] = charge
 
 
-def _parse_pdb_models(path: str, altloc: str = "primary") -> list[dict]:
-    """Return a list of per-model records (dict of parallel atom arrays)."""
+def _parse_pdb_models(path: str, altloc: str = "primary") -> tuple[list[dict], Optional[Molecule.UnitCell]]:
+    """Return a tuple of (list of per-model records, unit_cell)."""
+    from .molecule import UnitCell
+
     _validate_altloc_policy(altloc)
     models: list[dict] = []
     cur = _new_record()
     global_conect: list[tuple[int, int]] = []
+    unit_cell = None
 
     def flush():
         nonlocal cur
@@ -559,7 +606,19 @@ def _parse_pdb_models(path: str, altloc: str = "primary") -> list[dict]:
     with _open(path) as f:
         for lineno, line in enumerate(f, 1):
             record = line[:6].strip()
-            if record in ("MODEL", "ENDMDL"):
+            if record == "CRYST1":
+                try:
+                    unit_cell = UnitCell(
+                        a=float(line[6:15]),
+                        b=float(line[15:24]),
+                        c=float(line[24:33]),
+                        alpha=float(line[33:40]),
+                        beta=float(line[40:47]),
+                        gamma=float(line[47:54]),
+                    )
+                except ValueError:
+                    pass
+            elif record in ("MODEL", "ENDMDL"):
                 flush()
             elif record in ("ATOM", "HETATM"):
                 atom = _parse_pdb_atom(line, len(cur["atoms"]) + 1, path, lineno)
@@ -575,7 +634,8 @@ def _parse_pdb_models(path: str, altloc: str = "primary") -> list[dict]:
     if global_conect:
         for model in models:
             model["conect"].extend(global_conect)
-    return models
+    return models, unit_cell
+
 
 
 def _new_record() -> dict:

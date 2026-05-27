@@ -110,7 +110,7 @@ def descriptors(
     )
     desc["distance_histogram"] = hist.astype(float).tolist()
     desc.update(_bond_length_summary(molecule))
-    desc.update(_contact_summary(molecule, contact_cutoff, distance_chunk_size))
+    desc.update(_contact_summary(molecule, contact_cutoff))
     desc.update(_residue_contact_summary(molecule, residue_contact_cutoff))
     if include_rdkit:
         desc.update(_rdkit_descriptors(molecule, rdkit_descriptor_names, rdkit_prefix))
@@ -287,13 +287,14 @@ def _bond_length_summary(molecule) -> dict[str, float]:
     }
 
 
-def _contact_summary(molecule, cutoff: float, chunk_size: int) -> dict[str, float]:
-    contact_count = molecule.contact_count(cutoff=cutoff, chunk_size=chunk_size)
+def _contact_summary(molecule, cutoff: float) -> dict[str, float]:
+    contact_count = molecule.contact_count(cutoff=cutoff)
     possible = len(molecule) * (len(molecule) - 1) / 2
     return {
         "atom_contact_count": float(contact_count),
         "atom_contact_density": float(contact_count / possible) if possible else 0.0,
     }
+
 
 
 def _residue_contact_summary(molecule, cutoff: float) -> dict[str, float]:

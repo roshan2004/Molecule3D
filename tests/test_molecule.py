@@ -112,21 +112,20 @@ def test_bonds_dense_path_matches(no_scipy):
     assert pairs == {frozenset({0, 1}), frozenset({0, 2})}
 
 
-def test_contacts_dense_chunked_path_matches(no_scipy):
-    pairs = {frozenset(b) for b in water().contacts(cutoff=1.1, chunk_size=1)}
+def test_contacts_path_matches(no_scipy):
+    pairs = {frozenset(b) for b in water().contacts(cutoff=1.1)}
     assert pairs == {frozenset({0, 1}), frozenset({0, 2})}
 
 
-def test_contact_count_dense_chunked_path(no_scipy):
-    assert water().contact_count(cutoff=1.1, chunk_size=1) == 2
+def test_contact_count_path(no_scipy):
+    assert water().contact_count(cutoff=1.1) == 2
 
 
-def test_contacts_validate_chunk_size():
-    with pytest.raises(ValueError, match="chunk_size"):
-        water().contacts(cutoff=1.1, chunk_size=0)
-
-
-def test_bonds_dense_guard_refuses_huge_molecules(no_scipy):
+def test_bonds_works_on_large_molecules_without_scipy(no_scipy):
+    # Previously this would have failed with O(n^2) guard; now it uses O(n) cell list.
     big = Molecule(np.zeros((9000, 3)), ["C"] * 9000)
-    with pytest.raises(ValueError):
-        big.bonds()
+    bonds = big.bonds()
+    # All at origin, so all are bonded (cutoff 1.2 * (0.77+0.77) = 1.848)
+    # n*(n-1)/2 bonds.
+    assert len(bonds) == 9000 * 8999 // 2
+

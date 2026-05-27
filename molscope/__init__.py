@@ -93,7 +93,7 @@ from .io import (
     write_pdb,
     write_xyz,
 )
-from .molecule import Molecule
+from .molecule import Molecule, UnitCell
 from .plotting import plot_distance_matrix, plot_mapping, plot_rmsd_heatmap
 
 __all__ = [
@@ -116,6 +116,7 @@ __all__ = [
     "ResidueContactGraph",
     "SSSegment",
     "SecondaryStructure",
+    "UnitCell",
     "apply_cg_mapping",
     "backbone_torsions",
     "binding_site",

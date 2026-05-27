@@ -20,10 +20,49 @@ from . import elements
 
 # Above this size the dense O(n^2) bond search is refused; install scipy for the
 # KD-tree path (pip install 'molscope[fast]') to handle larger structures.
-_DENSE_BOND_LIMIT = 8000
-_DEFAULT_CONTACT_CHUNK_SIZE = 1024
 
 _BACKBONE_ATOMS = ("N", "CA", "C", "O")
+
+
+@dataclass(frozen=True)
+class UnitCell:
+    """Crystallographic unit cell parameters.
+
+    Lengths ``a``, ``b``, ``c`` in angstrom; angles ``alpha``, ``beta``,
+    ``gamma`` in degrees.
+    """
+
+    a: float
+    b: float
+    c: float
+    alpha: float = 90.0
+    beta: float = 90.0
+    gamma: float = 90.0
+
+    def lattice_matrix(self) -> np.ndarray:
+        """Return the (3, 3) matrix of lattice vectors as rows."""
+        alpha, beta, gamma = np.radians([self.alpha, self.beta, self.gamma])
+        cos_alpha = np.cos(alpha)
+        cos_beta = np.cos(beta)
+        cos_gamma = np.cos(gamma)
+        sin_gamma = np.sin(gamma)
+
+        # Volume of a parallelepiped with unit edges
+        v = np.sqrt(
+            1 - cos_alpha**2 - cos_beta**2 - cos_gamma**2 + 2 * cos_alpha * cos_beta * cos_gamma
+        )
+
+        return np.array([
+            [self.a, 0, 0],
+            [self.b * cos_gamma, self.b * sin_gamma, 0],
+            [self.c * cos_beta, self.c * (cos_alpha - cos_beta * cos_gamma) / sin_gamma, self.c * v / sin_gamma]
+        ])
+
+    def __repr__(self) -> str:
+        return (
+            f"UnitCell(a={self.a:.3f}, b={self.b:.3f}, c={self.c:.3f}, "
+            f"alpha={self.alpha:.2f}, beta={self.beta:.2f}, gamma={self.gamma:.2f})"
+        )
 
 
 @dataclass(frozen=True, eq=False)
@@ -46,7 +85,9 @@ class Molecule:
     bond_index: Optional[np.ndarray] = None
     bond_orders: Optional[np.ndarray] = None
     formal_charges: np.ndarray = field(default_factory=lambda: np.empty(0, dtype=int))
+    unit_cell: Optional[UnitCell] = None
     _mapping_report: Optional[Any] = field(default=None, repr=False, compare=False)
+
     # Track selection lineage to enable boolean logic (e.g. mol1 & mol2).
     _parent: Optional[Molecule] = field(default=None, repr=False, compare=False)
     _indices: Optional[np.ndarray] = field(default=None, repr=False, compare=False)
@@ -467,23 +508,24 @@ class Molecule:
         from .distance import distance_matrix
 
         return distance_matrix(
-            self.coords, backend=backend, device=device, as_numpy=as_numpy
+            self.coords, backend=backend, device=device, as_numpy=as_numpy,
+            unit_cell=self.unit_cell,
         )
 
     def contacts(
         self,
         cutoff: float = 5.0,
-        chunk_size: int = _DEFAULT_CONTACT_CHUNK_SIZE,
         backend: str = "scipy",
         device: str | None = None,
     ) -> np.ndarray:
         """Atom index pairs ``(i, j)`` closer than ``cutoff`` angstrom.
 
         ``backend="scipy"`` uses a KD-tree when SciPy is installed. Without SciPy the
-        fallback scans coordinate blocks, so it avoids materializing the full
-        distance matrix. Dense backends (``"numpy"``, ``"torch"``, ``"cupy"``,
-        ``"auto"``) materialize a full contact matrix first, which is convenient
-        for CPU/GPU dense workflows but scales as ``O(N^2)`` memory.
+        fallback uses an efficient O(N) cell-list algorithm, so it avoids
+        materializing the full distance matrix. Dense backends (``"numpy"``,
+        ``"torch"``, ``"cupy"``, ``"auto"``) materialize a full contact matrix first,
+        which is convenient for CPU/GPU dense workflows but scales as ``O(N^2)``
+        memory.
         """
         n = len(self)
         if n < 2:
@@ -494,7 +536,8 @@ class Molecule:
             from .distance import contact_matrix, contacts_from_matrix
 
             mat = contact_matrix(
-                self.coords, cutoff=cutoff, backend=backend, device=device
+                self.coords, cutoff=cutoff, backend=backend, device=device,
+                unit_cell=self.unit_cell,
             )
             return contacts_from_matrix(mat)
         if backend != "scipy":
@@ -502,18 +545,22 @@ class Molecule:
                 "backend must be 'scipy', 'numpy', 'torch', 'cupy' or 'auto', "
                 f"got {backend!r}"
             )
-        chunk_size = _validate_chunk_size(chunk_size)
         try:
+            # KD-tree doesn't natively support general PBC MIC
+            if self.unit_cell is not None:
+                raise ImportError("mocking for PBC")
             from scipy.spatial import cKDTree
 
             return cKDTree(self.coords).query_pairs(cutoff, output_type="ndarray")
         except ImportError:
-            return _contacts_chunked(self.coords, cutoff, chunk_size)
+            from .distance import find_contacts
+
+            return find_contacts(self.coords, cutoff, unit_cell=self.unit_cell)
+
 
     def contact_count(
         self,
         cutoff: float = 5.0,
-        chunk_size: int = _DEFAULT_CONTACT_CHUNK_SIZE,
         backend: str = "scipy",
         device: str | None = None,
     ) -> int:
@@ -528,8 +575,9 @@ class Molecule:
                 "backend must be 'scipy', 'numpy', 'torch', 'cupy' or 'auto', "
                 f"got {backend!r}"
             )
-        chunk_size = _validate_chunk_size(chunk_size)
         try:
+            if self.unit_cell is not None:
+                raise ImportError("mocking for PBC")
             from scipy.spatial import cKDTree
 
             tree = cKDTree(self.coords)
@@ -537,7 +585,11 @@ class Molecule:
             # directions; remove the diagonal and collapse i->j / j->i.
             return max(0, int((tree.count_neighbors(tree, cutoff) - n) // 2))
         except ImportError:
-            return _contact_count_chunked(self.coords, cutoff, chunk_size)
+            from .distance import find_contact_count
+
+            return find_contact_count(self.coords, cutoff, unit_cell=self.unit_cell)
+
+
 
     def contact_map(
         self,
@@ -687,15 +739,17 @@ class Molecule:
                 return np.empty((0, 2), dtype=int)
             i, j = cand[:, 0], cand[:, 1]
         else:
-            if n > _DENSE_BOND_LIMIT:
-                raise ValueError(
-                    f"{n} atoms exceeds the dense bond limit ({_DENSE_BOND_LIMIT}); "
-                    "install scipy (pip install 'molscope[fast]') for large "
-                    "structures."
-                )
-            i, j = np.triu_indices(n, k=1)
+            from .distance import find_contacts
+
+            # Use the same max-radius trick as the KD-tree path to find candidates,
+            # then filter by the sum of radii.
+            cand = find_contacts(self.coords, tolerance * 2 * radii.max())
+            if len(cand) == 0:
+                return np.empty((0, 2), dtype=int)
+            i, j = cand[:, 0], cand[:, 1]
 
         dist = np.linalg.norm(self.coords[i] - self.coords[j], axis=1)
+
         cutoff = tolerance * (radii[i] + radii[j])
         keep = dist < cutoff
         return np.stack([i[keep], j[keep]], axis=1)
@@ -953,65 +1007,8 @@ def _rotation_matrix(axis: np.ndarray, angle: float) -> np.ndarray:
     ])
 
 
-def _validate_chunk_size(chunk_size: int) -> int:
-    chunk_size = int(chunk_size)
-    if chunk_size < 1:
-        raise ValueError("chunk_size must be >= 1")
-    return chunk_size
-
-
-def _contacts_chunked(coords: np.ndarray, cutoff: float, chunk_size: int) -> np.ndarray:
-    pairs = []
-    cutoff2 = float(cutoff) ** 2
-    for start, end, block in _iter_blocks(coords, chunk_size):
-        if len(block) > 1:
-            d2 = _squared_distances(block, block)
-            i, j = np.triu_indices(len(block), k=1)
-            keep = d2[i, j] < cutoff2
-            if np.any(keep):
-                pairs.append(np.stack([start + i[keep], start + j[keep]], axis=1))
-
-        for other_start, _, other in _iter_blocks(coords, chunk_size, start=end):
-            d2 = _squared_distances(block, other)
-            i, j = np.nonzero(d2 < cutoff2)
-            if len(i):
-                pairs.append(np.stack([start + i, other_start + j], axis=1))
-
-    if not pairs:
-        return np.empty((0, 2), dtype=int)
-    return np.concatenate(pairs).astype(int, copy=False).reshape(-1, 2)
-
-
-def _contact_count_chunked(coords: np.ndarray, cutoff: float, chunk_size: int) -> int:
-    count = 0
-    cutoff2 = float(cutoff) ** 2
-    for _, end, block in _iter_blocks(coords, chunk_size):
-        if len(block) > 1:
-            d2 = _squared_distances(block, block)
-            i, j = np.triu_indices(len(block), k=1)
-            count += int(np.count_nonzero(d2[i, j] < cutoff2))
-
-        for _, _, other in _iter_blocks(coords, chunk_size, start=end):
-            d2 = _squared_distances(block, other)
-            count += int(np.count_nonzero(d2 < cutoff2))
-    return count
-
-
-def _iter_blocks(coords: np.ndarray, chunk_size: int, start: int = 0):
-    n = len(coords)
-    for block_start in range(start, n, chunk_size):
-        block_end = min(block_start + chunk_size, n)
-        yield block_start, block_end, coords[block_start:block_end]
-
-
-def _squared_distances(a: np.ndarray, b: np.ndarray) -> np.ndarray:
-    a2 = np.einsum("ij,ij->i", a, a)[:, None]
-    b2 = np.einsum("ij,ij->i", b, b)[None, :]
-    d2 = a2 + b2 - 2.0 * (a @ b.T)
-    return np.maximum(d2, 0.0)
-
-
 def _align_bond_flags(edges: np.ndarray, source_edges: np.ndarray, flags: np.ndarray) -> np.ndarray:
+
     if len(edges) == 0:
         return np.empty(0, dtype=bool)
     flag_by_pair = {
