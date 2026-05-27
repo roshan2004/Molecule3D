@@ -226,3 +226,82 @@ def test_pdb_round_trip_preserves_explicit_bonds(tmp_path):
     write_pdb(mol, path)
     back = read_pdb(path)
     np.testing.assert_array_equal(back.bonds(), [[0, 1]])
+
+
+# -- malformed / edge-case fixtures -----------------------------------------
+
+FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
+
+
+def _fixture(name):
+    return os.path.join(FIXTURES, name)
+
+
+def test_xyz_truncated_frame_reports_count_mismatch():
+    with pytest.raises(ValueError, match="declares 3 atoms but 2 were found"):
+        ms.read(_fixture("truncated.xyz"))
+
+
+def test_xyz_non_numeric_coordinate_names_the_line():
+    with pytest.raises(ValueError, match=r"XYZ file \(line 4\).*coordinates"):
+        ms.read(_fixture("bad_coord.xyz"))
+
+
+def test_pdb_short_atom_record_names_columns():
+    with pytest.raises(ValueError, match=r"PDB file \(line 2\).*coordinate columns 31-54"):
+        ms.read(_fixture("short_atom.pdb"))
+
+
+def test_pdb_non_numeric_coordinate_errors_clearly():
+    with pytest.raises(ValueError, match="could not read coordinate columns"):
+        ms.read(_fixture("bad_coord.pdb"))
+
+
+def test_pdb_header_only_returns_empty_molecule():
+    # A file with no ATOM/HETATM records is a valid (empty) read, not an error.
+    mol = ms.read(_fixture("no_atoms.pdb"))
+    assert len(mol) == 0
+
+
+def test_cif_without_atom_site_loop_errors():
+    with pytest.raises(ValueError, match="no _atom_site coordinate loop"):
+        ms.read(_fixture("no_atom_site.cif"))
+
+
+def test_cif_missing_coordinate_columns_lists_what_was_found():
+    with pytest.raises(ValueError, match="missing coordinate column"):
+        ms.read(_fixture("missing_coord_col.cif"))
+
+
+def test_sdf_v3000_is_rejected_clearly():
+    with pytest.raises(ValueError, match="V3000.*not supported"):
+        ms.read(_fixture("v3000.sdf"))
+
+
+def test_sdf_malformed_counts_line_errors():
+    with pytest.raises(ValueError, match="malformed counts line"):
+        ms.read(_fixture("bad_counts.sdf"))
+
+
+def test_sdf_truncated_atom_block_errors():
+    with pytest.raises(ValueError, match="declares 3 atoms .* only 2 block lines"):
+        ms.read(_fixture("truncated.sdf"))
+
+
+def test_valid_v2000_sdf_still_parses():
+    mol = ms.read(_fixture("water.sdf"))
+    assert mol.elements == ["O", "H", "H"]
+    np.testing.assert_array_equal(np.sort(mol.bonds(), axis=0), [[0, 1], [0, 2]])
+
+
+def test_fetch_unknown_pdb_id_raises_value_error(monkeypatch, tmp_path):
+    from urllib.error import HTTPError
+
+    import molscope.io as io
+
+    def boom(url):
+        raise HTTPError(url, 404, "Not Found", {}, None)
+
+    monkeypatch.setattr(io, "urlopen", boom)
+    with pytest.raises(ValueError, match="not found at RCSB"):
+        io.fetch("zzzz9", cache_dir=str(tmp_path))

@@ -16,6 +16,7 @@ nav:
   - Installation: installation.md
   - Quickstart: quickstart.md
   - User Guide:
+      - Coordinate formats compared: user-guide/coordinate-formats.md
       - Reading molecular files: user-guide/reading-files.md
       - Selections: user-guide/selections.md
       - Geometry and measurements: user-guide/geometry.md
