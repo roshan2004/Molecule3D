@@ -69,17 +69,29 @@ graph LR
 
 ## Why MolScope?
 
-MolScope is **not** intended to replace full molecular-simulation or
-cheminformatics frameworks. It is a lightweight **educational and prototyping**
-toolkit for reading common molecular structure files, performing simple
-structural analysis, exporting graph representations for ML workflows, and
-experimenting with coarse-grained mappings. Its core depends only on NumPy and
-Matplotlib, and the API is Python-first and scriptable.
+MolScope takes you from a structure file to analysis, a machine-learning graph,
+or a coarse-grained model with the smallest install that gets the job done. The
+core depends only on NumPy and Matplotlib, so `pip install molscope` stays light.
+Everything heavier (RDKit, PyTorch, PyTorch Geometric, DGL, MDAnalysis, Gemmi)
+is an opt-in [extra](#install) you add only when you reach for it.
 
-In particular, the coarse-graining tools are for **educational CG mapping and
-bead-graph prototyping**: useful for exploring mappings before moving to a
-production Martini workflow. They are not a validated Martini force-field
-generator.
+That makes it an on-ramp rather than a framework:
+
+- **Structure to ML graph in a few lines.** `mol.to_graph()` runs with zero extra
+  dependencies; `mol.to_pyg_data()`, `mol.to_networkx()` and `mol.to_dgl_graph()`
+  hand off to the ecosystem when you want it. This is the path MolScope is built
+  to make easy.
+- **Light enough to teach and prototype with.** A readable, Python-first API over
+  static structures, with no trajectory engine or build step to wrestle.
+- **Honest about its numbers.** Bonds, geometry and DSSP are cross-checked against
+  reference tools (MDAnalysis, `mkdssp`) in CI, so you know where the results come
+  from.
+
+MolScope is **not** a replacement for full molecular-simulation or
+cheminformatics frameworks. In particular, the coarse-graining tools are for
+**educational CG mapping and bead-graph prototyping**: useful for exploring
+mappings before moving to a production Martini workflow, not a validated Martini
+force-field generator.
 
 | Tool | Main focus | How MolScope differs |
 | --- | --- | --- |
@@ -91,8 +103,8 @@ generator.
 | nglview | Notebook structure viewer | MolScope also does analysis, descriptors, graphs and CG, not just viewing |
 
 Reach for those tools when you need their depth and validation. Reach for
-MolScope when you want something small, readable, and quick to teach or
-prototype with.
+MolScope when you want the shortest path from a structure file to analysis, an
+ML graph, or a CG prototype.
 
 ## Install
 
@@ -149,6 +161,10 @@ from PDB to molecular graph and coarse-grained beads in about 10 minutes.
 For an ML-oriented walkthrough, see
 [`docs/examples/pdb-to-pyg-ml.md`](docs/examples/pdb-to-pyg-ml.md):
 PDB ensemble to PyTorch Geometric classifier/regressor toy model.
+
+For a runnable, narrated version of that ML walkthrough, open the notebook
+[`notebooks/pdb_to_gnn.ipynb`](notebooks/pdb_to_gnn.ipynb): structure file to a
+trained GNN, end to end (needs `pip install 'molscope[pyg]'`).
 
 ## Library
 
