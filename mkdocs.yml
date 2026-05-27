@@ -41,6 +41,7 @@ nav:
       - Ligand binding site: examples/binding-site.md
   - API reference: api-reference.md
   - Benchmarks: benchmarks.md
+  - Scientific validation: validation.md
   - Limitations and validation: limitations.md
   - Roadmap: roadmap.md
   - Contributing: contributing.md

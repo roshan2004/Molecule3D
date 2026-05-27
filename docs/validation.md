@@ -1,0 +1,77 @@
+# Scientific validation
+
+MolScope is a lightweight teaching and prototyping toolkit, so validation is
+not just "tests pass". For every scientific method, ask:
+
+- What is the reference?
+- What assumptions does the method make?
+- Where does it fail?
+- What tolerance is scientifically reasonable?
+
+The validation suite is split into two tiers:
+
+- **Tier 1 invariants** run everywhere and check mathematical or conservation
+  truths that do not need an external tool.
+- **Tier 2 reference comparisons** run when optional scientific tools are
+  installed: MDAnalysis, RDKit, and `mkdssp`/`dssp`.
+
+Run the full validation layer locally:
+
+```bash
+uv run pytest tests/validation -v -rs -s
+```
+
+Install optional Python references with:
+
+```bash
+uv sync --extra validation
+```
+
+The secondary-structure reference additionally needs a system `mkdssp` or
+`dssp` executable on `PATH`.
+
+## Reference-tool checks
+
+| Area | Reference | Validation file | Panel | Tolerance / threshold | Rationale |
+| --- | --- | --- | --- | --- | --- |
+| Mass geometry | MDAnalysis | `tests/validation/test_geometry_ref.py` | `1fqy.pdb` | `radius_of_gyration` relative `1e-6`; center of mass absolute `1e-5`; inertia relative `1e-5` | Same formulas and same PDB coordinates should agree to floating-point precision. |
+| Geometry primitives | MDAnalysis | `tests/validation/test_geometry_ref.py` | `1fqy.pdb` | distances relative `1e-5`; angles/dihedrals absolute `1e-4` degrees | Coordinate precision and degree conversion dominate error. |
+| CA distance/contact maps | MDAnalysis | `tests/validation/test_geometry_ref.py` | `1fqy.pdb` alpha carbons | distance matrix absolute `1e-5`; contact pairs exact at 8 A | Contact-map logic should match an independent distance-threshold implementation. |
+| Ensemble RMSF/RMSD | MDAnalysis | `tests/validation/test_geometry_ref.py` | `1aml.pdb` NMR ensemble | RMSF absolute `1e-3`; Kabsch RMSD absolute `1e-4` | Alignment and trajectory APIs differ slightly, but biologically meaningful values should agree tightly. |
+| Distance bond perception | RDKit topology | `tests/validation/test_bonds_ref.py` | RDKit-embedded small molecules | bond precision and recall each `>= 0.98` | Geometry-only bond perception is expected to recover clean small-molecule topologies, with a small margin for future panel expansion. |
+| Chemical features | RDKit atom/bond APIs | `tests/validation/test_chem_ref.py` | Aromatic, heteroatom and charged small molecules | formal charges and aromatic flags exact; bond orders exact within `1e-12` | MolScope delegates optional chemical perception to RDKit, so direct RDKit arrays are the reference. |
+| RDKit descriptors | RDKit descriptor APIs | `tests/validation/test_chem_ref.py` | Same chemistry panel | selected scalar descriptors relative/absolute `1e-12` | Descriptor wrappers should not alter RDKit descriptor values. |
+| Secondary structure | `mkdssp` / `dssp` | `tests/validation/test_dssp_ref.py` | `1fqy.pdb` | 3-state helix/strand/coil agreement `>= 0.95`; helix fraction within `0.15` | MolScope's DSSP is simplified and educational, so reduced-state agreement is the honest target rather than byte-for-byte 8-state equality. |
+
+## Invariant checks
+
+| Area | Validation file | Assertion | Tolerance |
+| --- | --- | --- | --- |
+| Rigid-body alignment | `tests/validation/test_invariants.py` | Kabsch alignment recovers a known rotation/translation | RMSD `< 1e-9` |
+| Self RMSD | `tests/validation/test_invariants.py` | A structure aligned to itself has zero RMSD | RMSD `< 1e-12` |
+| Geometry primitives | `tests/validation/test_invariants.py` | Euclidean distances, right angles, planar torsions | Exact or near machine precision |
+| Radius of gyration | `tests/validation/test_invariants.py` | Uniform shell has radius of gyration equal to shell radius | Absolute `< 1e-3` |
+| Coarse-graining | `tests/validation/test_invariants.py` | Residue COM and centroid beads equal direct reductions of source atoms | Absolute `< 1e-9` |
+| Contact maps | `tests/validation/test_invariants.py` | Atom contact map equals brute-force all-pairs threshold | Exact matrix equality |
+
+## Assumptions and failure modes
+
+| Method | Key assumptions | Expected failure modes |
+| --- | --- | --- |
+| Geometric bonds | Clean 3D coordinates, normal covalent distances, standard elements | Missing/extra bonds for strained structures, metals, unusual valence, bad coordinates, or raw PDB files without explicit chemistry. |
+| RDKit chemical features | Explicit bond orders/formal charges or a geometry whose inferred single-bond graph RDKit can sanitize | Sanitization errors for inconsistent valence or missing bond-order chemistry; aromaticity depends on RDKit's model and version. |
+| Contact maps | Static coordinates and a chosen distance cutoff/method (`ca`, `com`, or `min`) | Different cutoffs or representative atoms change the result; dense atom maps are `O(N^2)`. |
+| Simplified DSSP | Complete protein backbone atoms (`N`, `CA`, `C`, `O`) and standard residue ordering | Not canonical `mkdssp`; strand-rich or edge-case folds can disagree more than helical examples; bare XYZ input is insufficient. |
+| Coarse-graining | Beads are coordinate reductions and simple bead graphs for inspection | No force-field parameters, charges, exclusions, elastic networks, or validation of simulation behavior. |
+
+## Updating validation
+
+When adding a scientific feature, add at least one of:
+
+- an invariant test if the expected behavior follows from math or conservation,
+- a reference-tool comparison if a credible external implementation exists,
+- a limitations-table row if the method is intentionally approximate.
+
+Prefer tight tolerances when two implementations should be numerically
+equivalent. Use looser, justified thresholds only when the method is explicitly
+approximate, as with simplified DSSP.

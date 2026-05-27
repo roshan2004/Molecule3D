@@ -147,6 +147,11 @@ python scripts/build_user_guide_pdf.py
 Docs source lives in `docs/`; the site configuration is `mkdocs.yml`. The PDF
 builder requires Pandoc and a LaTeX engine such as `xelatex`.
 
+Scientific validation is documented in
+[`docs/validation.md`](docs/validation.md): reference tools, assumptions,
+failure modes, and tolerances for MDAnalysis, RDKit, `mkdssp`, and invariant
+checks.
+
 ## Quickstart
 
 A runnable end-to-end tour over the bundled sample structures lives in
