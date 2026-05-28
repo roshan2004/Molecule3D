@@ -5,8 +5,8 @@ title: "MolScope: lightweight molecular structure analysis, visualisation, graph
 authors:
   - family-names: Shrestha
     given-names: Roshan
-version: 0.8.1
-date-released: "2026-05-26"
+version: 0.8.2
+date-released: "2026-05-28"
 license: MIT
 repository-code: "https://github.com/roshan2004/molscope"
 url: "https://github.com/roshan2004/molscope"
