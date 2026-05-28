@@ -49,7 +49,7 @@ nav:
   - API reference: api-reference.md
   - Benchmarks: benchmarks.md
   - Scientific validation: validation.md
-  - Limitations and validation: limitations.md
+  - Limitations by workflow: limitations.md
   - Roadmap: roadmap.md
   - Contributing: contributing.md
 
