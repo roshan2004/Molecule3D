@@ -10,6 +10,14 @@ authors:
 version: 0.8.3
 date-released: "2026-05-28"
 license: MIT
+doi: 10.5281/zenodo.20433850
+identifiers:
+  - type: doi
+    value: 10.5281/zenodo.20433850
+    description: Concept DOI (always resolves to the latest archived version)
+  - type: doi
+    value: 10.5281/zenodo.20433851
+    description: DOI for v0.8.3
 repository-code: "https://github.com/roshan2004/molscope"
 url: "https://github.com/roshan2004/molscope"
 abstract: >

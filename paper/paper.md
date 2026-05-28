@@ -110,6 +110,16 @@ reference scientific tools. Documentation is built with `MkDocs Material`
 and hosted at <https://molscope.readthedocs.io/>, and a per-workflow
 limitations page makes explicit what each workflow does and does not cover.
 
+# Availability and archival
+
+`MolScope` is distributed on PyPI as `molscope` and developed openly on
+GitHub at <https://github.com/roshan2004/molscope> under the MIT licence.
+Each release is automatically archived on Zenodo: the concept DOI
+[10.5281/zenodo.20433850](https://doi.org/10.5281/zenodo.20433850)
+resolves to the latest archived version, and the version under review
+here (v0.8.3) is archived at
+[10.5281/zenodo.20433851](https://doi.org/10.5281/zenodo.20433851).
+
 # Acknowledgements
 
 The author thanks the maintainers of `NumPy`, `matplotlib`, `RDKit`,
