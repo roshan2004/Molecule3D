@@ -76,8 +76,11 @@ end in the project's tutorials:
    and optional `RDKit`-backed scalar descriptors when the `chem` extra is
    installed. The DSSP-style implementation reaches roughly 99% agreement
    with reference `mkdssp` [@kabsch1983dssp] on the helical reference
-   protein included in the validation suite, after collapsing assignments
-   to helix, strand, and coil.
+   protein (Aquaporin-1) included in the validation suite, after
+   collapsing assignments to helix, strand, and coil. This is a
+   targeted regression check rather than a full benchmark panel, and
+   strand-rich folds may disagree more strongly; the package's
+   per-workflow limitations page records this explicitly.
 
 2. **PDB to graph or GNN.** Atom-and-bond graphs and residue contact graphs
    with named node and edge feature presets, Laplacian and random-walk
