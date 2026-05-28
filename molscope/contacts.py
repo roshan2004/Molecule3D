@@ -14,7 +14,7 @@ metadata and the ``hetero`` (ATOM vs HETATM) flag that ``Molecule`` carries:
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import numpy as np
 
@@ -100,7 +100,8 @@ class BindingSite:
 
     ``residues`` and ``min_distances`` are parallel lists ordered by increasing
     distance to the ligand; ``contacts`` are (protein atom, ligand atom) index
-    pairs within ``cutoff``.
+    pairs within ``cutoff``. ``residue_atom_indices`` is aligned with
+    ``residues`` and contains all polymer atoms in each binding-site residue.
     """
 
     ligand: LigandResidue
@@ -108,6 +109,69 @@ class BindingSite:
     residues: list[Residue]
     min_distances: list[float]
     contacts: list[tuple[int, int]]
+    residue_atom_indices: list[list[int]] = field(default_factory=list)
+
+    @property
+    def n_atom_contacts(self) -> int:
+        """Number of protein-ligand atom pairs within ``cutoff``."""
+        return len(self.contacts)
+
+    @property
+    def contact_atom_indices(self) -> list[int]:
+        """Protein atoms that make at least one ligand contact."""
+        return sorted({int(i) for i, _ in self.contacts})
+
+    @property
+    def protein_atom_indices(self) -> list[int]:
+        """All polymer atoms in the binding-site residues.
+
+        Sites created by older code may not carry ``residue_atom_indices``; in
+        that case this falls back to the protein atoms that directly contact the
+        ligand.
+        """
+        if not self.residue_atom_indices:
+            return self.contact_atom_indices
+        return sorted({int(i) for atoms in self.residue_atom_indices for i in atoms})
+
+    @property
+    def residue_contact_counts(self) -> list[int]:
+        """Atom-contact counts aligned with ``residues``."""
+        counts = [0] * len(self.residues)
+        if not self.residue_atom_indices:
+            return counts
+        atom_to_residue = {
+            int(atom): residue_i
+            for residue_i, atoms in enumerate(self.residue_atom_indices)
+            for atom in atoms
+        }
+        for protein_atom, _ in self.contacts:
+            residue_i = atom_to_residue.get(int(protein_atom))
+            if residue_i is not None:
+                counts[residue_i] += 1
+        return counts
+
+    def to_records(self) -> list[dict[str, object]]:
+        """Return table-friendly per-residue binding-site records."""
+        contact_counts = self.residue_contact_counts
+        return [
+            {
+                "chain": residue.chain,
+                "resid": residue.resid,
+                "resname": residue.resname,
+                "min_distance": float(distance),
+                "n_atom_contacts": int(contact_counts[i]),
+            }
+            for i, (residue, distance) in enumerate(zip(self.residues, self.min_distances))
+        ]
+
+    def to_molecule(self, molecule: Molecule, include_ligand: bool = False) -> Molecule:
+        """Return a subset molecule for the site residues, optionally with ligand atoms."""
+        indices = self.protein_atom_indices
+        if include_ligand:
+            indices = sorted({*indices, *[int(i) for i in self.ligand.atom_indices]})
+        if not indices:
+            return molecule.take(np.array([], dtype=int))
+        return molecule.take(indices)
 
     def __repr__(self) -> str:
         return (
@@ -276,11 +340,17 @@ def binding_site(
     contacts = [(int(prot_idx[i]), int(lig_idx[j])) for i, j in zip(lp, ll)]
 
     resnames = molecule.resnames or [""] * len(molecule)
+    residue_atoms: dict[tuple, list[int]] = {}
+    for idx, resname, resid, chain in molecule.residue_groups():
+        atoms = [int(i) for i in idx if not hetero[i]]
+        if atoms:
+            residue_atoms[(chain, int(resid), resname)] = atoms
+
     site_min: dict[tuple, float] = {}
     site_res: dict[tuple, Residue] = {}
     for local_i in np.unique(lp):
         gi = int(prot_idx[local_i])
-        key = (molecule.chains[gi], int(molecule.resids[gi]))
+        key = (molecule.chains[gi], int(molecule.resids[gi]), resnames[gi])
         site_res[key] = Residue(molecule.chains[gi], int(molecule.resids[gi]), resnames[gi])
         site_min[key] = float(per_atom_min[local_i])
     order = sorted(site_min, key=lambda k: site_min[k])
@@ -289,4 +359,5 @@ def binding_site(
         residues=[site_res[k] for k in order],
         min_distances=[site_min[k] for k in order],
         contacts=contacts,
+        residue_atom_indices=[residue_atoms[k] for k in order],
     )
