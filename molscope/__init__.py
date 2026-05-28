@@ -155,4 +155,4 @@ __all__ = [
     "write_pdb",
     "write_xyz",
 ]
-__version__ = "0.8.2"
+__version__ = "0.8.3"
