@@ -7,6 +7,7 @@
 [![Python](https://img.shields.io/badge/python-3.9%20%7C%203.11%20%7C%203.13-blue)](pyproject.toml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](LICENSE)
 [![Code style: Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20433850.svg)](https://doi.org/10.5281/zenodo.20433850)
 
 Lightweight molecular structure analysis, graph export, and coarse-graining in
 Python. MolScope is built around three polished workflows: turn coordinate
@@ -531,6 +532,15 @@ physical invariants (rigid-body algebra, geometry, coarse-grain conservation)
 that run everywhere, plus cross-checks against reference scientific tools (the
 simplified DSSP vs `mkdssp`) that turn "the tests pass" into a measured
 agreement number.
+
+## How to cite
+
+Each release of MolScope is archived on Zenodo with a citable DOI. The concept
+DOI [10.5281/zenodo.20433850](https://doi.org/10.5281/zenodo.20433850) always
+resolves to the latest version; each release also has its own version DOI.
+Machine-readable citation metadata lives in [`CITATION.cff`](CITATION.cff), so
+GitHub's "Cite this repository" button on the sidebar produces BibTeX and APA
+entries automatically.
 
 ## License
 
