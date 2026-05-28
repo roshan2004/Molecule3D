@@ -1,0 +1,4 @@
+# Docs-only requirements consumed by Read the Docs.
+# Mirrors the `docs` dependency group in pyproject.toml; kept as a
+# requirements file because RTD does not yet read PEP 735 groups.
+mkdocs-material>=9.5
