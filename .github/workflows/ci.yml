@@ -29,16 +29,9 @@ jobs:
         run: uv run ruff check .
 
       - name: Test
-        run: uv run pytest -q --cov --cov-report=xml
-
-      - name: Upload coverage to Codecov
-        # Only one matrix leg needs to report; 3.11 is the canonical one.
-        if: matrix.python-version == '3.11'
-        uses: codecov/codecov-action@v5
-        with:
-          files: ./coverage.xml
-          token: ${{ secrets.CODECOV_TOKEN }}
-          fail_ci_if_error: false
+        # Base install (no extras) — proves the suite passes bare. Coverage is
+        # measured separately in the `coverage` job with the backends installed.
+        run: uv run pytest -q
 
   extras-smoke:
     runs-on: ubuntu-latest
@@ -59,6 +52,35 @@ jobs:
 
       - name: Smoke import
         run: uv run python -c "import molscope as ms; print(ms.__version__)"
+
+  coverage:
+    # Authoritative coverage run: install the optional backends so the rdkit,
+    # gemmi, networkx, scipy and torch/PyG code paths actually execute instead
+    # of being skipped. dgl is intentionally omitted — it ships no Linux wheel
+    # on PyPI, so its exporter stays uncovered.
+    runs-on: ubuntu-latest
+    env:
+      MPLBACKEND: Agg
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Test with coverage
+        run: >
+          uv run --python 3.11
+          --extra chem --extra cif --extra graph --extra fast --extra pyg --extra viz
+          pytest -q --cov --cov-report=xml
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          files: ./coverage.xml
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false
 
   validation:
     # Tier-2 cross-checks against reference scientific tools (tests/validation).
