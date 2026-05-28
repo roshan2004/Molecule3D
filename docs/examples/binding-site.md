@@ -23,6 +23,18 @@ for res, dist in zip(site.residues, site.min_distances):
 # A:SER195   3.65   <- catalytic serine
 ```
 
+For quick figures or reports, convert the site to table-friendly residue
+records and extract descriptors for only the site residues:
+
+```python
+site.to_records()[0]
+# {'chain': 'A', 'resid': 219, 'resname': 'GLY',
+#  'min_distance': 2.815..., 'n_atom_contacts': 5}
+
+site_mol = site.to_molecule(mol)
+site_mol.descriptors(preset="native-basic")
+```
+
 When a structure has several ligands, select one by residue name or location:
 
 ```python

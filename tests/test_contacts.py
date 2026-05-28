@@ -87,6 +87,32 @@ def test_binding_site_synthetic():
     assert [r.resid for r in bs.residues] == [1]            # only res 1 is within 4.5 A
     assert bs.min_distances[0] == pytest.approx(2.0)
     assert all(p < q for p, q in zip(bs.min_distances, bs.min_distances[1:]))
+    assert bs.n_atom_contacts == 1
+    assert bs.residue_contact_counts == [1]
+    assert bs.to_records() == [{
+        "chain": "A",
+        "resid": 1,
+        "resname": "ALA",
+        "min_distance": 2.0,
+        "n_atom_contacts": 1,
+    }]
+
+
+def test_binding_site_can_select_full_site_residues():
+    mol = Molecule(
+        np.array([[0.0, 0, 0], [8.0, 0, 0], [10.0, 0, 0], [2.0, 0, 0]]),
+        ["C", "C", "C", "N"],
+        atom_names=["CA", "CB", "CA", "N1"],
+        resnames=["ALA", "ALA", "GLY", "LIG"],
+        resids=np.array([1, 1, 2, 100]),
+        chains=["A", "A", "A", "A"],
+        hetero=[False, False, False, True],
+    )
+    bs = mol.binding_site(cutoff=4.5)
+    assert bs.contact_atom_indices == [0]
+    assert bs.protein_atom_indices == [0, 1]
+    assert len(bs.to_molecule(mol)) == 2
+    assert len(bs.to_molecule(mol, include_ligand=True)) == 3
 
 
 def test_binding_site_ambiguous_requires_explicit_ligand():

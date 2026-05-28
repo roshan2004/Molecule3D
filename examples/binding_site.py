@@ -30,7 +30,27 @@ def main():
     for res, dist in zip(site.residues, site.min_distances):
         print(f"  {res!s:<10} {dist:.2f} A")
 
-    # 3. Secondary-structure overview of the protein.
+    # 3. A table-friendly view for quick figures or reports.
+    print("\nPer-residue contact table:")
+    for row in site.to_records():
+        label = f"{row['chain']}:{row['resname']}{row['resid']}"
+        print(
+            f"  {label:<10} {row['min_distance']:.2f} A  "
+            f"{row['n_atom_contacts']:>3} atom contacts"
+        )
+
+    # 4. Descriptor extraction for just the binding-site residues.
+    site_mol = site.to_molecule(mol)
+    site_desc = site_mol.descriptors(preset="native-basic")
+    print(
+        "\nBinding-site descriptors: "
+        f"{int(site_desc['n_atoms'])} atoms, "
+        f"{int(site_desc['n_residues'])} residues, "
+        f"Rg {site_desc['radius_of_gyration']:.2f} A, "
+        f"{int(site_desc['atom_contact_count'])} atom contacts"
+    )
+
+    # 5. Secondary-structure overview of the protein.
     ss = mol.secondary_structure()
     summary = ss.summary()
     print(

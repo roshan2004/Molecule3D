@@ -132,6 +132,12 @@ for res, d in zip(site.residues, site.min_distances):
 # A:ASP189 2.87   <- the benzamidine specificity residue
 # A:SER190 3.04
 # ...
+
+site.n_atom_contacts                         # protein-ligand atom contacts
+site.to_records()                            # table-ready residue rows
+site.to_molecule(mol).descriptors(
+    preset="native-basic"
+)                                            # descriptors for site residues
 ```
 
 When several ligands are present, name one explicitly:
