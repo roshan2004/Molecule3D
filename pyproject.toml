@@ -51,7 +51,7 @@ gnn = [
 [project.urls]
 Homepage = "https://github.com/roshan2004/molscope"
 Repository = "https://github.com/roshan2004/molscope"
-Documentation = "https://roshan2004.github.io/molscope/"
+Documentation = "https://molscope.readthedocs.io/"
 Issues = "https://github.com/roshan2004/molscope/issues"
 
 [project.scripts]

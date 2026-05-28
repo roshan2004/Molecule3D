@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/roshan2004/molscope/actions/workflows/ci.yml/badge.svg)](https://github.com/roshan2004/molscope/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/roshan2004/molscope/branch/main/graph/badge.svg)](https://codecov.io/gh/roshan2004/molscope)
-[![Docs](https://img.shields.io/badge/docs-MkDocs%20Material-blue)](https://roshan2004.github.io/molscope/)
+[![Docs](https://readthedocs.org/projects/molscope/badge/?version=latest)](https://molscope.readthedocs.io/en/latest/)
 [![PyPI](https://img.shields.io/pypi/v/molscope.svg)](https://pypi.org/project/molscope/)
 [![Python](https://img.shields.io/badge/python-3.9%20%7C%203.11%20%7C%203.13-blue)](pyproject.toml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](LICENSE)
