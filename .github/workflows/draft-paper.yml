@@ -1,0 +1,36 @@
+name: Draft JOSS paper
+
+# Builds a PDF of the JOSS paper via the openjournals draft action.
+# Triggers only on changes to the paper itself so it stays out of the way
+# of the main CI pipeline. The PDF is uploaded as a workflow artifact;
+# download it from the run's summary page to preview before submission.
+
+on:
+  push:
+    paths:
+      - 'paper/**'
+      - '.github/workflows/draft-paper.yml'
+  pull_request:
+    paths:
+      - 'paper/**'
+      - '.github/workflows/draft-paper.yml'
+  workflow_dispatch:
+
+jobs:
+  paper:
+    runs-on: ubuntu-latest
+    name: Build paper draft PDF
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Build draft PDF
+        uses: openjournals/openjournals-draft-action@master
+        with:
+          journal: joss
+          paper-path: paper/paper.md
+
+      - name: Upload paper PDF as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: paper
+          path: paper/paper.pdf

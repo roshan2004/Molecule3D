@@ -1,0 +1,27 @@
+{
+  "title": "MolScope: lightweight molecular structure analysis, graph export, and coarse-graining in Python",
+  "description": "MolScope is a lightweight Python toolkit for static molecular structure analysis, graph export, and coarse-graining. It reads XYZ, PDB, mmCIF, and SDF files, computes geometry, contacts, and a dependency-free DSSP-style secondary structure assignment, and exposes three workflow-shaped outputs: fixed-width structural descriptor tables, atom-and-bond or residue-contact graphs (with NetworkX, PyTorch Geometric, and DGL exporters), and coarse-grained bead representations with simple connectivity. The base install requires only NumPy and matplotlib; chemistry, file-format, and graph-backend dependencies are optional extras that are pulled in only when the relevant feature is used.",
+  "creators": [
+    {
+      "name": "Shrestha, Roshan",
+      "orcid": "0000-0002-9356-5136",
+      "affiliation": "Independent Researcher"
+    }
+  ],
+  "keywords": [
+    "chemistry",
+    "molecular-structure",
+    "pdb",
+    "xyz",
+    "mmcif",
+    "coarse-graining",
+    "molecular-graphs",
+    "graph-neural-networks",
+    "machine-learning",
+    "visualization",
+    "python"
+  ],
+  "license": "MIT",
+  "upload_type": "software",
+  "access_right": "open"
+}
