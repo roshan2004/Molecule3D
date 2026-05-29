@@ -1,9 +1,41 @@
 """Tests for optional RDKit-backed chemical perception."""
 
+import os
+
 import numpy as np
 import pytest
 
+import molscope as ms
 from molscope import ChemicalFeatures, Molecule
+
+DATA = os.path.join(os.path.dirname(os.path.dirname(__file__)), "examples", "data")
+
+
+def test_pdb_template_bonds_perceive_aromatic_rings():
+    """Residue templates recover aromaticity that geometric bonds miss."""
+    pytest.importorskip("rdkit")
+    path = os.path.join(DATA, "1ubq.pdb")
+
+    geometric = ms.read(path)
+    template = ms.read(path, bond_perception="template")
+    assert template.bond_index is not None
+
+    geo_arom = int(sum(bool(a) for a in geometric.chemical_features().aromatic_atoms))
+    tpl_arom = int(sum(bool(a) for a in template.chemical_features().aromatic_atoms))
+    assert geo_arom == 0  # geometric single bonds carry no aromatic perception
+    assert tpl_arom >= 20  # Phe/Tyr/His rings of ubiquitin
+
+
+def test_pdb_template_bonds_returns_aligned_arrays():
+    pytest.importorskip("rdkit")
+    from molscope.chem import pdb_template_bonds
+
+    path = os.path.join(DATA, "1ubq.pdb")
+    bond_index, bond_orders, charges = pdb_template_bonds(path, ms.read(path))
+    assert bond_index.shape[1] == 2
+    assert len(bond_orders) == len(bond_index)
+    assert len(charges) == 660
+    assert set(np.unique(bond_orders)).issubset({1.0, 2.0, 3.0})  # Kekule, no 1.5
 
 
 def test_chemical_features_require_rdkit():

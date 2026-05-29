@@ -11,6 +11,14 @@ API changes; these are called out under **Changed** where they occur.
 
 ### Added
 
+- Residue-template bond perception for proteins: ``read``/``read_pdb``/``fetch``
+  accept ``bond_perception="template"``, which uses RDKit's residue-aware PDB
+  reader to attach explicit bonds, Kekule bond orders, and formal charges for
+  standard residues (needs the ``chem`` extra). This fixes aromaticity and bond
+  orders that geometric distance inference cannot recover, so RDKit-backed
+  descriptors and ``chemical_features`` are correct on proteins. The MCP
+  ``chemical_features`` tool now defaults to template perception for PDB inputs.
+  Default behaviour of ``read`` elsewhere is unchanged (still ``"geometric"``).
 - The MCP render tools (`render_structure`, `render_contact_map`,
   `render_distance_matrix`, `render_rmsd_heatmap`) now take an optional
   `save_path`: when given, the figure is written to disk and the tool returns the

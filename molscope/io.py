@@ -32,15 +32,19 @@ def _parse_error(path, fmt: str, detail: str, lineno: Optional[int] = None) -> V
     return ValueError(f"{path}: invalid {fmt} file{where}: {detail}")
 
 
-def read(path: str) -> Molecule:
+def read(path: str, bond_perception: str = "geometric") -> Molecule:
     """Read a molecule, picking the parser from the file extension.
 
     Transparently handles gzip-compressed files (``.pdb.gz``, ``.xyz.gz``).
+    ``bond_perception="template"`` requests RDKit residue-template bonds and is
+    only supported for ``.pdb`` files (see :func:`read_pdb`).
     """
     path = os.fspath(path)
     ext = _data_extension(path)
     if ext == ".pdb":
-        return read_pdb(path)
+        return read_pdb(path, bond_perception=bond_perception)
+    if bond_perception != "geometric":
+        raise ValueError("bond_perception='template' is only supported for .pdb files")
     if ext == ".xyz":
         return read_xyz(path)
     if ext in (".cif", ".mmcif"):
@@ -50,11 +54,16 @@ def read(path: str) -> Molecule:
     raise ValueError(f"Unsupported file type {ext!r}; expected .pdb/.xyz/.cif/.sdf")
 
 
-def fetch(pdb_id: str, fmt: str = "pdb", cache_dir: Optional[str] = None) -> Molecule:
+def fetch(
+    pdb_id: str, fmt: str = "pdb", cache_dir: Optional[str] = None,
+    bond_perception: str = "geometric",
+) -> Molecule:
     """Download a structure from RCSB by its PDB id and read it.
 
     ``fmt`` is ``"pdb"`` or ``"cif"``. Files are cached (default: the system temp
     directory) so repeat calls don't re-download. Example: ``ms.fetch("1fqy")``.
+    ``bond_perception="template"`` attaches RDKit residue-template bonds and
+    needs ``fmt="pdb"`` (see :func:`read_pdb`).
     """
     fmt = fmt.lower()
     if fmt not in ("pdb", "cif"):
@@ -78,7 +87,7 @@ def fetch(pdb_id: str, fmt: str = "pdb", cache_dir: Optional[str] = None) -> Mol
             raise ValueError(f"could not reach RCSB to download {url}: {exc.reason}") from exc
         with open(dest, "wb") as fh:
             fh.write(data)
-    return read(dest)
+    return read(dest, bond_perception=bond_perception)
 
 
 def read_xyz(path: str) -> Molecule:
@@ -123,7 +132,9 @@ def read_xyz_frames(path: str) -> list[Molecule]:
     return frames
 
 
-def read_pdb(path: str, model: int = 1, altloc: str = "primary") -> Molecule:
+def read_pdb(
+    path: str, model: int = 1, altloc: str = "primary", bond_perception: str = "geometric"
+) -> Molecule:
     """Read ``ATOM``/``HETATM`` records from a ``.pdb`` file.
 
     Coordinates, element, atom name, residue name/id and chain are sliced from
@@ -133,6 +144,13 @@ def read_pdb(path: str, model: int = 1, altloc: str = "primary") -> Molecule:
     the largest occupancy, and ``"all"`` keeps every alternate. For multi-model
     (NMR) files the 1-based ``model`` is returned; files without ``MODEL``
     records are read in full.
+
+    ``bond_perception`` chooses how bonds are assigned: ``"geometric"`` (the
+    default) leaves connectivity to later distance-based inference, while
+    ``"template"`` uses RDKit's residue-aware perception to attach explicit bonds
+    and bond orders for standard residues (needs the ``chem`` extra). Template
+    bonds make aromaticity, double bonds, and RDKit-backed features correct for
+    proteins, where geometric inference yields single bonds only.
     """
     models, unit_cell = _parse_pdb_models(path, altloc=altloc)
     if not models:
@@ -140,7 +158,18 @@ def read_pdb(path: str, model: int = 1, altloc: str = "primary") -> Molecule:
     if not 1 <= model <= len(models):
         raise ValueError(f"model {model} out of range (1..{len(models)})")
     mol = _molecule_from_record(models[model - 1], _stem(path))
-    return replace(mol, unit_cell=unit_cell)
+    mol = replace(mol, unit_cell=unit_cell)
+    if bond_perception == "template":
+        from .chem import pdb_template_bonds
+
+        bond_index, bond_orders, formal_charges = pdb_template_bonds(path, mol)
+        mol = replace(
+            mol, bond_index=bond_index, bond_orders=bond_orders,
+            formal_charges=formal_charges,
+        )
+    elif bond_perception != "geometric":
+        raise ValueError("bond_perception must be 'geometric' or 'template'")
+    return mol
 
 
 def read_pdb_models(path: str, altloc: str = "primary") -> list[Molecule]:
