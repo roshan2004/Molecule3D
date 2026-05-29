@@ -34,6 +34,7 @@ nav:
       - Chemical perception: user-guide/chemical-perception.md
       - Structural descriptors: user-guide/descriptors.md
       - Coarse-graining: user-guide/coarse-graining.md
+      - MCP server (AI assistants): user-guide/mcp-server.md
   - Examples:
       - Overview: examples/index.md
       - Molecular geometry tour: examples/geometry-tour.md

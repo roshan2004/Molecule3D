@@ -11,6 +11,12 @@ API changes; these are called out under **Changed** where they occur.
 
 ### Added
 
+- Optional MCP (Model Context Protocol) server, `molscope.mcp_server`, exposing
+  MolScope's analyses as tools for AI assistants such as Claude Code and Claude
+  Desktop. Adds a `molscope-mcp` console script, an `mcp` extra
+  (`pip install "molscope[mcp]"`, Python >= 3.10), and nine read-only tools that
+  wrap the existing API: summarise, descriptors, secondary structure, contact
+  map, binding site, molecular graph, coarse-grain, and two PNG render tools.
 - Broadened the DSSP reference cross-check to three fold classes instead of one:
   helix-dominated Aquaporin-1 (`1fqy`), mixed alpha/beta ubiquitin (`1ubq`), and
   the all-beta SH3 domain (`1shg`). The test is parametrised and prints

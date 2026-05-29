@@ -503,6 +503,38 @@ molscope export "data/*.cif" --to pyg --out-dir pyg_graphs/ --pe laplacian --job
 ```
 Supports advanced features like `--self-loops`, `--global-node`, and `--pe` (positional encodings).
 
+## Use from an AI assistant (MCP)
+
+MolScope ships an optional [Model Context Protocol](https://modelcontextprotocol.io)
+server, so an AI assistant such as Claude Code or Claude Desktop can drive its
+analyses in natural language. The server exposes MolScope's existing features as
+MCP tools; it adds no new science, just an adapter layer over the public API.
+
+```bash
+pip install "molscope[mcp]"             # needs Python >= 3.10
+claude mcp add molscope -- molscope-mcp  # register with Claude Code
+```
+
+The server runs over stdio (`molscope-mcp`, or `python -m molscope.mcp_server`)
+and provides these tools:
+
+| Tool | What it does |
+| --- | --- |
+| `summarize_structure` | Load a file or PDB id and report atoms, formula, chains, size. |
+| `compute_descriptors` | Descriptor table across one or more structures (the batch tool). |
+| `secondary_structure` | Per-residue DSSP codes and helix/strand/coil composition. |
+| `contact_map` | Contact count, contact order, and labelled contacting pairs. |
+| `binding_site` | Protein residues around a ligand, closest first. |
+| `molecular_graph` | Node/edge counts and feature names for the ML graph. |
+| `coarse_grain` | Bead assignment statistics for a coarse-grained mapping. |
+| `render_structure`, `render_contact_map` | Return PNG figures. |
+
+Each tool takes a `source` that is either a local coordinate-file path or a
+4-character PDB id (fetched from RCSB). For example, you can ask the assistant to
+*"fetch trypsin (3ptb), find the benzamidine binding-site residues, and render a
+contact map"*, and it will call `binding_site` then `render_contact_map`. See
+[`docs/user-guide/mcp-server.md`](docs/user-guide/mcp-server.md) for the full
+guide.
 
 ## Sample structures
 
