@@ -217,3 +217,73 @@ def test_binding_site_on_trypsin_benzamidine():
     # The benzamidine S1 pocket: Asp189 (specificity), Ser190, Gly219, Ser195.
     assert {189, 190, 195, 219} <= resids
     assert bs.min_distances == sorted(bs.min_distances)
+
+
+# -- rich residue identity on contact records -------------------------------
+
+
+def test_residue_repr_icode_and_residue_id():
+    res = ms.Residue("A", 100, "SER", insertion_code="A")
+    assert res.icode == "A"
+    assert res.residue_id.label() == "A:SER100A"
+    assert repr(res) == "A:SER100A"
+    # Empty chain drops the chain prefix.
+    assert repr(ms.Residue("", 5, "GLY")) == "GLY5"
+
+
+def test_ligand_residue_repr_icode_and_residue_id():
+    lig = ms.LigandResidue("A", 10, "LIG", [0, 1], insertion_code="C")
+    assert lig.icode == "C"
+    assert len(lig) == 2
+    assert lig.residue_id.label() == "A:LIG10C"
+    assert repr(lig) == "LigandResidue(A:LIG10C, 2 atoms)"
+
+
+def test_resolve_ligand_by_residue_id_and_residue_objects():
+    mol = ms.read(os.path.join(FIXTURES, "ugly_residue_ids.pdb"))
+    by_rid = mol.binding_site(ligand=ms.ResidueId("A", 10), cutoff=2.0)
+    assert by_rid.ligand.residue_id.label() == "A:LIG10"
+    by_res = mol.binding_site(ligand=ms.Residue("B", 10, "LIG"), cutoff=2.0)
+    assert by_res.ligand.chain == "B"
+
+
+def test_resolve_ligand_by_tuple_with_icode_and_resname():
+    mol = ms.read(os.path.join(FIXTURES, "ugly_residue_ids.pdb"))
+    assert mol.binding_site(ligand=("A", 10, ""), cutoff=2.0).ligand.chain == "A"
+    site = mol.binding_site(ligand=("A", 10, "", "LIG"), cutoff=2.0)
+    assert site.ligand.resname == "LIG"
+
+
+def test_resolve_ligand_passthrough_for_ligand_residue():
+    mol = ms.read(os.path.join(FIXTURES, "ugly_residue_ids.pdb"))
+    target = mol.ligands()[0]
+    assert mol.binding_site(ligand=target, cutoff=2.0).ligand is target
+
+
+def test_resolve_ligand_no_match_raises():
+    mol = ms.read(os.path.join(FIXTURES, "ugly_residue_ids.pdb"))
+    with pytest.raises(ValueError, match="no HETATM group matching"):
+        mol.binding_site(ligand=("Z", 99), cutoff=2.0)
+    # Right chain/resid but a non-matching insertion code or resname misses too.
+    with pytest.raises(ValueError, match="no HETATM group matching"):
+        mol.binding_site(ligand=("A", 10, "Z"), cutoff=2.0)
+    with pytest.raises(ValueError, match="no HETATM group matching"):
+        mol.binding_site(ligand=("A", 10, "", "WAT"), cutoff=2.0)
+    with pytest.raises(ValueError, match="no HETATM group with resname"):
+        mol.binding_site(ligand="XXX", cutoff=2.0)
+
+
+def test_resolve_ligand_ambiguous_selector_reports_all_matches():
+    # Two HETATM groups share chain+resid but differ in resname, so a bare
+    # (chain, resid) selector cannot disambiguate them.
+    mol = Molecule(
+        np.array([[0.0, 0, 0], [2.0, 0, 0], [2.5, 0, 0]]),
+        ["C", "C", "O"],
+        atom_names=["CA", "C1", "O1"],
+        resnames=["ALA", "LIG", "DRG"],
+        resids=np.array([1, 50, 50]),
+        chains=["A", "X", "X"],
+        hetero=[False, True, True],
+    )
+    with pytest.raises(ValueError, match="matches multiple groups"):
+        mol.binding_site(ligand=("X", 50), cutoff=3.0)

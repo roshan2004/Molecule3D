@@ -95,3 +95,98 @@ def test_binding_site_unknown_ligand_reports_error(tmp_path, capsys):
     assert rc == 2
     assert not out.exists()
     assert "Binding-site analysis failed" in capsys.readouterr().err
+
+
+XYZ = os.path.join(DATA, "helix_201.xyz")
+
+
+def test_view_saves_figure_with_transforms(tmp_path):
+    import matplotlib
+
+    matplotlib.use("Agg")
+    out = tmp_path / "view.png"
+    rc = main([
+        "view", XYZ, "--save", str(out),
+        "--center", "--translate", "1", "0", "0", "--rotate", "z", "90",
+    ])
+    assert rc == 0
+    assert out.exists() and out.stat().st_size > 0
+
+
+def test_view_without_save_renders(capsys):
+    import matplotlib
+
+    matplotlib.use("Agg")
+    rc = main(["view", XYZ])
+    assert rc == 0
+    assert capsys.readouterr().out.strip()  # prints the molecule summary
+
+
+def test_view_with_selection_saves(tmp_path):
+    import matplotlib
+
+    matplotlib.use("Agg")
+    out = tmp_path / "ca.png"
+    rc = main(["view", os.path.join(DATA, "3ptb.pdb"), "--select", "atom_name=CA",
+               "--save", str(out)])
+    assert rc == 0
+    assert out.exists()
+
+
+def test_view_gif(tmp_path):
+    import matplotlib
+
+    matplotlib.use("Agg")
+    out = tmp_path / "spin.gif"
+    rc = main(["view", XYZ, "--gif", str(out)])
+    assert rc == 0
+    assert out.exists() and out.stat().st_size > 0
+
+
+def test_view_invalid_selection_syntax_returns_2(capsys):
+    rc = main(["view", XYZ, "--select", "bogus"])
+    assert rc == 2
+    assert "Invalid --select" in capsys.readouterr().err
+
+
+def test_view_selection_on_missing_metadata_returns_2(capsys):
+    # XYZ carries no chain information, so a valid-syntax chain filter fails.
+    rc = main(["view", XYZ, "--select", "chain=A"])
+    assert rc == 2
+    assert "Selection failed" in capsys.readouterr().err
+
+
+def test_analyze_reports_unreadable_files_and_returns_1(tmp_path, capsys):
+    out = tmp_path / "out.csv"
+    rc = main(["analyze", str(tmp_path / "missing.pdb"), "--out", str(out), "--jobs", "1"])
+    assert rc == 1
+    captured = capsys.readouterr()
+    assert "Error processing" in captured.err
+    assert "No results to save" in captured.out
+    assert not out.exists()
+
+
+def test_binding_site_without_descriptors(tmp_path):
+    out = tmp_path / "site.csv"
+    rc = main(["binding-site", os.path.join(DATA, "3ptb.pdb"), "--out", str(out),
+               "--cutoff", "4.5"])
+    assert rc == 0
+    rows = _read_csv(out)
+    assert rows and "residue_id" in rows[0]
+
+
+def test_export_nx_serial(tmp_path):
+    pytest.importorskip("networkx")
+    out_dir = tmp_path / "graphs"
+    rc = main(["export", os.path.join(DATA, "1fqy.pdb"), "--to", "nx",
+               "--out-dir", str(out_dir), "--jobs", "1"])
+    assert rc == 0
+    assert (out_dir / "1fqy.json").exists()
+
+
+def test_expand_globs_matches_pattern():
+    from molscope.cli import _expand_globs
+
+    paths = _expand_globs([os.path.join(DATA, "*.pdb")])
+    assert os.path.join(DATA, "3ptb.pdb") in paths
+    assert all(p.endswith(".pdb") for p in paths)
