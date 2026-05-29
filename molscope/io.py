@@ -93,6 +93,68 @@ def fetch(
     return read(dest, bond_perception=bond_perception, protonation=protonation)
 
 
+def read_smiles(smiles: str, *, name: Optional[str] = None, add_hs: bool = True,
+                seed: int = 0) -> Molecule:
+    """Build a :class:`Molecule` from a SMILES string by generating one conformer.
+
+    The bonds, Kekule bond orders, and formal charges come from RDKit; the
+    coordinates are a single **generated** 3D conformer (RDKit ETKDG), *not* an
+    experimental or energy-minimised structure. This makes it a good input for
+    descriptors and graph-ML (where topology is what matters), but treat
+    geometry-dependent results (contact maps, RMSD against experiment, precise
+    distances) with care.
+
+    Needs RDKit (``pip install "molscope[chem]"``). ``add_hs`` keeps explicit
+    hydrogens (recommended for embedding quality); ``seed`` makes the conformer
+    reproducible. Raises :class:`ValueError` for an invalid SMILES or if a 3D
+    conformer cannot be embedded.
+    """
+    from .chem import _require_rdkit
+
+    Chem, _ = _require_rdkit()
+    from rdkit import RDLogger
+    from rdkit.Chem import AllChem
+
+    RDLogger.DisableLog("rdApp.*")  # silence per-parse errors; we raise our own
+    try:
+        rdmol = Chem.MolFromSmiles(str(smiles))
+    finally:
+        RDLogger.EnableLog("rdApp.*")
+    if rdmol is None:
+        raise ValueError(f"invalid SMILES: {smiles!r}")
+
+    rdmol = Chem.AddHs(rdmol)
+    params = AllChem.ETKDGv3()
+    params.randomSeed = seed
+    if AllChem.EmbedMolecule(rdmol, params) != 0:
+        params.useRandomCoords = True
+        if AllChem.EmbedMolecule(rdmol, params) != 0:
+            raise ValueError(f"RDKit could not embed a 3D conformer for {smiles!r}")
+    if not add_hs:
+        rdmol = Chem.RemoveHs(rdmol)
+    # Kekulise so aromatic rings round-trip as explicit single/double bonds.
+    Chem.Kekulize(rdmol, clearAromaticFlags=True)
+
+    conf = rdmol.GetConformer()
+    coords = np.array(
+        [[conf.GetAtomPosition(i).x, conf.GetAtomPosition(i).y, conf.GetAtomPosition(i).z]
+         for i in range(rdmol.GetNumAtoms())],
+        dtype=float,
+    ).reshape(-1, 3)
+    elements = [atom.GetSymbol() for atom in rdmol.GetAtoms()]
+    charges = np.array([atom.GetFormalCharge() for atom in rdmol.GetAtoms()], dtype=int)
+    bond_index = np.array(
+        [(b.GetBeginAtomIdx(), b.GetEndAtomIdx()) for b in rdmol.GetBonds()], dtype=int
+    ).reshape(-1, 2)
+    bond_orders = np.array(
+        [float(b.GetBondTypeAsDouble()) for b in rdmol.GetBonds()], dtype=float
+    )
+    return Molecule(
+        coords, elements, name=name or f"smiles:{smiles}",
+        bond_index=bond_index, bond_orders=bond_orders, formal_charges=charges,
+    )
+
+
 def read_xyz(path: str) -> Molecule:
     """Read a single-frame ``.xyz`` file.
 

@@ -121,7 +121,7 @@ user-guide page:
 
 | Capability | Guide |
 | --- | --- |
-| Read/write XYZ, PDB, mmCIF, SDF; fetch from RCSB | [Reading files](docs/user-guide/reading-files.md) |
+| Read/write XYZ, PDB, mmCIF, SDF; fetch from RCSB; build from SMILES | [Reading files](docs/user-guide/reading-files.md) |
 | Select atoms by metadata | [Selections](docs/user-guide/selections.md) |
 | Geometry, RMSD, measurements | [Geometry and measurements](docs/user-guide/geometry.md) |
 | Contact maps and distance matrices | [Contact maps](docs/user-guide/contact-maps.md) |
