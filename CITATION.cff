@@ -7,7 +7,7 @@ authors:
     given-names: Roshan
     orcid: "https://orcid.org/0000-0002-9356-5136"
     affiliation: "Independent Researcher"
-version: 0.9.0
+version: 0.10.0
 date-released: "2026-05-29"
 license: MIT
 doi: 10.5281/zenodo.20433850
