@@ -1,4 +1,8 @@
-# MolScope
+<p align="center">
+  <img src="https://raw.githubusercontent.com/roshan2004/molscope/main/docs/assets/logo.svg" alt="MolScope logo" width="180">
+</p>
+
+<h1 align="center">MolScope</h1>
 
 [![CI](https://github.com/roshan2004/molscope/actions/workflows/ci.yml/badge.svg)](https://github.com/roshan2004/molscope/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/roshan2004/molscope/branch/main/graph/badge.svg)](https://codecov.io/gh/roshan2004/molscope)

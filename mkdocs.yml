@@ -6,6 +6,8 @@ repo_name: roshan2004/molscope
 
 theme:
   name: material
+  logo: assets/logo.svg
+  favicon: assets/logo.svg
   features:
     - navigation.sections
     - navigation.indexes
