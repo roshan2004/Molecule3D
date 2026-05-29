@@ -19,6 +19,15 @@ API changes; these are called out under **Changed** where they occur.
   descriptors and ``chemical_features`` are correct on proteins. The MCP
   ``chemical_features`` tool now defaults to template perception for PDB inputs.
   Default behaviour of ``read`` elsewhere is unchanged (still ``"geometric"``).
+  A Tier-2 validation test cross-checks perceived aromaticity against the known
+  per-residue chemistry (Phe/Tyr 6, Trp 9, His 5 aromatic atoms).
+- Idealised standard protonation: ``protonation="standard"`` (with template
+  bonds) assigns pH-7 side-chain charges for standard residues (Asp/Glu -1,
+  Lys/Arg +1, His neutral, termini uncharged; see
+  ``molscope.chem.STANDARD_PROTONATION``), so ``formal_charges`` is meaningful
+  (e.g. trypsin nets +6) instead of uniformly zero. The MCP ``chemical_features``
+  tool defaults to it and labels the assignment. It is a textbook model, not a
+  pKa-aware prediction; the default stays ``"none"`` (as-modelled neutral).
 - The MCP render tools (`render_structure`, `render_contact_map`,
   `render_distance_matrix`, `render_rmsd_heatmap`) now take an optional
   `save_path`: when given, the figure is written to disk and the tool returns the

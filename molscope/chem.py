@@ -160,7 +160,22 @@ def to_rdkit(molecule, *, sanitize: bool = True, infer_bonds: bool = True):
     return rdmol, np.asarray(bond_index, dtype=int).reshape(-1, 2)
 
 
-def pdb_template_bonds(path: str, molecule):
+#: Idealised protonation of standard ionisable side chains near pH 7, as a
+#: ``(resname, atom name) -> formal charge`` table. This is a fixed textbook
+#: assignment, NOT a pKa- or environment-aware prediction: aspartate/glutamate
+#: carboxylates are -1, lysine/arginine side chains +1, histidine is left
+#: neutral, and chain termini are not charged. For accurate, environment-aware
+#: protonation use a dedicated tool (PROPKA, H++, Dimorphite-DL, or a
+#: force-field preparation step).
+STANDARD_PROTONATION = {
+    ("ASP", "OD2"): -1,
+    ("GLU", "OE2"): -1,
+    ("LYS", "NZ"): +1,
+    ("ARG", "NH2"): +1,
+}
+
+
+def pdb_template_bonds(path: str, molecule, protonation: str = "none"):
     """Perceive bonds for standard residues via RDKit's residue-aware PDB reader.
 
     RDKit's PDB parser assigns bonds *and bond orders* for standard amino acids
@@ -177,7 +192,16 @@ def pdb_template_bonds(path: str, molecule):
     alternate location RDKit dropped, or a non-standard atom) is skipped. Needs
     RDKit (``pip install "molscope[chem]"``) and only helps for standard
     residues; modified residues and exotic ligands stay best-effort.
+
+    ``protonation`` controls side-chain charges: ``"none"`` (default) keeps the
+    as-modelled neutral state RDKit reads from the coordinates, while
+    ``"standard"`` applies the idealised pH-7 assignment in
+    :data:`STANDARD_PROTONATION` (aspartate/glutamate -1, lysine/arginine +1,
+    histidine neutral, termini uncharged). The latter is a fixed textbook model,
+    not a pKa-aware prediction.
     """
+    if protonation not in ("none", "standard"):
+        raise ValueError("protonation must be 'none' or 'standard'")
     Chem, _ = _require_rdkit()
     rdmol = Chem.MolFromPDBFile(path, removeHs=False, sanitize=True)
     if rdmol is None:
@@ -207,6 +231,14 @@ def pdb_template_bonds(path: str, molecule):
         if ms_index is not None:
             rd_to_ms[atom.GetIdx()] = ms_index
             charges[ms_index] = atom.GetFormalCharge()
+
+    if protonation == "standard":
+        for i in range(n):
+            charge = STANDARD_PROTONATION.get(
+                (str(molecule.resnames[i]).strip(), str(molecule.atom_names[i]).strip())
+            )
+            if charge is not None:
+                charges[i] = charge
 
     pairs, orders = [], []
     for bond in rdmol.GetBonds():

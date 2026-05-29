@@ -57,3 +57,23 @@ ligands, and exotic chemistry still fall back to best-effort perception. This is
 **not** a force field, just template-based connectivity and bond orders; for
 energies and parameters use a dedicated force-field tool. The default stays
 `"geometric"`, so nothing changes unless you opt in.
+
+### Protonation and formal charges
+
+A crystallographic PDB models heavy atoms only, so RDKit reads every residue as
+neutral and `chemical_features().formal_charges` sums to zero — faithful to the
+file, but not the ionisation state at physiological pH. Add
+`protonation="standard"` (with template bonds) for an idealised pH-7 assignment
+of the standard ionisable side chains:
+
+```python
+mol = ms.read("protein.pdb", bond_perception="template", protonation="standard")
+mol.chemical_features().formal_charges.sum()   # e.g. +6 for trypsin
+```
+
+The fixed assignment is aspartate/glutamate `-1`, lysine/arginine `+1`,
+histidine neutral, and termini uncharged (see `molscope.chem.STANDARD_PROTONATION`).
+It is a textbook model, **not** a pKa- or environment-aware prediction: it ignores
+local pKa shifts, buried or metal-coordinating residues, and termini. For
+accurate protonation use a dedicated tool such as PROPKA, H++, or Dimorphite-DL.
+The default `"none"` keeps the as-modelled neutral state.

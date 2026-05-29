@@ -32,19 +32,22 @@ def _parse_error(path, fmt: str, detail: str, lineno: Optional[int] = None) -> V
     return ValueError(f"{path}: invalid {fmt} file{where}: {detail}")
 
 
-def read(path: str, bond_perception: str = "geometric") -> Molecule:
+def read(path: str, bond_perception: str = "geometric", protonation: str = "none") -> Molecule:
     """Read a molecule, picking the parser from the file extension.
 
     Transparently handles gzip-compressed files (``.pdb.gz``, ``.xyz.gz``).
-    ``bond_perception="template"`` requests RDKit residue-template bonds and is
-    only supported for ``.pdb`` files (see :func:`read_pdb`).
+    ``bond_perception="template"`` (with optional ``protonation="standard"``)
+    requests RDKit residue-template bonds and is only supported for ``.pdb``
+    files (see :func:`read_pdb`).
     """
     path = os.fspath(path)
     ext = _data_extension(path)
     if ext == ".pdb":
-        return read_pdb(path, bond_perception=bond_perception)
-    if bond_perception != "geometric":
-        raise ValueError("bond_perception='template' is only supported for .pdb files")
+        return read_pdb(path, bond_perception=bond_perception, protonation=protonation)
+    if bond_perception != "geometric" or protonation != "none":
+        raise ValueError(
+            "bond_perception='template'/protonation are only supported for .pdb files"
+        )
     if ext == ".xyz":
         return read_xyz(path)
     if ext in (".cif", ".mmcif"):
@@ -56,7 +59,7 @@ def read(path: str, bond_perception: str = "geometric") -> Molecule:
 
 def fetch(
     pdb_id: str, fmt: str = "pdb", cache_dir: Optional[str] = None,
-    bond_perception: str = "geometric",
+    bond_perception: str = "geometric", protonation: str = "none",
 ) -> Molecule:
     """Download a structure from RCSB by its PDB id and read it.
 
@@ -87,7 +90,7 @@ def fetch(
             raise ValueError(f"could not reach RCSB to download {url}: {exc.reason}") from exc
         with open(dest, "wb") as fh:
             fh.write(data)
-    return read(dest, bond_perception=bond_perception)
+    return read(dest, bond_perception=bond_perception, protonation=protonation)
 
 
 def read_xyz(path: str) -> Molecule:
@@ -133,7 +136,8 @@ def read_xyz_frames(path: str) -> list[Molecule]:
 
 
 def read_pdb(
-    path: str, model: int = 1, altloc: str = "primary", bond_perception: str = "geometric"
+    path: str, model: int = 1, altloc: str = "primary", bond_perception: str = "geometric",
+    protonation: str = "none",
 ) -> Molecule:
     """Read ``ATOM``/``HETATM`` records from a ``.pdb`` file.
 
@@ -151,6 +155,11 @@ def read_pdb(
     and bond orders for standard residues (needs the ``chem`` extra). Template
     bonds make aromaticity, double bonds, and RDKit-backed features correct for
     proteins, where geometric inference yields single bonds only.
+
+    ``protonation`` (only with ``bond_perception="template"``) assigns idealised
+    pH-7 side-chain charges for standard residues when set to ``"standard"``; the
+    default ``"none"`` keeps the as-modelled neutral state. See
+    :func:`molscope.chem.pdb_template_bonds`.
     """
     models, unit_cell = _parse_pdb_models(path, altloc=altloc)
     if not models:
@@ -162,13 +171,17 @@ def read_pdb(
     if bond_perception == "template":
         from .chem import pdb_template_bonds
 
-        bond_index, bond_orders, formal_charges = pdb_template_bonds(path, mol)
+        bond_index, bond_orders, formal_charges = pdb_template_bonds(
+            path, mol, protonation=protonation
+        )
         mol = replace(
             mol, bond_index=bond_index, bond_orders=bond_orders,
             formal_charges=formal_charges,
         )
     elif bond_perception != "geometric":
         raise ValueError("bond_perception must be 'geometric' or 'template'")
+    elif protonation != "none":
+        raise ValueError("protonation requires bond_perception='template'")
     return mol
 
 

@@ -38,21 +38,22 @@ if TYPE_CHECKING:  # pragma: no cover - import only for type checkers
 _MAX_ROWS = 2000
 
 
-def _load(source: str, bond_perception: str = "geometric") -> Molecule:
+def _load(source: str, bond_perception: str = "geometric", protonation: str = "none") -> Molecule:
     """Resolve ``source`` to a :class:`~molscope.molecule.Molecule`.
 
     ``source`` is either a path to a local coordinate file (``.pdb``, ``.cif``,
     ``.xyz``, ``.sdf``, optionally gzipped) or a 4-character RCSB PDB id, which
     is fetched and cached. ``bond_perception="template"`` attaches RDKit
-    residue-template bonds (PDB only; see :func:`molscope.read_pdb`).
+    residue-template bonds (PDB only); ``protonation="standard"`` adds idealised
+    pH-7 side-chain charges (see :func:`molscope.read_pdb`).
     """
     from .io import fetch, read
 
     if os.path.exists(source):
-        return read(source, bond_perception=bond_perception)
+        return read(source, bond_perception=bond_perception, protonation=protonation)
     token = source.strip()
     if len(token) == 4 and token.isalnum():
-        return fetch(token, bond_perception=bond_perception)
+        return fetch(token, bond_perception=bond_perception, protonation=protonation)
     raise FileNotFoundError(
         f"{source!r} is neither an existing file nor a 4-character PDB id; "
         "pass a path like 'examples/data/1ubq.pdb' or an id like '1ubq'"
@@ -438,7 +439,9 @@ def build_server():  # noqa: C901 - a flat list of small tool adapters reads cle
         )
 
     @server.tool()
-    def chemical_features(source: str, bond_perception: str = "template") -> str:
+    def chemical_features(
+        source: str, bond_perception: str = "template", protonation: str = "standard"
+    ) -> str:
         """RDKit-perceived per-atom chemistry (needs the ``chem`` extra).
 
         Returns JSON with the formal-charge sum, the number of aromatic atoms and
@@ -447,19 +450,26 @@ def build_server():  # noqa: C901 - a flat list of small tool adapters reads cle
         ``bond_perception`` defaults to ``"template"``, which uses RDKit's
         residue-aware PDB reader so standard-residue proteins get correct bond
         orders and aromatic rings. (Plain distance-based ``"geometric"`` bonds
-        miss all of that on bare PDBs.) Template perception applies to PDB inputs
+        miss all of that on bare PDBs.) ``protonation`` defaults to ``"standard"``
+        (idealised pH-7 side-chain charges: Asp/Glu -1, Lys/Arg +1, His neutral,
+        termini uncharged) so ``total_formal_charge`` is meaningful; pass
+        ``"none"`` for the as-modelled neutral state. Both apply to PDB inputs
         only; other formats fall back to their explicit/geometric bonds.
         """
-        bp = bond_perception
-        if bp == "template" and os.path.exists(source) and not source.lower().endswith(
+        is_pdb = not (os.path.exists(source) and not source.lower().endswith(
             (".pdb", ".pdb.gz", ".ent")
-        ):
-            bp = "geometric"  # templates apply to PDB only; SDF/MOL carry real bonds
-        feats = _load(source, bond_perception=bp).chemical_features()
+        ))
+        bp = bond_perception if is_pdb else "geometric"
+        prot = protonation if (is_pdb and bp == "template") else "none"
+        feats = _load(source, bond_perception=bp, protonation=prot).chemical_features()
         return json.dumps(
             {
                 "n_atoms": int(len(feats.formal_charges)),
                 "total_formal_charge": int(sum(int(c) for c in feats.formal_charges)),
+                "protonation": (
+                    "standard (idealised pH 7, standard side chains only)"
+                    if prot == "standard" else "as-modelled (no protonation assigned)"
+                ),
                 "n_aromatic_atoms": int(sum(bool(a) for a in feats.aromatic_atoms)),
                 "n_bonds": int(len(feats.bond_orders)),
                 "n_aromatic_bonds": int(sum(bool(a) for a in feats.aromatic_bonds)),

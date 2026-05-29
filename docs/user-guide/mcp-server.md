@@ -82,7 +82,7 @@ that is fetched and cached.
 | Tool | Arguments | Returns |
 | --- | --- | --- |
 | `compute_descriptors` | `sources` (list), `preset` | Descriptor table, one row per structure. The batch tool. |
-| `chemical_features` | `source`, `bond_perception` | RDKit formal charges, aromatic atom/bond counts (`chem` extra). Defaults to `"template"` so protein PDBs get correct bond orders and aromatic rings. |
+| `chemical_features` | `source`, `bond_perception`, `protonation` | RDKit formal charges, aromatic atom/bond counts (`chem` extra). Defaults to `"template"` bonds + `"standard"` pH-7 protonation, so protein PDBs get correct bond orders, aromatic rings, and a meaningful net charge. |
 | `molecular_graph` | `source`, `preset`, `include_chemical_features` | Node/edge counts and feature names for the ML graph. |
 
 ### Protein analysis
