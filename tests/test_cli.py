@@ -61,3 +61,28 @@ def test_parse_ligand_accepts_resname_and_location():
 def test_parse_ligand_rejects_bad_location():
     with pytest.raises(ValueError, match="integer resid"):
         _parse_ligand("A:BEN")
+
+
+def test_parse_selection_residue_id_variants():
+    assert _parse_selection("residue_id=A:100") == {"residue_id": ("A", 100)}
+    assert _parse_selection("residue_id=A:100:B") == {"residue_id": ("A", 100, "B")}
+    assert _parse_selection("residue_id=A:100:B:THR") == {
+        "residue_id": ("A", 100, "B", "THR"),
+    }
+
+
+def test_parse_selection_residue_id_rejects_bad_values():
+    with pytest.raises(ValueError, match="chain:resid"):
+        _parse_selection("residue_id=A")
+    with pytest.raises(ValueError, match="integer resid"):
+        _parse_selection("residue_id=A:BEN")
+
+
+def test_parse_ligand_accepts_icode_and_resname():
+    assert _parse_ligand("A:10:B") == ("A", 10, "B")
+    assert _parse_ligand("A:10:B:LIG") == ("A", 10, "B", "LIG")
+
+
+def test_parse_ligand_rejects_too_many_parts():
+    with pytest.raises(ValueError, match="chain:resid"):
+        _parse_ligand("A:10:B:LIG:extra")
