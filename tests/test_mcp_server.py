@@ -57,9 +57,25 @@ EXPECTED_TOOLS = {
     "binding_site",
     "molecular_graph",
     "coarse_grain",
+    "geometry",
+    "measure",
+    "rmsd",
+    "list_ligands",
+    "chain_interfaces",
+    "backbone_torsions",
+    "ensemble_summary",
+    "chemical_features",
+    "validate_cif",
+    "select_diverse",
     "render_structure",
     "render_contact_map",
+    "render_distance_matrix",
+    "render_rmsd_heatmap",
 }
+
+FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
+ENSEMBLE = os.path.join(DATA, "1aml.pdb")  # 20-model NMR ensemble
+TWO_CHAIN = os.path.join(FIXTURES, "ugly_residue_ids.pdb")  # chains A and B
 
 
 def test_server_registers_expected_tools(server):
@@ -130,6 +146,152 @@ def test_render_contact_map_returns_png(server):
     block = _image(server, "render_contact_map", source=UBQ)
     assert getattr(block, "mimeType", None) == "image/png"
     assert block.data
+
+
+def test_geometry(server):
+    out = _json(server, "geometry", source=UBQ)
+    assert out["n_atoms"] == 660
+    assert out["radius_of_gyration"] > 0
+    assert len(out["center_of_mass"]) == 3
+    assert len(out["principal_moments"]) == 3
+
+
+def test_measure_distance_angle_dihedral(server):
+    assert _json(server, "measure", source=UBQ, atoms=[0, 1])["kind"] == "distance"
+    assert _json(server, "measure", source=UBQ, atoms=[0, 1, 2])["kind"] == "angle"
+    dih = _json(server, "measure", source=UBQ, atoms=[0, 1, 2, 3])
+    assert dih["kind"] == "dihedral" and dih["value"] is not None
+
+
+def test_measure_rejects_bad_atom_count(server):
+    with pytest.raises(Exception):  # noqa: B017 - any error surfaces as a tool failure
+        _text(server, "measure", source=UBQ, atoms=[0])
+
+
+def test_rmsd_self_is_zero(server):
+    out = _json(server, "rmsd", source_a=UBQ, source_b=UBQ)
+    assert out["rmsd"] is not None and out["rmsd"] < 1e-6
+
+
+def test_list_ligands(server):
+    out = _json(server, "list_ligands", source=TRYPSIN)
+    assert out["n_ligands"] == 1
+    assert out["ligands"][0]["resname"] == "BEN"
+
+
+def test_chain_interfaces_matrix_path(server):
+    out = _json(server, "chain_interfaces", source=UBQ)  # single chain -> matrix
+    assert out["chains"] == ["A"]
+    assert out["contact_matrix"] == [[0]]
+
+
+def test_chain_interfaces_pair_path(server):
+    out = _json(server, "chain_interfaces", source=TWO_CHAIN,
+                chain_a="A", chain_b="B", cutoff=50.0)
+    assert out["chain_a"] == "A" and out["chain_b"] == "B"
+    assert "residues_a" in out and "residues_b" in out
+
+
+def test_backbone_torsions(server):
+    out = _json(server, "backbone_torsions", source=UBQ)
+    assert out["n_residues"] == 76
+    first = out["residues"][0]
+    assert first["phi"] is None  # undefined at a chain start -> JSON null, not NaN
+    assert first["psi"] is not None
+
+
+def test_ensemble_summary(server):
+    out = _json(server, "ensemble_summary", source=ENSEMBLE)
+    assert out["n_models"] == 20
+    assert out["mean_pairwise_rmsd"] > 0
+    assert out["n_clusters"] >= 1
+
+
+def test_ensemble_summary_rejects_single_model(server):
+    with pytest.raises(Exception):  # noqa: B017
+        _text(server, "ensemble_summary", source=UBQ)
+
+
+def test_chemical_features(server):
+    pytest.importorskip("rdkit")
+    out = _json(server, "chemical_features", source=UBQ)
+    assert out["n_atoms"] == 660
+    assert out["n_bonds"] > 0
+
+
+def test_validate_cif(server):
+    pytest.importorskip("gemmi")
+    out = _json(server, "validate_cif", source=os.path.join(FIXTURES, "insertion_codes.cif"))
+    assert "valid" in out and "n_atom_site_rows" in out
+
+
+def test_select_diverse_on_descriptor_cols(server, tmp_path):
+    import csv
+
+    path = tmp_path / "lib.csv"
+    with open(path, "w", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=["ID", "MW", "ALogP"])
+        writer.writeheader()
+        for i in range(6):
+            writer.writerow({"ID": f"m{i}", "MW": 100 + i * 60, "ALogP": i * 0.9})
+    out = _json(server, "select_diverse", table=str(path), n=3, descriptor_cols=["MW", "ALogP"])
+    assert out["selected"] == 3 and out["of"] == 6
+
+
+def test_select_diverse_requires_a_descriptor_source(server, tmp_path):
+    import csv
+
+    path = tmp_path / "lib.csv"
+    with open(path, "w", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=["ID", "MW"])
+        writer.writeheader()
+        writer.writerow({"ID": "m0", "MW": 100})
+    with pytest.raises(Exception):  # noqa: B017 - neither descriptor_cols nor compute given
+        _text(server, "select_diverse", table=str(path), n=1)
+
+
+def test_select_diverse_from_smiles(server, tmp_path):
+    pytest.importorskip("rdkit")
+    import csv
+
+    path = tmp_path / "smi.csv"
+    with open(path, "w", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=["ID", "SMILES"])
+        writer.writeheader()
+        for name, smi in [("ethanol", "CCO"), ("benzene", "c1ccccc1"),
+                          ("acetic", "CC(=O)O"), ("caffeine", "CN1C=NC2=C1C(=O)N(C(=O)N2C)C")]:
+            writer.writerow({"ID": name, "SMILES": smi})
+    out = _json(server, "select_diverse", table=str(path), n=2,
+                smiles_col="SMILES", compute_descriptors=True)
+    assert out["selected"] == 2
+    assert "MolWt" in out["descriptors"]
+
+
+def test_select_diverse_compute_without_smiles_col_errors(server, tmp_path):
+    import csv
+
+    path = tmp_path / "lib.csv"
+    with open(path, "w", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=["ID", "MW"])
+        writer.writeheader()
+        writer.writerow({"ID": "m0", "MW": 100})
+    with pytest.raises(Exception):  # noqa: B017 - compute_descriptors set but no smiles_col
+        _text(server, "select_diverse", table=str(path), n=1, compute_descriptors=True)
+
+
+def test_render_rmsd_heatmap_rejects_single_model(server):
+    with pytest.raises(Exception):  # noqa: B017
+        _image(server, "render_rmsd_heatmap", source=UBQ)
+
+
+def test_render_distance_matrix_returns_png(server):
+    block = _image(server, "render_distance_matrix", source=UBQ)
+    assert getattr(block, "mimeType", None) == "image/png" and block.data
+
+
+def test_render_rmsd_heatmap_returns_png(server):
+    block = _image(server, "render_rmsd_heatmap", source=ENSEMBLE)
+    assert getattr(block, "mimeType", None) == "image/png" and block.data
 
 
 def test_load_accepts_paths_and_rejects_garbage():

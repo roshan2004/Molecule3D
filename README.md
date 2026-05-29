@@ -531,20 +531,20 @@ claude mcp add molscope -- molscope-mcp  # register with Claude Code
 ```
 
 The server runs over stdio (`molscope-mcp`, or `python -m molscope.mcp_server`)
-and provides these tools:
+and provides 21 read-only tools spanning most of the package:
 
-| Tool | What it does |
+| Area | Tools |
 | --- | --- |
-| `summarize_structure` | Load a file or PDB id and report atoms, formula, chains, size. |
-| `compute_descriptors` | Descriptor table across one or more structures (the batch tool). |
-| `secondary_structure` | Per-residue DSSP codes and helix/strand/coil composition. |
-| `contact_map` | Contact count, contact order, and labelled contacting pairs. |
-| `binding_site` | Protein residues around a ligand, closest first. |
-| `molecular_graph` | Node/edge counts and feature names for the ML graph. |
-| `coarse_grain` | Bead assignment statistics for a coarse-grained mapping. |
-| `render_structure`, `render_contact_map` | Return PNG figures. |
+| Structure & geometry | `summarize_structure`, `geometry`, `measure` (distance/angle/dihedral) |
+| Comparison | `rmsd`, `ensemble_summary` (multi-model RMSD/RMSF/clusters) |
+| Descriptors & chemistry | `compute_descriptors`, `chemical_features`, `molecular_graph` |
+| Protein analysis | `secondary_structure`, `backbone_torsions`, `contact_map`, `binding_site`, `list_ligands`, `chain_interfaces` |
+| Coarse-graining | `coarse_grain` |
+| Library prep | `select_diverse` (diverse subset from a CSV/XLSX table) |
+| Files | `validate_cif` |
+| Plots (PNG) | `render_structure`, `render_contact_map`, `render_distance_matrix`, `render_rmsd_heatmap` |
 
-Each tool takes a `source` that is either a local coordinate-file path or a
+Structure tools take a `source` that is either a local coordinate-file path or a
 4-character PDB id (fetched from RCSB). For example, you can ask the assistant to
 *"fetch trypsin (3ptb), find the benzamidine binding-site residues, and render a
 contact map"*, and it will call `binding_site` then `render_contact_map`. See

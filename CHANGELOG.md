@@ -9,6 +9,15 @@ API changes; these are called out under **Changed** where they occur.
 
 ## [Unreleased]
 
+### Added
+
+- Expanded the MCP server from 9 to 21 tools so it fronts most of the package:
+  `geometry`, `measure` (distance/angle/dihedral), `rmsd`, `ensemble_summary`
+  (multi-model RMSD/RMSF/clusters), `chemical_features`, `backbone_torsions`,
+  `list_ligands`, `chain_interfaces`, `validate_cif`, `select_diverse`, and the
+  `render_distance_matrix` / `render_rmsd_heatmap` plot tools. All NaN/inf values
+  are now emitted as JSON `null` so tool output is always valid JSON.
+
 ## [0.9.0] - 2026-05-29
 
 ### Added

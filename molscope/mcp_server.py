@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import io
 import json
+import math
 import os
 from typing import TYPE_CHECKING, Any, Optional
 
@@ -61,12 +62,20 @@ def _three_state(code: str) -> str:
     return {"H": "H", "G": "H", "I": "H", "E": "E", "B": "E"}.get(code, "C")
 
 
+def _num(value) -> Optional[float]:
+    """A JSON-safe float: ``None`` for NaN/inf (invalid JSON), else ``float``."""
+    f = float(value)
+    return None if (math.isnan(f) or math.isinf(f)) else f
+
+
 def _jsonable(value: Any) -> Any:
-    """Coerce numpy scalars/arrays into plain JSON-serialisable Python values."""
+    """Coerce numpy scalars/arrays into plain, JSON-safe Python values."""
     if isinstance(value, np.generic):
-        return value.item()
+        value = value.item()
     if isinstance(value, np.ndarray):
-        return value.tolist()
+        return [_jsonable(v) for v in value.tolist()]
+    if isinstance(value, float):
+        return _num(value)
     return value
 
 
@@ -272,6 +281,235 @@ def build_server():  # noqa: C901 - a flat list of small tool adapters reads cle
         )
 
     @server.tool()
+    def geometry(source: str) -> str:
+        """Report whole-structure geometry: size, mass distribution, shape.
+
+        Returns JSON with atom count, formula, chains, centre of mass, radius of
+        gyration, bounding-box dimensions, and the principal moments of inertia.
+        """
+        mol = _load(source)
+        return json.dumps(
+            {
+                "n_atoms": len(mol),
+                "formula": mol.formula,
+                "chains": sorted(set(mol.chain_ids())),
+                "center_of_mass": [_num(v) for v in mol.center_of_mass.tolist()],
+                "radius_of_gyration": _num(mol.radius_of_gyration),
+                "dimensions": [_num(v) for v in np.asarray(mol.dimensions).tolist()],
+                "principal_moments": [_num(v) for v in mol.principal_moments().tolist()],
+            },
+            indent=2,
+        )
+
+    @server.tool()
+    def measure(source: str, atoms: list[int]) -> str:
+        """Measure a geometric quantity between atoms by 0-based index.
+
+        Pass 2 atom indices for a distance (angstrom), 3 for an angle (degrees),
+        or 4 for a dihedral (degrees).
+        """
+        mol = _load(source)
+        if len(atoms) == 2:
+            return json.dumps({"kind": "distance", "atoms": atoms,
+                               "value": _num(mol.distance(*atoms)), "unit": "angstrom"})
+        if len(atoms) == 3:
+            return json.dumps({"kind": "angle", "atoms": atoms,
+                               "value": _num(mol.angle(*atoms)), "unit": "degrees"})
+        if len(atoms) == 4:
+            return json.dumps({"kind": "dihedral", "atoms": atoms,
+                               "value": _num(mol.dihedral(*atoms)), "unit": "degrees"})
+        raise ValueError("atoms must hold 2 (distance), 3 (angle), or 4 (dihedral) indices")
+
+    @server.tool()
+    def rmsd(source_a: str, source_b: str, align: bool = True) -> str:
+        """Root-mean-square deviation between two structures with the same atom count.
+
+        With ``align`` (default), the structures are Kabsch-superposed first so the
+        result is the minimal RMSD; set it false for the RMSD as-is. Returns the
+        value in angstrom.
+        """
+        a, b = _load(source_a), _load(source_b)
+        return json.dumps({"rmsd": _num(a.rmsd(b, align=align)), "aligned": align,
+                           "n_atoms": len(a), "unit": "angstrom"})
+
+    @server.tool()
+    def list_ligands(source: str, exclude_water: bool = True, exclude_ions: bool = True) -> str:
+        """List the non-polymer (HETATM) groups in a structure.
+
+        Useful before ``binding_site`` to see which ligand names are present.
+        Returns JSON with each group's residue name, chain, residue id, and atom
+        count. Waters and monatomic ions are excluded by default.
+        """
+        ligs = _load(source).ligands(exclude_water=exclude_water, exclude_ions=exclude_ions)
+        return json.dumps(
+            {
+                "n_ligands": len(ligs),
+                "ligands": [
+                    {"resname": lig.resname, "chain": lig.chain, "resid": int(lig.resid),
+                     "n_atoms": len(lig)}
+                    for lig in ligs
+                ],
+            },
+            indent=2,
+        )
+
+    @server.tool()
+    def chain_interfaces(
+        source: str, chain_a: Optional[str] = None, chain_b: Optional[str] = None,
+        cutoff: float = 5.0,
+    ) -> str:
+        """Analyse inter-chain contacts.
+
+        With both ``chain_a`` and ``chain_b``, return the residues on each side of
+        that interface (within ``cutoff`` angstrom) and the atom-contact count.
+        With neither, return the all-pairs chain contact matrix instead.
+        """
+        mol = _load(source)
+        if chain_a and chain_b:
+            iface = mol.interface(chain_a, chain_b, cutoff=cutoff)
+
+            def fmt(residues):
+                return [{"chain": r.chain, "resid": int(r.resid), "resname": r.resname}
+                        for r in residues]
+
+            return json.dumps(
+                {"chain_a": iface.chain_a, "chain_b": iface.chain_b, "cutoff": cutoff,
+                 "n_atom_contacts": iface.n_atom_contacts,
+                 "residues_a": fmt(iface.residues_a), "residues_b": fmt(iface.residues_b)},
+                indent=2,
+            )
+        ccm = mol.chain_contacts(cutoff=cutoff)
+        return json.dumps(
+            {"cutoff": cutoff, "chains": list(ccm.chains),
+             "contact_matrix": [[int(v) for v in row] for row in ccm.matrix.tolist()]},
+            indent=2,
+        )
+
+    @server.tool()
+    def backbone_torsions(source: str) -> str:
+        """Per-residue backbone dihedral angles (Ramachandran phi/psi/omega).
+
+        Returns JSON with one entry per residue in chain/residue order. Angles are
+        ``null`` where undefined (phi at a chain start, psi/omega at a chain end).
+        """
+        bt = _load(source).backbone_torsions()
+        residues = [
+            {"chain": c, "resid": int(r),
+             "phi": _num(phi), "psi": _num(psi), "omega": _num(omega)}
+            for c, r, phi, psi, omega in zip(
+                bt.chains, bt.resids.tolist(), bt.phi.tolist(), bt.psi.tolist(), bt.omega.tolist()
+            )
+        ]
+        return json.dumps(
+            {"n_residues": len(residues), "residues": residues[:_MAX_ROWS],
+             "residues_truncated": len(residues) > _MAX_ROWS},
+            indent=2,
+        )
+
+    @server.tool()
+    def ensemble_summary(source: str) -> str:
+        """Summarise a multi-model (e.g. NMR) ensemble.
+
+        Reads every model from a multi-model PDB and returns JSON with the model
+        count, mean/max pairwise RMSD across models, a per-atom RMSF summary, and
+        the number of conformational clusters. Errors on single-model inputs.
+        """
+        from .ensemble import cluster, rmsd_matrix, rmsf
+        from .io import read_pdb_models
+
+        models = read_pdb_models(source)
+        if len(models) < 2:
+            raise ValueError("ensemble_summary needs a multi-model file (e.g. an NMR PDB)")
+        mat = rmsd_matrix(models)
+        upper = mat[np.triu_indices_from(mat, k=1)]
+        fluct = rmsf(models)
+        return json.dumps(
+            {
+                "n_models": len(models),
+                "mean_pairwise_rmsd": _num(upper.mean()),
+                "max_pairwise_rmsd": _num(upper.max()),
+                "rmsf_mean": _num(fluct.mean()),
+                "rmsf_max": _num(fluct.max()),
+                "n_clusters": cluster(models).n_clusters,
+                "unit": "angstrom",
+            },
+            indent=2,
+        )
+
+    @server.tool()
+    def chemical_features(source: str) -> str:
+        """RDKit-perceived per-atom chemistry (needs the ``chem`` extra).
+
+        Returns JSON with the formal-charge sum, the number of aromatic atoms and
+        bonds, and the atom/bond counts RDKit assigned after sanitisation.
+        """
+        feats = _load(source).chemical_features()
+        return json.dumps(
+            {
+                "n_atoms": int(len(feats.formal_charges)),
+                "total_formal_charge": int(sum(int(c) for c in feats.formal_charges)),
+                "n_aromatic_atoms": int(sum(bool(a) for a in feats.aromatic_atoms)),
+                "n_bonds": int(len(feats.bond_orders)),
+                "n_aromatic_bonds": int(sum(bool(a) for a in feats.aromatic_bonds)),
+            },
+            indent=2,
+        )
+
+    @server.tool()
+    def validate_cif(source: str) -> str:
+        """Validate an mmCIF/CIF file (needs the ``cif`` extra / gemmi).
+
+        Returns JSON with whether the file is valid, syntax/atom-site status, block
+        and atom-row counts, and any errors or warnings.
+        """
+        from .cif import validate_cif as _validate
+
+        report = _validate(source)
+        return json.dumps(
+            {
+                "path": report.path, "valid": report.valid,
+                "syntax_ok": report.syntax_ok, "atom_site_ok": report.atom_site_ok,
+                "n_blocks": report.n_blocks, "n_atom_site_rows": report.n_atom_site_rows,
+                "dictionary_checked": report.dictionary_checked,
+                "errors": list(report.errors), "warnings": list(report.warnings),
+            },
+            indent=2,
+        )
+
+    @server.tool()
+    def select_diverse(
+        table: str, n: int, descriptor_cols: Optional[list[str]] = None,
+        smiles_col: Optional[str] = None, compute_descriptors: bool = False,
+    ) -> str:
+        """Pick a diverse subset of molecules from a CSV/XLSX table.
+
+        ``table`` is a path to a ``.csv`` or ``.xlsx`` file of molecules. Select on
+        existing numeric columns via ``descriptor_cols`` (e.g. ``["MW", "ALogP"]``),
+        or set ``compute_descriptors`` with ``smiles_col`` to compute RDKit
+        descriptors (``MolLogP`` is the ALogP equivalent) and select on those.
+        Returns the chosen rows by MaxMin (farthest-first) diversity selection.
+        """
+        from .library import read_table, smiles_descriptors
+        from .library import select_diverse as _pick
+
+        tab = read_table(table)
+        if compute_descriptors:
+            if not smiles_col:
+                raise ValueError("compute_descriptors needs smiles_col")
+            matrix, names = smiles_descriptors(tab.column(smiles_col))
+            tab = tab.with_columns(names, matrix)
+        elif descriptor_cols:
+            names, matrix = list(descriptor_cols), tab.numeric_matrix(descriptor_cols)
+        else:
+            raise ValueError("provide descriptor_cols, or compute_descriptors with smiles_col")
+        chosen = tab.select_rows(_pick(matrix, n))
+        return json.dumps(
+            {"selected": len(chosen), "of": len(tab), "descriptors": names,
+             "rows": [dict(r) for r in chosen.rows]},
+            indent=2, default=_jsonable,
+        )
+
+    @server.tool()
     def render_structure(source: str, color_by: str = "element"):
         """Render the structure in 3D and return a PNG image.
 
@@ -298,6 +536,34 @@ def build_server():  # noqa: C901 - a flat list of small tool adapters reads cle
         matplotlib.use("Agg")
         cmap = _load(source).contact_map(cutoff=cutoff, level=level, method=method)
         ax = cmap.plot(show=False)
+        return _png(ax.figure)
+
+    @server.tool()
+    def render_distance_matrix(source: str):
+        """Render the dense pairwise atom-distance matrix as a PNG heatmap."""
+        import matplotlib
+
+        matplotlib.use("Agg")
+        ax = _load(source).plot_distance_matrix(show=False)
+        return _png(ax.figure)
+
+    @server.tool()
+    def render_rmsd_heatmap(source: str):
+        """Render a multi-model ensemble's pairwise-RMSD matrix as a PNG heatmap.
+
+        ``source`` must be a multi-model (e.g. NMR) PDB.
+        """
+        import matplotlib
+
+        matplotlib.use("Agg")
+        from .ensemble import rmsd_matrix
+        from .io import read_pdb_models
+        from .plotting import plot_rmsd_heatmap
+
+        models = read_pdb_models(source)
+        if len(models) < 2:
+            raise ValueError("render_rmsd_heatmap needs a multi-model file (e.g. an NMR PDB)")
+        ax = plot_rmsd_heatmap(rmsd_matrix(models), show=False)
         return _png(ax.figure)
 
     def _png(figure) -> Image:

@@ -62,21 +62,63 @@ Every tool takes a `source` that is either a path to a local coordinate file
 (`.pdb`, `.cif`, `.xyz`, `.sdf`, optionally gzipped) or a 4-character RCSB PDB id
 that is fetched and cached.
 
+### Structure and geometry
+
 | Tool | Arguments | Returns |
 | --- | --- | --- |
 | `summarize_structure` | `source` | One-line summary: atoms, formula, chains, size. |
-| `compute_descriptors` | `sources` (list), `preset` | JSON descriptor table, one row per structure. The batch tool. |
-| `secondary_structure` | `source` | JSON per-residue DSSP codes and helix/strand/coil composition. |
-| `contact_map` | `source`, `cutoff`, `level`, `method`, `min_seq_sep` | JSON contact count, contact order, and labelled contacting pairs. |
-| `binding_site` | `source`, `ligand`, `cutoff` | JSON binding-site residues ordered closest-first. |
-| `molecular_graph` | `source`, `preset`, `include_chemical_features` | JSON node/edge counts and feature names. |
-| `coarse_grain` | `source`, `mapping` | JSON bead-assignment statistics. |
-| `render_structure` | `source`, `color_by` | PNG of the 3D view. |
-| `render_contact_map` | `source`, `cutoff`, `level`, `method` | PNG heatmap. |
+| `geometry` | `source` | Centre of mass, radius of gyration, bounding box, principal moments. |
+| `measure` | `source`, `atoms` | Distance (2 indices), angle (3), or dihedral (4). |
 
-Data tools return JSON text so the model can read the values directly; the two
-render tools return PNG images. Large per-residue or per-pair lists are truncated
-with a `*_truncated` flag so a big structure cannot flood the conversation.
+### Comparison
+
+| Tool | Arguments | Returns |
+| --- | --- | --- |
+| `rmsd` | `source_a`, `source_b`, `align` | Kabsch RMSD between two structures. |
+| `ensemble_summary` | `source` (multi-model) | Model count, mean/max pairwise RMSD, RMSF, cluster count. |
+
+### Descriptors and chemistry
+
+| Tool | Arguments | Returns |
+| --- | --- | --- |
+| `compute_descriptors` | `sources` (list), `preset` | Descriptor table, one row per structure. The batch tool. |
+| `chemical_features` | `source` | RDKit formal charges, aromatic atom/bond counts (`chem` extra). |
+| `molecular_graph` | `source`, `preset`, `include_chemical_features` | Node/edge counts and feature names for the ML graph. |
+
+### Protein analysis
+
+| Tool | Arguments | Returns |
+| --- | --- | --- |
+| `secondary_structure` | `source` | Per-residue DSSP codes and helix/strand/coil composition. |
+| `backbone_torsions` | `source` | Per-residue phi/psi/omega (Ramachandran), `null` where undefined. |
+| `contact_map` | `source`, `cutoff`, `level`, `method`, `min_seq_sep` | Contact count, contact order, labelled pairs. |
+| `binding_site` | `source`, `ligand`, `cutoff` | Binding-site residues ordered closest-first. |
+| `list_ligands` | `source`, `exclude_water`, `exclude_ions` | HETATM groups present (run before `binding_site`). |
+| `chain_interfaces` | `source`, `chain_a`, `chain_b`, `cutoff` | Interface residues for a chain pair, or the all-pairs chain contact matrix. |
+
+### Coarse-graining, library prep, files
+
+| Tool | Arguments | Returns |
+| --- | --- | --- |
+| `coarse_grain` | `source`, `mapping` | Bead-assignment statistics. |
+| `select_diverse` | `table`, `n`, `descriptor_cols` / `smiles_col` + `compute_descriptors` | Diverse subset of a CSV/XLSX molecule table (MaxMin). |
+| `validate_cif` | `source` | mmCIF validation report (`cif` extra for full checks). |
+
+### Plots (PNG)
+
+| Tool | Arguments | Returns |
+| --- | --- | --- |
+| `render_structure` | `source`, `color_by` | 3D scatter view. |
+| `render_contact_map` | `source`, `cutoff`, `level`, `method` | Contact-map heatmap. |
+| `render_distance_matrix` | `source` | Dense pairwise distance heatmap. |
+| `render_rmsd_heatmap` | `source` (multi-model) | Ensemble pairwise-RMSD heatmap. |
+
+Most tools take a `source` that is a local coordinate-file path or a 4-character
+RCSB PDB id; `select_diverse` instead takes a `table` (CSV/XLSX) path. Data tools
+return JSON text so the model can read the values directly; the render tools
+return PNG images. Large per-residue or per-pair lists are truncated with a
+`*_truncated` flag so a big structure cannot flood the conversation. `NaN`/`inf`
+values (e.g. undefined torsion angles) are emitted as JSON `null`.
 
 ## Scope
 
