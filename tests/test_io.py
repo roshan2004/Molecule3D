@@ -350,3 +350,13 @@ def test_fetch_unknown_pdb_id_raises_value_error(monkeypatch, tmp_path):
     monkeypatch.setattr(io, "urlopen", boom)
     with pytest.raises(ValueError, match="not found at RCSB"):
         io.fetch("zzzz9", cache_dir=str(tmp_path))
+
+
+def test_read_template_bond_perception_only_for_pdb():
+    with pytest.raises(ValueError, match="only supported for .pdb"):
+        ms.read(os.path.join(DATA, "helix_201.xyz"), bond_perception="template")
+
+
+def test_read_pdb_rejects_unknown_bond_perception():
+    with pytest.raises(ValueError, match="bond_perception"):
+        read_pdb(os.path.join(DATA, "1ubq.pdb"), bond_perception="bogus")

@@ -160,6 +160,65 @@ def to_rdkit(molecule, *, sanitize: bool = True, infer_bonds: bool = True):
     return rdmol, np.asarray(bond_index, dtype=int).reshape(-1, 2)
 
 
+def pdb_template_bonds(path: str, molecule):
+    """Perceive bonds for standard residues via RDKit's residue-aware PDB reader.
+
+    RDKit's PDB parser assigns bonds *and bond orders* for standard amino acids
+    and nucleotides from built-in residue templates (plus peptide bonds and
+    disulfides), recovering aromatic rings and double bonds that geometric
+    distance inference cannot. This returns ``(bond_index, bond_orders,
+    formal_charges)`` in ``molecule`` atom order so they can be attached as
+    explicit bonds. Aromatic rings are returned in Kekule form (alternating
+    single/double bonds) so they round-trip cleanly and re-aromatise on
+    sanitisation; per-atom formal charges (carboxylate, ammonium, ...) carry over.
+
+    Atoms are matched to ``molecule`` by ``(chain, resid, insertion code, atom
+    name)``; any RDKit bond whose endpoints are not both matched (e.g. an
+    alternate location RDKit dropped, or a non-standard atom) is skipped. Needs
+    RDKit (``pip install "molscope[chem]"``) and only helps for standard
+    residues; modified residues and exotic ligands stay best-effort.
+    """
+    Chem, _ = _require_rdkit()
+    rdmol = Chem.MolFromPDBFile(path, removeHs=False, sanitize=True)
+    if rdmol is None:
+        raise ValueError(f"RDKit could not parse {path!r} for template bond perception")
+    # Kekulise so aromatic rings become explicit single/double bonds: rebuilding a
+    # molecule from aromatic-flagged bonds alone fails to re-kekulise, whereas an
+    # explicit Kekule structure sanitises cleanly and re-aromatises downstream.
+    Chem.Kekulize(rdmol, clearAromaticFlags=True)
+
+    n = len(molecule)
+    icodes = molecule.icodes if molecule.icodes is not None else [""] * n
+    by_key: dict = {}
+    for i in range(n):
+        key = (str(molecule.chains[i]).strip(), int(molecule.resids[i]),
+               (icodes[i] or "").strip(), str(molecule.atom_names[i]).strip())
+        by_key.setdefault(key, i)  # first occurrence wins for duplicate keys (altlocs)
+
+    rd_to_ms: dict = {}
+    charges = np.zeros(n, dtype=int)
+    for atom in rdmol.GetAtoms():
+        info = atom.GetPDBResidueInfo()
+        if info is None:
+            continue
+        key = (info.GetChainId().strip(), int(info.GetResidueNumber()),
+               info.GetInsertionCode().strip(), info.GetName().strip())
+        ms_index = by_key.get(key)
+        if ms_index is not None:
+            rd_to_ms[atom.GetIdx()] = ms_index
+            charges[ms_index] = atom.GetFormalCharge()
+
+    pairs, orders = [], []
+    for bond in rdmol.GetBonds():
+        i, j = bond.GetBeginAtomIdx(), bond.GetEndAtomIdx()
+        if i in rd_to_ms and j in rd_to_ms:
+            pairs.append((rd_to_ms[i], rd_to_ms[j]))
+            orders.append(float(bond.GetBondTypeAsDouble()))
+    if not pairs:
+        return np.empty((0, 2), dtype=int), np.empty(0, dtype=float), charges
+    return np.array(pairs, dtype=int), np.array(orders, dtype=float), charges
+
+
 def _require_rdkit():
     try:
         from rdkit import Chem

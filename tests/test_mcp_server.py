@@ -214,9 +214,26 @@ def test_ensemble_summary_rejects_single_model(server):
 
 def test_chemical_features(server):
     pytest.importorskip("rdkit")
+    # Default bond_perception="template" recovers aromatic rings on a protein PDB.
     out = _json(server, "chemical_features", source=UBQ)
     assert out["n_atoms"] == 660
     assert out["n_bonds"] > 0
+    assert out["n_aromatic_atoms"] >= 20  # Phe/Tyr/His rings via residue templates
+
+
+def test_chemical_features_geometric_has_no_aromaticity(server):
+    pytest.importorskip("rdkit")
+    out = _json(server, "chemical_features", source=UBQ, bond_perception="geometric")
+    assert out["n_aromatic_atoms"] == 0  # geometric single bonds, no perception
+
+
+def test_chemical_features_non_pdb_falls_back_from_template(server):
+    pytest.importorskip("rdkit")
+    # An SDF carries explicit bonds; template perception is PDB-only, so the
+    # default "template" must fall back gracefully rather than erroring.
+    water = os.path.join(FIXTURES, "water.sdf")
+    out = _json(server, "chemical_features", source=water)
+    assert out["n_atoms"] == 3 and out["n_bonds"] == 2
 
 
 def test_validate_cif(server):
@@ -329,7 +346,7 @@ def test_load_dispatches_pdb_id_to_fetch(monkeypatch):
     import molscope.io as mio
 
     sentinel = object()
-    monkeypatch.setattr(mio, "fetch", lambda pdb_id: sentinel)
+    monkeypatch.setattr(mio, "fetch", lambda pdb_id, **kwargs: sentinel)
     assert _load("1abc") is sentinel
 
 

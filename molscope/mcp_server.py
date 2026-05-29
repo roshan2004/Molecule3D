@@ -38,20 +38,21 @@ if TYPE_CHECKING:  # pragma: no cover - import only for type checkers
 _MAX_ROWS = 2000
 
 
-def _load(source: str) -> Molecule:
+def _load(source: str, bond_perception: str = "geometric") -> Molecule:
     """Resolve ``source`` to a :class:`~molscope.molecule.Molecule`.
 
     ``source`` is either a path to a local coordinate file (``.pdb``, ``.cif``,
     ``.xyz``, ``.sdf``, optionally gzipped) or a 4-character RCSB PDB id, which
-    is fetched and cached.
+    is fetched and cached. ``bond_perception="template"`` attaches RDKit
+    residue-template bonds (PDB only; see :func:`molscope.read_pdb`).
     """
     from .io import fetch, read
 
     if os.path.exists(source):
-        return read(source)
+        return read(source, bond_perception=bond_perception)
     token = source.strip()
     if len(token) == 4 and token.isalnum():
-        return fetch(token)
+        return fetch(token, bond_perception=bond_perception)
     raise FileNotFoundError(
         f"{source!r} is neither an existing file nor a 4-character PDB id; "
         "pass a path like 'examples/data/1ubq.pdb' or an id like '1ubq'"
@@ -437,13 +438,24 @@ def build_server():  # noqa: C901 - a flat list of small tool adapters reads cle
         )
 
     @server.tool()
-    def chemical_features(source: str) -> str:
+    def chemical_features(source: str, bond_perception: str = "template") -> str:
         """RDKit-perceived per-atom chemistry (needs the ``chem`` extra).
 
         Returns JSON with the formal-charge sum, the number of aromatic atoms and
         bonds, and the atom/bond counts RDKit assigned after sanitisation.
+
+        ``bond_perception`` defaults to ``"template"``, which uses RDKit's
+        residue-aware PDB reader so standard-residue proteins get correct bond
+        orders and aromatic rings. (Plain distance-based ``"geometric"`` bonds
+        miss all of that on bare PDBs.) Template perception applies to PDB inputs
+        only; other formats fall back to their explicit/geometric bonds.
         """
-        feats = _load(source).chemical_features()
+        bp = bond_perception
+        if bp == "template" and os.path.exists(source) and not source.lower().endswith(
+            (".pdb", ".pdb.gz", ".ent")
+        ):
+            bp = "geometric"  # templates apply to PDB only; SDF/MOL carry real bonds
+        feats = _load(source, bond_perception=bp).chemical_features()
         return json.dumps(
             {
                 "n_atoms": int(len(feats.formal_charges)),
