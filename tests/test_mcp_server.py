@@ -136,3 +136,46 @@ def test_load_accepts_paths_and_rejects_garbage():
     assert _load(UBQ).summary()
     with pytest.raises(FileNotFoundError):
         _load("not-a-file-or-id.zzz")
+
+
+def test_load_dispatches_pdb_id_to_fetch(monkeypatch):
+    import molscope.io as mio
+
+    sentinel = object()
+    monkeypatch.setattr(mio, "fetch", lambda pdb_id: sentinel)
+    assert _load("1abc") is sentinel
+
+
+def test_jsonable_coerces_numpy():
+    import numpy as np
+
+    from molscope.mcp_server import _jsonable
+
+    assert _jsonable(np.float64(3.5)) == 3.5
+    assert _jsonable(np.array([1, 2])) == [1, 2]
+    assert _jsonable("x") == "x"
+
+
+def test_main_without_mcp_raises_systemexit(monkeypatch):
+    import molscope.mcp_server as srv
+
+    def boom():
+        raise ImportError("mcp not installed")
+
+    monkeypatch.setattr(srv, "build_server", boom)
+    with pytest.raises(SystemExit):
+        srv.main()
+
+
+def test_main_runs_server(monkeypatch):
+    import molscope.mcp_server as srv
+
+    calls = {}
+
+    class _FakeServer:
+        def run(self):
+            calls["ran"] = True
+
+    monkeypatch.setattr(srv, "build_server", lambda: _FakeServer())
+    srv.main()
+    assert calls.get("ran") is True

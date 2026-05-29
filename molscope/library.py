@@ -146,7 +146,7 @@ def smiles_descriptors(
             for j, name in enumerate(selected):
                 try:
                     matrix[i, j] = float(desc_map[name](mol))
-                except Exception:
+                except Exception:  # pragma: no cover - defensive: RDKit descriptors rarely raise
                     matrix[i, j] = np.nan
     finally:
         RDLogger.EnableLog("rdApp.*")

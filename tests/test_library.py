@@ -160,3 +160,119 @@ def test_cli_select_compute_descriptors_from_smiles(tmp_path, capsys):
     assert len(picked) == 2
     # Computed descriptor columns are carried into the output.
     assert "MolWt" in picked.columns and "MolLogP" in picked.columns
+
+
+# -- error paths and edge cases --------------------------------------------
+
+def test_numeric_matrix_empty_names_raises():
+    table = MoleculeTable(columns=["a"], rows=[{"a": "1"}])
+    with pytest.raises(ValueError):
+        table.numeric_matrix([])
+
+
+def test_numeric_matrix_native_numeric_and_none():
+    table = MoleculeTable(columns=["x"], rows=[{"x": 5}, {"x": 5.5}, {"x": None}])
+    matrix = table.numeric_matrix(["x"])
+    assert matrix[0, 0] == 5.0
+    assert matrix[1, 0] == 5.5
+    assert np.isnan(matrix[2, 0])
+
+
+def test_read_table_unsupported_extension():
+    with pytest.raises(ValueError):
+        read_table("molecules.json")
+
+
+def test_read_csv_without_header_raises(tmp_path):
+    path = tmp_path / "empty.csv"
+    path.write_text("")
+    with pytest.raises(ValueError):
+        read_table(str(path))
+
+
+def test_read_xlsx_skips_blank_rows(tmp_path):
+    openpyxl = pytest.importorskip("openpyxl")
+    path = tmp_path / "gappy.xlsx"
+    workbook = openpyxl.Workbook()
+    sheet = workbook.active
+    sheet.append(["ID", "MW"])
+    sheet.append(["m1", 100])
+    sheet.append([None, None])  # blank row, as real spreadsheets often have
+    sheet.append(["m2", 200])
+    workbook.save(str(path))
+    table = read_table(str(path))
+    assert len(table) == 2
+    assert table.column("ID") == ["m1", "m2"]
+
+
+def test_write_unsupported_extension(tmp_path):
+    table = MoleculeTable(columns=["a"], rows=[{"a": "1"}])
+    with pytest.raises(ValueError):
+        table.write(str(tmp_path / "out.json"))
+
+
+def test_select_diverse_requires_2d():
+    with pytest.raises(ValueError):
+        select_diverse(np.array([1.0, 2.0, 3.0]), 2)
+
+
+def test_select_diverse_without_standardize_still_picks_extreme():
+    picks = select_diverse(np.array(_mw_alogp()), 3, standardize=False)
+    assert 2 in picks  # the extreme point is chosen regardless of scaling
+    assert len(picks) == 3
+
+
+def test_smiles_descriptors_unknown_name_raises():
+    pytest.importorskip("rdkit")
+    with pytest.raises(ValueError):
+        smiles_descriptors(["CCO"], names=["NotARealDescriptor"])
+
+
+def test_read_xlsx_empty_worksheet_raises(tmp_path):
+    openpyxl = pytest.importorskip("openpyxl")
+    path = tmp_path / "empty.xlsx"
+    openpyxl.Workbook().save(str(path))  # one sheet, no rows
+    with pytest.raises(ValueError):
+        read_table(str(path))
+
+
+def test_cli_select_num_must_be_positive(tmp_path):
+    path = _write_csv(tmp_path / "lib.csv", LIB_ROWS, LIB_COLS)
+    assert main(["select", path, "--descriptor-cols", "MW", "-n", "0"]) == 2
+
+
+def test_cli_select_read_error(tmp_path):
+    assert main(["select", str(tmp_path / "nope.json"), "--descriptor-cols", "MW", "-n", "2"]) == 2
+
+
+def test_cli_select_missing_column(tmp_path):
+    path = _write_csv(tmp_path / "lib.csv", LIB_ROWS, LIB_COLS)
+    assert main(["select", path, "--descriptor-cols", "NOPE", "-n", "2"]) == 2
+
+
+def test_cli_select_all_nan_descriptors(tmp_path):
+    path = _write_csv(tmp_path / "lib.csv", LIB_ROWS, LIB_COLS)
+    # ID is all strings -> all-NaN selection space -> selection error.
+    assert main(["select", path, "--descriptor-cols", "ID", "-n", "2"]) == 2
+
+
+def test_cli_select_fewer_rows_than_requested(tmp_path, capsys):
+    path = _write_csv(tmp_path / "lib.csv", LIB_ROWS, LIB_COLS)
+    rc = main(["select", path, "--descriptor-cols", "MW", "ALogP", "-n", "10"])
+    assert rc == 0
+    assert "fewer than the requested 10" in capsys.readouterr().err
+
+
+def test_cli_select_write_error(tmp_path):
+    path = _write_csv(tmp_path / "lib.csv", LIB_ROWS, LIB_COLS)
+    out = tmp_path / "out.json"  # unsupported output extension
+    assert main(
+        ["select", path, "--descriptor-cols", "MW", "ALogP", "-n", "2", "--out", str(out)]
+    ) == 2
+
+
+def test_cli_select_summary_without_out(tmp_path, capsys):
+    path = _write_csv(tmp_path / "lib.csv", LIB_ROWS, LIB_COLS)
+    rc = main(["select", path, "--descriptor-cols", "MW", "ALogP", "-n", "2"])
+    assert rc == 0
+    assert "selected 2 of 5" in capsys.readouterr().out
