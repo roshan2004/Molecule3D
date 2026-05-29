@@ -9,6 +9,7 @@ import molscope as ms
 from molscope import Molecule
 
 DATA = os.path.join(os.path.dirname(os.path.dirname(__file__)), "examples", "data")
+FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
 
 
 def two_chain():
@@ -90,8 +91,10 @@ def test_binding_site_synthetic():
     assert bs.n_atom_contacts == 1
     assert bs.residue_contact_counts == [1]
     assert bs.to_records() == [{
+        "residue_id": "A:ALA1",
         "chain": "A",
         "resid": 1,
+        "insertion_code": "",
         "resname": "ALA",
         "min_distance": 2.0,
         "n_atom_contacts": 1,
@@ -178,6 +181,22 @@ def test_binding_site_ambiguous_requires_explicit_ligand():
         mol.binding_site()                                  # two candidate ligands
     bs = mol.binding_site(ligand="LIG", cutoff=4.5)
     assert bs.ligand.resname == "LIG"
+
+
+def test_binding_site_disambiguates_ligand_and_residue_insertion_codes():
+    mol = ms.read(os.path.join(FIXTURES, "ugly_residue_ids.pdb"))
+    ligands = mol.ligands()
+    assert [lig.residue_id.label() for lig in ligands] == ["A:LIG10", "B:LIG10"]
+    assert [len(lig) for lig in ligands] == [2, 1]
+
+    with pytest.raises(ValueError, match="matches multiple groups"):
+        mol.binding_site(ligand="LIG", cutoff=2.0)
+
+    site = mol.binding_site(ligand=("A", 10), cutoff=2.0)
+    assert site.ligand.residue_id.label() == "A:LIG10"
+    assert [res.residue_id.label() for res in site.residues] == ["A:SER100A"]
+    assert site.to_records()[0]["insertion_code"] == "A"
+    assert site.to_records()[0]["residue_id"] == "A:SER100A"
 
 
 def test_binding_site_no_hetatm_raises():

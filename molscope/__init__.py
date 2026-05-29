@@ -87,7 +87,7 @@ from .io import (
     write_pdb,
     write_xyz,
 )
-from .molecule import Molecule, UnitCell
+from .molecule import Molecule, ResidueGroup, ResidueId, UnitCell
 from .plotting import plot_distance_matrix, plot_mapping, plot_rmsd_heatmap
 
 __all__ = [
@@ -107,6 +107,8 @@ __all__ = [
     "Molecule",
     "MolecularGraph",
     "Residue",
+    "ResidueGroup",
+    "ResidueId",
     "ResidueContactGraph",
     "SSSegment",
     "SecondaryStructure",

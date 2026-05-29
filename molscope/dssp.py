@@ -22,6 +22,8 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
+from .molecule import ResidueId
+
 if TYPE_CHECKING:
     from .molecule import Molecule
 
@@ -96,6 +98,7 @@ class SecondaryStructure:
     resids: np.ndarray         # (R,) residue ids
     chains: list               # (R,) chain ids
     resnames: list             # (R,) residue names
+    icodes: list = None        # (R,) insertion codes
 
     def __len__(self) -> int:
         return len(self.codes)
@@ -104,6 +107,17 @@ class SecondaryStructure:
     def string(self) -> str:
         """The assignment as a single string, e.g. ``'--HHHHH--EEEE--'``."""
         return "".join(self.codes.tolist())
+
+    @property
+    def residue_ids(self) -> list[ResidueId]:
+        """Rich residue ids aligned with :attr:`codes`."""
+        icodes = self.icodes or [""] * len(self.codes)
+        return [
+            ResidueId(chain, int(resid), icode, resname)
+            for chain, resid, icode, resname in zip(
+                self.chains, self.resids, icodes, self.resnames
+            )
+        ]
 
     def simplified(self) -> str:
         """The assignment reduced to 3 states: ``H`` helix, ``E`` strand, ``C`` coil."""
@@ -156,22 +170,24 @@ def _backbone_residues(molecule: Molecule):
     names = molecule.atom_names
     coords = molecule.coords
     N, CA, C, O = [], [], [], []
-    resids, chains, resnames = [], [], []
-    for idx, resname, resid, chain in molecule.residue_groups():
+    resids, icodes, chains, resnames = [], [], [], []
+    for group in molecule.residue_groups():
+        idx = group.atom_indices
         atoms = {names[i].upper(): i for i in idx}
         if all(a in atoms for a in ("N", "CA", "C", "O")):
             N.append(coords[atoms["N"]])
             CA.append(coords[atoms["CA"]])
             C.append(coords[atoms["C"]])
             O.append(coords[atoms["O"]])
-            resids.append(resid)
-            chains.append(chain)
-            resnames.append(resname)
+            resids.append(group.resid)
+            icodes.append(group.insertion_code)
+            chains.append(group.chain)
+            resnames.append(group.resname)
     if not resids:
         raise ValueError("no residues with a complete N/CA/C/O backbone were found")
     return (
         np.array(N, float), np.array(CA, float), np.array(C, float), np.array(O, float),
-        np.array(resids, int), chains, resnames,
+        np.array(resids, int), icodes, chains, resnames,
     )
 
 
@@ -217,7 +233,7 @@ def assign(molecule: Molecule) -> SecondaryStructure:
     Raises ``ValueError`` if the molecule lacks the metadata or backbone atoms
     needed (e.g. a bare ``.xyz`` file).
     """
-    N, CA, C, O, resids, chains, resnames = _backbone_residues(molecule)
+    N, CA, C, O, resids, icodes, chains, resnames = _backbone_residues(molecule)
     R = len(resids)
     chain_arr = np.array(chains)
 
@@ -280,15 +296,17 @@ def assign(molecule: Molecule) -> SecondaryStructure:
     for code in reversed(_PRIORITY):
         codes[masks[code]] = code
 
-    return SecondaryStructure(codes, resids, chains, resnames)
+    return SecondaryStructure(codes, resids, chains, resnames, icodes=icodes)
 
 
 def per_atom_ss(molecule: Molecule) -> list:
     """SS code for every atom (its residue's code; ``'-'`` for non-protein atoms)."""
     ss = assign(molecule)
-    by_residue = {(c, int(r)): code for c, r, code in zip(ss.chains, ss.resids, ss.codes)}
-    chains = molecule.chains or [""] * len(molecule)
-    return [by_residue.get((chains[i], int(molecule.resids[i])), "-")
+    by_residue = {
+        residue_id: code
+        for residue_id, code in zip(ss.residue_ids, ss.codes)
+    }
+    return [by_residue.get(molecule.residue_id(i), "-")
             for i in range(len(molecule))]
 
 
@@ -306,6 +324,7 @@ class BackboneTorsions:
     phi: np.ndarray
     psi: np.ndarray
     omega: np.ndarray
+    icodes: list = None
 
     def __len__(self) -> int:
         return len(self.resids)
@@ -330,7 +349,7 @@ def backbone_torsions(molecule: Molecule) -> BackboneTorsions:
     Reuses the same N/CA/C/O backbone extraction as :func:`assign`, so it needs a
     protein with backbone atoms (PDB/mmCIF, not a bare ``.xyz``).
     """
-    N, CA, C, O, resids, chains, _ = _backbone_residues(molecule)
+    N, CA, C, O, resids, icodes, chains, _ = _backbone_residues(molecule)
     R = len(resids)
     chain_arr = np.array(chains)
 
@@ -352,4 +371,6 @@ def backbone_torsions(molecule: Molecule) -> BackboneTorsions:
         # psi(i)   = N(i)-CA(i)-C(i)-N(i+1),     defined when i+1 bonded to i
         psi[:-1][link] = _dihedrals(N[:-1], CA[:-1], C[:-1], N[1:])[link]
 
-    return BackboneTorsions(resids=resids, chains=chains, phi=phi, psi=psi, omega=omega)
+    return BackboneTorsions(
+        resids=resids, chains=chains, phi=phi, psi=psi, omega=omega, icodes=icodes
+    )

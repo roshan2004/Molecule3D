@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from .molecule import Molecule
+from .molecule import Molecule, ResidueId
 
 # Crystallographic solvent and common monatomic ions skipped when auto-detecting
 # ligands (they are HETATM but rarely the "ligand" of interest).
@@ -37,15 +37,25 @@ POCKET_DESCRIPTOR_PRESETS = ("pocket-basic",)
 
 @dataclass(frozen=True)
 class Residue:
-    """A residue identity: chain id, residue number, residue name."""
+    """A residue identity: chain id, residue number, insertion code, and name."""
 
     chain: str
     resid: int
     resname: str
+    insertion_code: str = ""
+
+    @property
+    def icode(self) -> str:
+        """Short alias for :attr:`insertion_code`."""
+        return self.insertion_code
+
+    @property
+    def residue_id(self) -> ResidueId:
+        """Return this residue as a :class:`molscope.molecule.ResidueId`."""
+        return ResidueId(self.chain, self.resid, self.insertion_code, self.resname)
 
     def __repr__(self) -> str:
-        loc = f"{self.chain}:" if self.chain else ""
-        return f"{loc}{self.resname or 'RES'}{self.resid}"
+        return self.residue_id.label()
 
 
 @dataclass(frozen=True)
@@ -56,13 +66,23 @@ class LigandResidue:
     resid: int
     resname: str
     atom_indices: list[int]
+    insertion_code: str = ""
 
     def __len__(self) -> int:
         return len(self.atom_indices)
 
+    @property
+    def icode(self) -> str:
+        """Short alias for :attr:`insertion_code`."""
+        return self.insertion_code
+
+    @property
+    def residue_id(self) -> ResidueId:
+        """Return this ligand group as a :class:`molscope.molecule.ResidueId`."""
+        return ResidueId(self.chain, self.resid, self.insertion_code, self.resname)
+
     def __repr__(self) -> str:
-        loc = f"{self.chain}:" if self.chain else ""
-        return f"LigandResidue({loc}{self.resname}{self.resid}, {len(self)} atoms)"
+        return f"LigandResidue({self.residue_id.label()}, {len(self)} atoms)"
 
 
 @dataclass
@@ -161,8 +181,10 @@ class BindingSite:
         contact_counts = self.residue_contact_counts
         return [
             {
+                "residue_id": residue.residue_id.label(),
                 "chain": residue.chain,
                 "resid": residue.resid,
+                "insertion_code": residue.insertion_code,
                 "resname": residue.resname,
                 "min_distance": float(distance),
                 "n_atom_contacts": int(contact_counts[i]),
@@ -203,7 +225,7 @@ class BindingSite:
 
     def __repr__(self) -> str:
         return (
-            f"BindingSite({self.ligand.resname}{self.ligand.resid}: "
+            f"BindingSite({self.ligand.residue_id.label()}: "
             f"{len(self.residues)} residues < {self.cutoff} A)"
         )
 
@@ -325,14 +347,13 @@ def _require_residue_metadata(molecule: Molecule) -> None:
 
 
 def _unique_residues(molecule: Molecule, atom_indices) -> list[Residue]:
-    """Ordered (by chain, resid) unique residues covering the given atoms."""
-    resnames = molecule.resnames or [""] * len(molecule)
-    seen: dict[tuple, Residue] = {}
+    """Ordered (by full residue id) unique residues covering the given atoms."""
+    seen: dict[ResidueId, Residue] = {}
     for i in atom_indices:
         i = int(i)
-        key = (molecule.chains[i], int(molecule.resids[i]))
+        key = molecule.residue_id(i)
         if key not in seen:
-            seen[key] = Residue(molecule.chains[i], int(molecule.resids[i]), resnames[i])
+            seen[key] = _residue_from_id(key)
     return [seen[k] for k in sorted(seen)]
 
 
@@ -342,10 +363,83 @@ def _hetero_groups(molecule: Molecule) -> list[LigandResidue]:
         return []
     hetero = molecule.hetero
     groups = []
-    for idx, resname, resid, chain in molecule.residue_groups():
-        if any(hetero[i] for i in idx):
-            groups.append(LigandResidue(chain, resid, resname, list(idx)))
+    for group in molecule.residue_groups():
+        het_idx = [int(i) for i in group.atom_indices if hetero[i]]
+        if het_idx:
+            rid = group.residue_id
+            groups.append(
+                LigandResidue(
+                    rid.chain,
+                    rid.resid,
+                    rid.resname,
+                    het_idx,
+                    insertion_code=rid.insertion_code,
+                )
+            )
     return groups
+
+
+def _residue_from_id(residue_id: ResidueId) -> Residue:
+    return Residue(
+        residue_id.chain,
+        residue_id.resid,
+        residue_id.resname,
+        insertion_code=residue_id.insertion_code,
+    )
+
+
+def _ligand_selector_from_tuple(ligand: tuple) -> tuple[str, int, str | None, str | None]:
+    chain, resid = ligand[0], ligand[1]
+    icode = ligand[2] if len(ligand) >= 3 else None
+    resname = ligand[3] if len(ligand) >= 4 else None
+    return str(chain), int(resid), None if icode is None else str(icode), (
+        None if not resname else str(resname)
+    )
+
+
+def _ligand_matches_residue_id(group: LigandResidue, residue_id: ResidueId) -> bool:
+    return _ligand_matches_selector(
+        group,
+        (
+            residue_id.chain,
+            int(residue_id.resid),
+            residue_id.insertion_code,
+            residue_id.resname or None,
+        ),
+    )
+
+
+def _ligand_matches_selector(
+    group: LigandResidue,
+    selector: tuple[str, int, str | None, str | None],
+) -> bool:
+    chain, resid, icode, resname = selector
+    if group.chain != chain or int(group.resid) != int(resid):
+        return False
+    if icode is not None and group.insertion_code != icode:
+        return False
+    if resname is not None and group.resname.upper() != resname.upper():
+        return False
+    return True
+
+
+def _selector_label(selector: tuple[str, int, str | None, str | None]) -> str:
+    chain, resid, icode, resname = selector
+    residue_number = f"{resid}{icode or ''}"
+    name = f"{resname or 'HET'}{residue_number}"
+    return f"{chain}:{name}" if chain else name
+
+
+def _one_ligand_match(matches: list[LigandResidue], label: str) -> LigandResidue:
+    if len(matches) == 1:
+        return matches[0]
+    if not matches:
+        raise ValueError(f"no HETATM group matching {label}")
+    locs = ", ".join(g.residue_id.label() for g in matches)
+    raise ValueError(
+        f"ligand selector {label} matches multiple groups: {locs}; "
+        "include insertion code or residue name"
+    )
 
 
 # -- interfaces -------------------------------------------------------------
@@ -426,18 +520,24 @@ def _resolve_ligand(molecule: Molecule, ligand) -> LigandResidue:
         )
     if isinstance(ligand, LigandResidue):
         return ligand
-    if isinstance(ligand, tuple) and len(ligand) == 2:
-        chain, resid = ligand
-        for g in groups:
-            if g.chain == chain and g.resid == int(resid):
-                return g
-        raise ValueError(f"no HETATM group at chain {chain!r} resid {resid}")
+    if isinstance(ligand, ResidueId) or isinstance(ligand, Residue):
+        residue_id = ligand if isinstance(ligand, ResidueId) else ligand.residue_id
+        matches = [g for g in groups if _ligand_matches_residue_id(g, residue_id)]
+        return _one_ligand_match(matches, f"residue id {residue_id.label()}")
+    if isinstance(ligand, tuple) and 2 <= len(ligand) <= 4:
+        selector = _ligand_selector_from_tuple(ligand)
+        matches = [g for g in groups if _ligand_matches_selector(g, selector)]
+        label = _selector_label(selector)
+        return _one_ligand_match(matches, label)
     matches = [g for g in groups if g.resname.upper() == str(ligand).upper()]
     if not matches:
         raise ValueError(f"no HETATM group with resname {ligand!r}")
     if len(matches) > 1:
-        locs = ", ".join(f"({g.chain}, {g.resid})" for g in matches)
-        raise ValueError(f"resname {ligand!r} matches multiple groups: {locs}; pass (chain, resid)")
+        locs = ", ".join(g.residue_id.label() for g in matches)
+        raise ValueError(
+            f"resname {ligand!r} matches multiple groups: {locs}; "
+            "pass (chain, resid[, insertion_code])"
+        )
     return matches[0]
 
 
@@ -468,20 +568,19 @@ def binding_site(
     lp, ll = np.nonzero(close)
     contacts = [(int(prot_idx[i]), int(lig_idx[j])) for i, j in zip(lp, ll)]
 
-    resnames = molecule.resnames or [""] * len(molecule)
-    residue_atoms: dict[tuple, list[int]] = {}
-    for idx, resname, resid, chain in molecule.residue_groups():
-        atoms = [int(i) for i in idx if not hetero[i]]
+    residue_atoms: dict[ResidueId, list[int]] = {}
+    for group in molecule.residue_groups():
+        atoms = [int(i) for i in group.atom_indices if not hetero[i]]
         if atoms:
-            residue_atoms[(chain, int(resid), resname)] = atoms
+            residue_atoms[group.residue_id] = atoms
 
-    site_min: dict[tuple, float] = {}
-    site_res: dict[tuple, Residue] = {}
+    site_min: dict[ResidueId, float] = {}
+    site_res: dict[ResidueId, Residue] = {}
     for local_i in np.unique(lp):
         gi = int(prot_idx[local_i])
-        key = (molecule.chains[gi], int(molecule.resids[gi]), resnames[gi])
-        site_res[key] = Residue(molecule.chains[gi], int(molecule.resids[gi]), resnames[gi])
-        site_min[key] = float(per_atom_min[local_i])
+        key = molecule.residue_id(gi)
+        site_res[key] = _residue_from_id(key)
+        site_min[key] = min(float(per_atom_min[local_i]), site_min.get(key, float("inf")))
     order = sorted(site_min, key=lambda k: site_min[k])
     return BindingSite(
         ligand=target, cutoff=cutoff,

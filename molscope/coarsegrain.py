@@ -76,6 +76,7 @@ class BeadMapping:
     resid: Optional[int] = None
     chain: str = ""
     atom_indices: list[int] = field(default_factory=list)
+    insertion_code: str = ""
 
 
 @dataclass(frozen=True)
@@ -87,6 +88,7 @@ class DroppedAtom:
     resname: str = ""
     resid: Optional[int] = None
     chain: str = ""
+    insertion_code: str = ""
 
 
 @dataclass(frozen=True)
@@ -116,6 +118,7 @@ class VirtualSiteMapping:
     resname: str = ""
     resid: Optional[int] = None
     chain: str = ""
+    insertion_code: str = ""
 
 
 @dataclass(frozen=True)
@@ -173,7 +176,9 @@ class CoarseGrainReport:
         lines = [f"Mapping: {self.mapping}", self.coverage(), "", "Beads:"]
         if self.beads:
             for bead in self.beads:
-                prefix = _residue_label(bead.resid, bead.resname, bead.chain)
+                prefix = _residue_label(
+                    bead.resid, bead.resname, bead.chain, bead.insertion_code
+                )
                 atoms = ", ".join(bead.atom_names) if bead.atom_names else "(none)"
                 lines.append(f"  {prefix}:")
                 lines.append(f"    {bead.name} bead: {atoms} -> {bead.reduction}")
@@ -187,7 +192,9 @@ class CoarseGrainReport:
                     f"{name}#{idx}" for idx, name in zip(site.parents, site.parent_names)
                 )
                 weights = ", ".join(f"{w:g}" for w in site.weights)
-                prefix = _residue_label(site.resid, site.resname, site.chain)
+                prefix = _residue_label(
+                    site.resid, site.resname, site.chain, site.insertion_code
+                )
                 lines.append(f"  {prefix}:")
                 lines.append(
                     f"    {site.name} site: {site.rule}({parents}; weights={weights})"
@@ -196,7 +203,9 @@ class CoarseGrainReport:
         lines.extend(["", "Dropped atoms:"])
         if self.dropped_atoms:
             for atom in self.dropped_atoms:
-                label = _residue_label(atom.resid, atom.resname, atom.chain)
+                label = _residue_label(
+                    atom.resid, atom.resname, atom.chain, atom.insertion_code
+                )
                 name = atom.name or atom.element or "(unnamed)"
                 lines.append(f"  {label}: {name}")
         else:
@@ -290,12 +299,17 @@ def _by_index(molecule: Molecule, mapping: dict, weighted: bool, bonds, virtual_
 def _by_residue(molecule: Molecule, mapping, weighted: bool, bonds, virtual_sites) -> Molecule:
     use_mass = weighted and mapping != "residue_centroid"
     bead_coords, bead_names = [], []
-    bead_resnames, bead_resids, bead_chains = [], [], []
+    bead_resnames, bead_resids, bead_icodes, bead_chains = [], [], [], []
     residue_beads: list[list[int]] = []
     bead_report: list[BeadMapping] = []
     assigned: set[int] = set()
 
-    for atom_idx, resname, resid, chain in molecule.residue_groups():
+    for group in molecule.residue_groups():
+        atom_idx = group.atom_indices
+        resname = group.resname
+        resid = group.resid
+        chain = group.chain
+        icode = group.insertion_code
         local = []
         for bead_name, members in _residue_beads(molecule, atom_idx, resname, mapping):
             if not members:
@@ -305,6 +319,7 @@ def _by_residue(molecule: Molecule, mapping, weighted: bool, bonds, virtual_site
             bead_names.append(bead_name)
             bead_resnames.append(resname)
             bead_resids.append(resid)
+            bead_icodes.append(icode)
             bead_chains.append(chain)
             local.append(len(bead_coords) - 1)
             bead_report.append(
@@ -316,6 +331,7 @@ def _by_residue(molecule: Molecule, mapping, weighted: bool, bonds, virtual_site
                     resid=resid,
                     chain=chain,
                     atom_indices=[int(i) for i in members],
+                    insertion_code=icode,
                 )
             )
         if local:
@@ -337,6 +353,7 @@ def _by_residue(molecule: Molecule, mapping, weighted: bool, bonds, virtual_site
         virtual_sites,
         bead_resnames,
         bead_resids,
+        bead_icodes,
         bead_chains,
     )
     report = CoarseGrainReport(
@@ -350,7 +367,7 @@ def _by_residue(molecule: Molecule, mapping, weighted: bool, bonds, virtual_site
     cg = Molecule(
         np.array(bead_coords, dtype=float), elements=[""] * len(bead_coords),
         name=f"{molecule.name} (CG)", atom_names=bead_names, resnames=bead_resnames,
-        resids=np.array(bead_resids, dtype=int), chains=bead_chains,
+        resids=np.array(bead_resids, dtype=int), icodes=bead_icodes, chains=bead_chains,
         bond_index=bond_index, virtual_sites=virtual_flags, _mapping_report=report,
     )
     return cg, report
@@ -406,6 +423,7 @@ def _append_virtual_sites(
     virtual_sites,
     bead_resnames: Optional[list[str]] = None,
     bead_resids: Optional[list[int]] = None,
+    bead_icodes: Optional[list[str]] = None,
     bead_chains: Optional[list[str]] = None,
 ) -> list[VirtualSiteMapping]:
     """Append virtual-site coordinates to the CG coordinate/name lists."""
@@ -435,6 +453,9 @@ def _append_virtual_sites(
         resid = spec.get("resid")
         if resid is None and bead_resids is not None:
             resid = bead_resids[first]
+        icode = spec.get("insertion_code")
+        if icode is None and bead_icodes is not None:
+            icode = bead_icodes[first]
         chain = spec.get("chain")
         if chain is None and bead_chains is not None:
             chain = bead_chains[first]
@@ -446,6 +467,8 @@ def _append_virtual_sites(
             bead_resnames.append(resname or "")
         if bead_resids is not None:
             bead_resids.append(0 if resid is None else int(resid))
+        if bead_icodes is not None:
+            bead_icodes.append(icode or "")
         if bead_chains is not None:
             bead_chains.append(chain or "")
         report.append(
@@ -459,6 +482,7 @@ def _append_virtual_sites(
                 resname=resname or "",
                 resid=None if resid is None else int(resid),
                 chain=chain or "",
+                insertion_code=icode or "",
             )
         )
     return report
@@ -477,6 +501,7 @@ def _normalise_virtual_site_spec(spec) -> dict:
             "weights": weights,
             "resname": spec.get("resname"),
             "resid": spec.get("resid"),
+            "insertion_code": spec.get("insertion_code", spec.get("icode")),
             "chain": spec.get("chain"),
         }
     else:
@@ -493,6 +518,7 @@ def _normalise_virtual_site_spec(spec) -> dict:
             "weights": None,
             "resname": None,
             "resid": None,
+            "insertion_code": None,
             "chain": None,
         }
 
@@ -635,6 +661,7 @@ def _dropped_atoms(molecule: Molecule, assigned: set) -> list[DroppedAtom]:
     chains = molecule.chains or [""] * len(molecule)
     resnames = molecule.resnames or [""] * len(molecule)
     resids = molecule.resids if len(molecule.resids) else [None] * len(molecule)
+    icodes = molecule.icodes or [""] * len(molecule)
     atom_names = molecule.atom_names or [""] * len(molecule)
     for i in range(len(molecule)):
         if i in assigned:
@@ -646,6 +673,7 @@ def _dropped_atoms(molecule: Molecule, assigned: set) -> list[DroppedAtom]:
                 resname=resnames[i],
                 resid=None if resids[i] is None else int(resids[i]),
                 chain=chains[i],
+                insertion_code=icodes[i],
             )
         )
     return dropped
@@ -659,10 +687,15 @@ def _mapping_name(mapping) -> str:
     return mapping if isinstance(mapping, str) else "custom residue"
 
 
-def _residue_label(resid: Optional[int], resname: str, chain: str) -> str:
+def _residue_label(
+    resid: Optional[int],
+    resname: str,
+    chain: str,
+    insertion_code: str = "",
+) -> str:
     parts = ["Residue"]
     if resid is not None:
-        parts.append(str(resid))
+        parts.append(f"{resid}{insertion_code}")
     if resname:
         parts.append(resname)
     if chain:
@@ -677,7 +710,13 @@ def bead_label(bead: BeadMapping, index: Optional[int] = None) -> str:
     from index mappings still get distinct labels.
     """
     residue = " ".join(
-        str(p) for p in (bead.resid, bead.resname, bead.chain) if p not in (None, "")
+        str(p)
+        for p in (
+            f"{bead.resid}{bead.insertion_code}" if bead.resid is not None else None,
+            bead.resname,
+            bead.chain,
+        )
+        if p not in (None, "")
     )
     if residue:
         return f"{bead.name} ({residue})"
@@ -705,6 +744,7 @@ def mapping_to_dict(cg: Molecule) -> dict:
             "name": bead.name,
             "resname": bead.resname,
             "resid": bead.resid,
+            "insertion_code": bead.insertion_code,
             "chain": bead.chain,
             "reduction": bead.reduction,
             "atom_indices": list(bead.atom_indices),
@@ -722,6 +762,7 @@ def mapping_to_dict(cg: Molecule) -> dict:
             "element": atom.element,
             "resname": atom.resname,
             "resid": atom.resid,
+            "insertion_code": atom.insertion_code,
             "chain": atom.chain,
         }
         for atom in report.dropped_atoms
@@ -732,6 +773,7 @@ def mapping_to_dict(cg: Molecule) -> dict:
             "name": site.name,
             "resname": site.resname,
             "resid": site.resid,
+            "insertion_code": site.insertion_code,
             "chain": site.chain,
             "parents": list(site.parents),
             "parent_names": list(site.parent_names),
@@ -796,7 +838,7 @@ def apply_mapping(molecule: Molecule, record: dict) -> Molecule:
         raise ValueError("mapping record has no beads")
 
     n = len(molecule)
-    coords, names, resnames, resids, chains = [], [], [], [], []
+    coords, names, resnames, resids, icodes, chains = [], [], [], [], [], []
     bead_report: list[BeadMapping] = []
     assigned: set[int] = set()
     has_residues = False
@@ -813,8 +855,10 @@ def apply_mapping(molecule: Molecule, record: dict) -> Molecule:
         coords.append(_reduce(molecule, members, use_mass))
         names.append(bead["name"])
         resname, resid, chain = bead.get("resname", ""), bead.get("resid"), bead.get("chain", "")
+        icode = bead.get("insertion_code", bead.get("icode", ""))
         resnames.append(resname)
         resids.append(0 if resid is None else int(resid))
+        icodes.append(icode or "")
         chains.append(chain)
         has_residues = has_residues or resid is not None
         bead_report.append(
@@ -826,6 +870,7 @@ def apply_mapping(molecule: Molecule, record: dict) -> Molecule:
                 resid=resid,
                 chain=chain,
                 atom_indices=members,
+                insertion_code=icode or "",
             )
         )
 
@@ -835,6 +880,7 @@ def apply_mapping(molecule: Molecule, record: dict) -> Molecule:
         record.get("virtual_sites") or None,
         resnames if has_residues else None,
         resids if has_residues else None,
+        icodes if has_residues else None,
         chains if has_residues else None,
     )
     bonds = record.get("bonds") or []
@@ -863,6 +909,7 @@ def apply_mapping(molecule: Molecule, record: dict) -> Molecule:
         kwargs.update(
             resnames=resnames,
             resids=np.array(resids, dtype=int),
+            icodes=icodes,
             chains=chains,
         )
     return Molecule(np.array(coords, dtype=float), **kwargs)
@@ -906,7 +953,7 @@ def _index_group_name(bead: BeadMapping, index: int, used: dict[str, int]) -> st
     """Build a unique, whitespace-free group name for one bead."""
     parts = [bead.name]
     if bead.resid is not None:
-        parts.append(str(bead.resid))
+        parts.append(f"{bead.resid}{bead.insertion_code}")
     if bead.resname:
         parts.append(bead.resname)
     if bead.chain:
