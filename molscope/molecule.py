@@ -18,9 +18,6 @@ import numpy as np
 
 from . import elements
 
-# Above this size the dense O(n^2) bond search is refused; install scipy for the
-# KD-tree path (pip install 'molscope[fast]') to handle larger structures.
-
 _BACKBONE_ATOMS = ("N", "CA", "C", "O")
 
 
@@ -210,6 +207,18 @@ class Molecule:
 
     def __len__(self) -> int:
         return len(self.coords)
+
+    def __repr__(self) -> str:
+        # The default dataclass repr dumps the raw coordinate arrays, which is
+        # unreadable for anything bigger than a few atoms. Show a high-signal
+        # one-liner instead.
+        parts = [f"name={self.name!r}" if self.name else None,
+                 f"atoms={len(self)}"]
+        if self.formula:
+            parts.append(f"formula={self.formula!r}")
+        if self.chains:
+            parts.append(f"chains={''.join(sorted(set(self.chains)))!r}")
+        return f"Molecule({', '.join(p for p in parts if p)})"
 
     def __eq__(self, other) -> bool:
         # Auto-generated dataclass __eq__ can't compare the numpy field; do it
@@ -879,10 +888,11 @@ class Molecule:
         Two atoms bond when their separation is within ``tolerance`` times the
         sum of their covalent radii. Returns an ``(M, 2)`` int array.
 
-        Uses ``scipy.spatial.cKDTree`` when available (scales to large
-        structures); otherwise falls back to a dense search that is refused
-        above ``_DENSE_BOND_LIMIT`` atoms. If the molecule carries explicit
-        bonds (e.g. a coarse-grained model), those are returned directly.
+        Uses ``scipy.spatial.cKDTree`` when available; otherwise falls back to
+        a pure-NumPy O(N) cell-list search, so both paths scale to large
+        structures without materializing the full distance matrix. If the
+        molecule carries explicit bonds (e.g. a coarse-grained model), those
+        are returned directly.
         """
         if self.bond_index is not None:
             return self.bond_index
