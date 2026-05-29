@@ -122,17 +122,21 @@ style assignment based on backbone hydrogen-bond patterns.
 What is validated:
 
 - The validation suite compares MolScope's simplified DSSP against `mkdssp`
-  where the reference binary is available.
-- On the bundled Aquaporin-1 structure (`1fqy`), CI records about 99%
-  agreement after reducing DSSP states to helix/strand/coil.
+  across three fold classes where the reference binary is available:
+  Aquaporin-1 (`1fqy`, helix-dominated), ubiquitin (`1ubq`, mixed alpha/beta),
+  and the SH3 domain (`1shg`, all-beta).
+- After reducing DSSP states to helix/strand/coil, agreement is high across
+  all three folds: about 99% on the helical and mixed structures and about
+  98% on the all-beta one.
 
 Limits:
 
 - Not bit-identical to reference `mkdssp`. Treat output as the
   educational/prototyping equivalent of DSSP, not as a substitute for it in
   production pipelines.
-- Strand-rich and edge-case folds can disagree more strongly than helical
-  test structures.
+- Disagreements concentrate at the boundary residues of helices and strands,
+  and on irregular or low-quality structures, rather than on any one fold
+  class.
 - Needs backbone N/CA/C/O atoms, so bare XYZ input is insufficient.
 - Only the standard collapsed states (H/E/C) are validated against the
   reference; finer DSSP categories are not.
