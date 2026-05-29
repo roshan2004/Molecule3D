@@ -503,6 +503,21 @@ molscope export "data/*.cif" --to pyg --out-dir pyg_graphs/ --pe laplacian --job
 ```
 Supports advanced features like `--self-loops`, `--global-node`, and `--pe` (positional encodings).
 
+### Select
+Pick a diverse subset from a molecule table (`.csv` or `.xlsx`) by MaxMin
+selection over descriptors. Select on existing numeric columns, or compute
+descriptors from a SMILES column with RDKit.
+```bash
+# diverse pick on existing property columns (no extras needed for CSV)
+molscope select molecules.csv --descriptor-cols MW ALogP -n 100 --out picked.csv
+
+# or compute RDKit descriptors from SMILES first (needs the chem extra;
+# .xlsx input needs the xlsx extra)
+molscope select molecules.xlsx --smiles-col SMILES --compute-descriptors -n 100 --out picked.csv
+```
+`MolLogP` (RDKit's Crippen logP) is the ALogP equivalent. Rows with missing
+descriptors are skipped; selection is deterministic.
+
 ## Use from an AI assistant (MCP)
 
 MolScope ships an optional [Model Context Protocol](https://modelcontextprotocol.io)
