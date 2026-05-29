@@ -1,5 +1,5 @@
 ---
-title: 'MolScope: lightweight molecular structure analysis, graph export, and coarse-graining in Python'
+title: 'MolScope: a lightweight bridge from molecular structures to descriptors, graph-ML inputs, and coarse-grained representations in Python'
 tags:
   - Python
   - molecular structure
@@ -10,120 +10,152 @@ tags:
 authors:
   - name: Roshan Shrestha
     orcid: 0000-0002-9356-5136
+    corresponding: true
     affiliation: 1
 affiliations:
-  - name: Independent Researcher
+  - name: Independent Researcher, Nepal
     index: 1
-date: 28 May 2026
+date: 29 May 2026
 bibliography: paper.bib
 ---
 
 # Summary
 
-`MolScope` is a lightweight Python toolkit for static molecular structure
-analysis, graph export, and coarse-graining. It reads common coordinate
-formats (XYZ, PDB, mmCIF, SDF), provides atom and residue level selections,
-computes geometry, contacts, and a dependency-free secondary structure
-assignment, and exposes three workflow-shaped outputs: fixed-width structural
-descriptor tables, atom-and-bond or residue-contact graphs (with NetworkX,
-PyTorch Geometric, and DGL exporters), and coarse-grained bead
-representations with simple connectivity.
+`MolScope` is a lightweight Python toolkit that bridges static molecular
+structures to three research-ready outputs: fixed-width structural descriptor
+tables, machine-learning graphs, and coarse-grained bead representations. It
+reads common coordinate formats (XYZ, PDB, mmCIF, SDF), builds a molecule from a
+SMILES string, fetches structures from the RCSB Protein Data Bank, and provides
+atom- and residue-level selections, geometry, contacts and contact maps, a
+dependency-free secondary-structure assignment, and protein-aware bond and
+chemistry perception.
 
 The package is built on `NumPy` [@harris2020array] and `matplotlib`
 [@hunter2007matplotlib] only. All chemistry, file-format, and graph-backend
 dependencies (`RDKit` [@rdkit], `Gemmi` [@wojdyr2022gemmi], `NetworkX`
 [@hagberg2008networkx], `SciPy` [@virtanen2020scipy], `PyTorch`
 [@paszke2019pytorch], `PyTorch Geometric` [@fey2019pytorch_geometric], `DGL`
-[@wang2019dgl]) are optional extras that are installed only when the relevant
-feature is used. This keeps the base install small and the dependency graph
-predictable.
+[@wang2019dgl]) are optional extras installed only when the relevant feature is
+used. This keeps the base install small and the dependency graph predictable,
+while still allowing each workflow to hand off to the wider ecosystem.
 
 # Statement of need
 
-Existing tooling for molecular structure work in Python sits at two
-extremes. Specialist packages such as `MDAnalysis` [@michaud2011mdanalysis],
-`MDTraj` [@mcgibbon2015mdtraj], `RDKit`, and `PyMOL` [@pymol] are powerful
-and battle-tested, but each carries a substantial dependency footprint and
-an API surface aimed at production scientific workflows. At the other
-extreme, building from raw `NumPy` quickly grows into a bespoke pile of
-parsers, selection logic, and graph builders that are easy to get wrong and
-hard to maintain.
-
 For teaching exercises, quick structural quality-control checks, and small
-machine-learning-for-molecules prototypes, neither extreme fits well.
-Students need readable Python that demonstrates the structure of the
-underlying data without disappearing into a framework. Researchers
-prototyping graph neural networks for molecules need a deterministic way to
-turn a PDB file into a `torch_geometric.data.Data` object without first
-standing up a full featurisation pipeline. Modellers want a fast way to
-inspect a coarse-grained mapping before committing to a production Martini
-[@marrink2007martini] setup.
+machine-learning-for-molecules prototypes, the available Python tooling fits
+poorly. Students need readable code that exposes the structure of molecular data
+rather than hiding it behind a framework. Researchers prototyping graph neural
+networks need a deterministic way to turn a structure file into a
+`torch_geometric.data.Data` object without first standing up a full
+featurisation pipeline. Modellers want to inspect a coarse-grained mapping before
+committing to a production Martini [@marrink2007martini] setup.
 
-`MolScope` sits in this gap. It is intentionally narrower than `MDAnalysis`
-or `RDKit`, and intentionally more opinionated than a `NumPy`-only approach:
-every workflow ends in a concrete, ready-to-use object (a descriptor table,
-a graph, or a bead model). The package documents what it deliberately is
-not, so users can identify when their work has outgrown it and reach for a
-heavier specialist tool.
+`MolScope` targets exactly these users. Every workflow ends in a concrete,
+ready-to-use object (a descriptor table, a graph, or a bead model), and the
+package documents what it deliberately is *not*, so users can recognise when
+their work has outgrown it and reach for a heavier specialist tool.
 
-# Functionality
+# State of the field
 
-`MolScope` is organised around three core workflows, each documented end to
-end in the project's tutorials:
+Python tooling for molecular structure work clusters at two extremes.
+Specialist packages are powerful and battle-tested but carry substantial
+dependency footprints and production-oriented APIs: `MDAnalysis`
+[@michaud2011mdanalysis] and `MDTraj` [@mcgibbon2015mdtraj] for trajectories,
+`RDKit` for cheminformatics, `Biopython` [@cock2009biopython] for bioinformatics
+parsing, and `PyMOL` [@pymol] for interactive visualisation. At the other
+extreme, assembling parsers, selection logic, and graph builders directly on
+`NumPy` quickly becomes a bespoke pile that is easy to get wrong and hard to
+maintain.
 
-1. **PDB to descriptors.** Geometry, contacts, contact maps, residue-level
-   analyses, a dependency-free DSSP-style secondary structure assignment,
-   and optional `RDKit`-backed scalar descriptors when the `chem` extra is
-   installed. After collapsing assignments to helix, strand, and coil, the
-   DSSP-style implementation reaches 98 to 99% per-residue agreement with
-   reference `mkdssp` [@kabsch1983dssp] across three fold classes in the
-   validation suite: helix-dominated Aquaporin-1 (99.1%), mixed alpha/beta
-   ubiquitin (100%), and the all-beta SH3 domain (98.2%). This is a targeted
-   regression check rather than an exhaustive benchmark panel; the package's
-   per-workflow limitations page records its scope explicitly.
+`MolScope` occupies the middle ground rather than competing with those tools. It
+is intentionally narrower than `MDAnalysis` or `RDKit` and intentionally more
+opinionated than a `NumPy`-only approach, optimised for the shortest path from a
+static structure to descriptors, an ML graph, or a coarse-grained prototype.
+When a workflow needs the depth of a specialist package, `MolScope` exports to
+it (`NetworkX`, `PyTorch Geometric`, `DGL`) or defers to it (`RDKit` chemistry,
+`Gemmi` validation) rather than reimplementing it.
 
-2. **PDB to graph or GNN.** Atom-and-bond graphs and residue contact graphs
-   with named node and edge feature presets, Laplacian and random-walk
-   positional encodings, and exporters to `NetworkX`, `PyTorch Geometric`,
-   and `DGL`. When explicit bond records are absent, bonds are inferred
-   geometrically from covalent radii.
+# Software design
 
-3. **PDB to coarse-grained beads.** Residue centroids, simplified
-   Martini-style backbone and side-chain mappings, custom user mappings,
-   and virtual sites preserved as derived coordinate metadata. The output
-   is a regular `Molecule` so plotting and graph export remain available
-   on the coarse-grained representation.
+`MolScope` is organised around an immutable `Molecule` object and a small core
+(`NumPy` and `matplotlib`) with every heavier capability behind an optional
+extra that degrades gracefully when absent. Three workflows are documented end
+to end in the project's tutorials:
 
-The package also ships with a command-line interface (`molscope`) for the
-most common batch operations, an interactive 3D viewer via the optional
-`viz` extra, and a two-tier validation suite that combines dependency-free
-invariants with cross-checks against `MDAnalysis`, `RDKit`, and `mkdssp`
-where the reference tools are available.
+1. **Structure to descriptors.** Geometry, contacts, contact maps, residue-level
+   analyses, a dependency-free DSSP-style secondary-structure assignment, and
+   optional `RDKit`-backed scalar descriptors. For proteins, an opt-in
+   residue-template path uses `RDKit` to assign correct bonds, bond orders, and
+   aromaticity that geometric distance inference cannot recover.
+2. **Structure to graph.** Atom-and-bond and residue-contact graphs with named
+   node and edge feature presets, Laplacian and random-walk positional
+   encodings, and exporters to `NetworkX`, `PyTorch Geometric`, and `DGL`.
+3. **Structure to coarse-grained beads.** Residue centroids, simplified
+   Martini-style backbone and side-chain mappings, custom mappings, and virtual
+   sites. The output is a regular `Molecule`, so plotting and graph export remain
+   available on the coarse-grained representation.
 
-# Quality, documentation, and continuous integration
+The package is reachable through a Python API, a command-line interface
+(`molscope`) for common batch operations, and an optional Model Context Protocol
+server that exposes the analyses to AI assistants. A design priority is honesty
+about scope: a per-workflow limitations page and a per-feature validation table
+state plainly which results are cross-checked against reference tools and which
+are intentionally lightweight (for example, the coarse-graining tools are for
+educational mapping and bead-graph prototyping, not validated force-field
+generation).
 
-`MolScope` is tested on Python 3.9, 3.11, and 3.13. Continuous integration
-runs the full test suite on each version, measures coverage with the
-optional backends installed, and runs a separate scientific validation job
-that cross-checks geometry, contacts, and secondary structure against
-reference scientific tools. Documentation is built with `MkDocs Material`
-and hosted at <https://molscope.readthedocs.io/>, and a per-workflow
-limitations page makes explicit what each workflow does and does not cover.
+That honesty is backed by a two-tier validation suite. Dependency-free
+invariants (rigid-body algebra, geometry, coarse-grain conservation) run
+everywhere, and reference cross-checks run where the reference tool is available:
+geometry and contacts against `MDAnalysis`, bond and chemistry perception
+against `RDKit`, and secondary structure against `mkdssp` [@kabsch1983dssp].
+After collapsing to the helix/strand/coil alphabet, the DSSP-style assignment
+reaches 98 to 99% per-residue agreement with `mkdssp` across three fold classes
+(helix-dominated, mixed alpha/beta, and all-beta). Continuous integration runs
+the suite on Python 3.9, 3.11, and 3.13.
+
+# Research impact statement
+
+`MolScope` is a young package, and its intended impact is in teaching,
+exploratory analysis, and early-stage molecular machine learning rather than in
+production pipelines. Its near-term significance rests on lowering the barrier
+between a structure file and a usable research artifact: a reproducible
+descriptor table for classical models, a deterministic graph for message-passing
+experiments, or an inspectable coarse-grained mapping. The deliberately small
+dependency core makes it suitable for classroom and continuous-integration
+environments where a full simulation or cheminformatics stack is impractical,
+and the reference-validated components make its descriptor and structural outputs
+trustworthy enough to build on. The package is openly developed and released, so
+adoption and downstream use can be tracked through its public repository and
+archive.
+
+# AI usage disclosure
+
+Generative AI was used substantially in the development of `MolScope`. Anthropic
+Claude models (via the Claude Code agent) assisted with implementation, test
+authoring, documentation, and the drafting of this paper. The author directed
+the work, reviewed and validated all contributions, and is solely responsible
+for the correctness and content of the software and this manuscript. The two-tier
+validation suite, which cross-checks results against the independent reference
+tools `MDAnalysis`, `RDKit`, and `mkdssp` and against known per-residue
+chemistry, provides verification of scientific correctness that is independent of
+how the code was produced.
 
 # Availability and archival
 
-`MolScope` is distributed on PyPI as `molscope` and developed openly on
-GitHub at <https://github.com/roshan2004/molscope> under the MIT licence.
-Each release is automatically archived on Zenodo: the concept DOI
-[10.5281/zenodo.20433850](https://doi.org/10.5281/zenodo.20433850)
-resolves to the latest archived version, and the version under review
-here (v0.8.3) is archived at
-[10.5281/zenodo.20433851](https://doi.org/10.5281/zenodo.20433851).
+`MolScope` is distributed on PyPI as `molscope` and developed openly on GitHub at
+<https://github.com/roshan2004/molscope> under the MIT licence, with
+documentation at <https://molscope.readthedocs.io/>. Each tagged release is
+archived on Zenodo; the concept DOI
+[10.5281/zenodo.20433850](https://doi.org/10.5281/zenodo.20433850) resolves to
+the latest archived version, and the version submitted here is archived under its
+own version DOI.
 
 # Acknowledgements
 
 The author thanks the maintainers of `NumPy`, `matplotlib`, `RDKit`,
-`MDAnalysis`, `PyTorch Geometric`, `DGL`, and `Gemmi`, on whose work
-`MolScope`'s optional integrations depend.
+`MDAnalysis`, `PyTorch Geometric`, `DGL`, and `Gemmi`, on whose work `MolScope`'s
+optional integrations depend. No external financial support was received for this
+work.
 
 # References
