@@ -294,6 +294,31 @@ def test_render_rmsd_heatmap_returns_png(server):
     assert getattr(block, "mimeType", None) == "image/png" and block.data
 
 
+def test_render_contact_map_saves_file(server, tmp_path):
+    out = tmp_path / "cmap.png"
+    msg = _text(server, "render_contact_map", source=TRYPSIN, save_path=str(out))
+    assert str(out) in msg and out.exists() and out.stat().st_size > 0
+    assert out.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n"
+
+
+def test_render_structure_saves_file(server, tmp_path):
+    out = tmp_path / "view.png"
+    msg = _text(server, "render_structure", source=UBQ, save_path=str(out))
+    assert "Saved figure to" in msg and out.exists()
+
+
+def test_render_save_path_format_follows_extension(server, tmp_path):
+    out = tmp_path / "cmap.pdf"
+    _text(server, "render_contact_map", source=TRYPSIN, save_path=str(out))
+    assert out.exists() and out.read_bytes()[:5] == b"%PDF-"
+
+
+def test_render_save_path_creates_parent_dirs(server, tmp_path):
+    out = tmp_path / "nested" / "dir" / "dm.png"
+    _text(server, "render_distance_matrix", source=UBQ, save_path=str(out))
+    assert out.exists()
+
+
 def test_load_accepts_paths_and_rejects_garbage():
     assert _load(UBQ).summary()
     with pytest.raises(FileNotFoundError):

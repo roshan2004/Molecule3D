@@ -510,48 +510,59 @@ def build_server():  # noqa: C901 - a flat list of small tool adapters reads cle
         )
 
     @server.tool()
-    def render_structure(source: str, color_by: str = "element"):
-        """Render the structure in 3D and return a PNG image.
+    def render_structure(source: str, color_by: str = "element", save_path: Optional[str] = None):
+        """Render the structure in 3D.
 
         ``color_by`` is ``"element"``, ``"chain"``, ``"residue"`` or ``"ss"``
-        (secondary structure). Returns a PNG of the 3D scatter view.
+        (secondary structure). Pass ``save_path`` (e.g. ``"~/Desktop/view.png"``)
+        to write the figure to a file and return its path; omit it to return the
+        image inline. The format follows the ``save_path`` extension
+        (``.png``/``.pdf``/``.svg``), defaulting to PNG.
         """
         import matplotlib
 
         matplotlib.use("Agg")
         mol = _load(source)
         ax = mol.plot(color_by=color_by, show=False)
-        return _png(ax.figure)
+        return _figure_result(ax.figure, save_path)
 
     @server.tool()
     def render_contact_map(
-        source: str, cutoff: float = 8.0, level: str = "residue", method: str = "ca"
+        source: str, cutoff: float = 8.0, level: str = "residue", method: str = "ca",
+        save_path: Optional[str] = None,
     ):
-        """Render a contact map as a PNG heatmap.
+        """Render a contact map as a heatmap.
 
         Same ``cutoff``/``level``/``method`` options as the ``contact_map`` tool.
+        Pass ``save_path`` to write the figure to a file and return its path;
+        omit it to return the image inline.
         """
         import matplotlib
 
         matplotlib.use("Agg")
         cmap = _load(source).contact_map(cutoff=cutoff, level=level, method=method)
         ax = cmap.plot(show=False)
-        return _png(ax.figure)
+        return _figure_result(ax.figure, save_path)
 
     @server.tool()
-    def render_distance_matrix(source: str):
-        """Render the dense pairwise atom-distance matrix as a PNG heatmap."""
+    def render_distance_matrix(source: str, save_path: Optional[str] = None):
+        """Render the dense pairwise atom-distance matrix as a heatmap.
+
+        Pass ``save_path`` to write the figure to a file and return its path;
+        omit it to return the image inline.
+        """
         import matplotlib
 
         matplotlib.use("Agg")
         ax = _load(source).plot_distance_matrix(show=False)
-        return _png(ax.figure)
+        return _figure_result(ax.figure, save_path)
 
     @server.tool()
-    def render_rmsd_heatmap(source: str):
-        """Render a multi-model ensemble's pairwise-RMSD matrix as a PNG heatmap.
+    def render_rmsd_heatmap(source: str, save_path: Optional[str] = None):
+        """Render a multi-model ensemble's pairwise-RMSD matrix as a heatmap.
 
-        ``source`` must be a multi-model (e.g. NMR) PDB.
+        ``source`` must be a multi-model (e.g. NMR) PDB. Pass ``save_path`` to
+        write the figure to a file and return its path; omit it for inline.
         """
         import matplotlib
 
@@ -564,10 +575,26 @@ def build_server():  # noqa: C901 - a flat list of small tool adapters reads cle
         if len(models) < 2:
             raise ValueError("render_rmsd_heatmap needs a multi-model file (e.g. an NMR PDB)")
         ax = plot_rmsd_heatmap(rmsd_matrix(models), show=False)
-        return _png(ax.figure)
+        return _figure_result(ax.figure, save_path)
 
-    def _png(figure) -> Image:
+    def _figure_result(figure, save_path: Optional[str]):
+        """Save the figure to ``save_path`` (returning the path) or return it inline.
+
+        When ``save_path`` is given the figure is written to disk and the absolute
+        path is returned as text, so the user gets a real file to open or share.
+        The image format follows the path extension (png/pdf/svg/jpg/tiff),
+        defaulting to PNG. Otherwise the PNG is returned inline.
+        """
         import matplotlib.pyplot as plt
+
+        if save_path:
+            path = os.path.abspath(os.path.expanduser(save_path))
+            os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+            ext = os.path.splitext(path)[1].lower().lstrip(".")
+            fmt = ext if ext in {"png", "pdf", "svg", "jpg", "jpeg", "tif", "tiff"} else "png"
+            figure.savefig(path, format=fmt, dpi=150, bbox_inches="tight")
+            plt.close(figure)
+            return f"Saved figure to {path}"
 
         buffer = io.BytesIO()
         figure.savefig(buffer, format="png", dpi=120, bbox_inches="tight")

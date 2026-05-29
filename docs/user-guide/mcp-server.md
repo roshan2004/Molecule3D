@@ -104,14 +104,21 @@ that is fetched and cached.
 | `select_diverse` | `table`, `n`, `descriptor_cols` / `smiles_col` + `compute_descriptors` | Diverse subset of a CSV/XLSX molecule table (MaxMin). |
 | `validate_cif` | `source` | mmCIF validation report (`cif` extra for full checks). |
 
-### Plots (PNG)
+### Plots
 
 | Tool | Arguments | Returns |
 | --- | --- | --- |
-| `render_structure` | `source`, `color_by` | 3D scatter view. |
-| `render_contact_map` | `source`, `cutoff`, `level`, `method` | Contact-map heatmap. |
-| `render_distance_matrix` | `source` | Dense pairwise distance heatmap. |
-| `render_rmsd_heatmap` | `source` (multi-model) | Ensemble pairwise-RMSD heatmap. |
+| `render_structure` | `source`, `color_by`, `save_path` | 3D scatter view. |
+| `render_contact_map` | `source`, `cutoff`, `level`, `method`, `save_path` | Contact-map heatmap. |
+| `render_distance_matrix` | `source`, `save_path` | Dense pairwise distance heatmap. |
+| `render_rmsd_heatmap` | `source` (multi-model), `save_path` | Ensemble pairwise-RMSD heatmap. |
+
+Every plot tool takes an optional `save_path`. **Pass it to get a file you can
+open or share** (e.g. *"render the contact map for 3ptb and save it to
+~/Desktop/3ptb.png"*): the figure is written to disk and the tool returns the
+absolute path. The format follows the extension (`.png`, `.pdf`, `.svg`, ...),
+defaulting to PNG. Omit `save_path` to receive the image inline instead, which
+suits clients that render MCP image content but leaves no file behind.
 
 Most tools take a `source` that is a local coordinate-file path or a 4-character
 RCSB PDB id; `select_diverse` instead takes a `table` (CSV/XLSX) path. Data tools

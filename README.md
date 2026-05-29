@@ -542,7 +542,7 @@ and provides 21 read-only tools spanning most of the package:
 | Coarse-graining | `coarse_grain` |
 | Library prep | `select_diverse` (diverse subset from a CSV/XLSX table) |
 | Files | `validate_cif` |
-| Plots (PNG) | `render_structure`, `render_contact_map`, `render_distance_matrix`, `render_rmsd_heatmap` |
+| Plots | `render_structure`, `render_contact_map`, `render_distance_matrix`, `render_rmsd_heatmap` (pass `save_path` to write a file) |
 
 Structure tools take a `source` that is either a local coordinate-file path or a
 4-character PDB id (fetched from RCSB). For example, you can ask the assistant to

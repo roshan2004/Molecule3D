@@ -11,6 +11,12 @@ API changes; these are called out under **Changed** where they occur.
 
 ### Added
 
+- The MCP render tools (`render_structure`, `render_contact_map`,
+  `render_distance_matrix`, `render_rmsd_heatmap`) now take an optional
+  `save_path`: when given, the figure is written to disk and the tool returns the
+  file path (format follows the extension: png/pdf/svg/...), so a user gets a
+  real file instead of only an inline image. Omitting it keeps the previous
+  inline-image behaviour.
 - Expanded the MCP server from 9 to 21 tools so it fronts most of the package:
   `geometry`, `measure` (distance/angle/dihedral), `rmsd`, `ensemble_summary`
   (multi-model RMSD/RMSF/clusters), `chemical_features`, `backbone_torsions`,
