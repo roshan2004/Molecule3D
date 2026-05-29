@@ -31,9 +31,18 @@ site.to_records()[0]
 # {'chain': 'A', 'resid': 219, 'resname': 'GLY',
 #  'min_distance': 2.815..., 'n_atom_contacts': 5}
 
-site_mol = site.to_molecule(mol)
-site_mol.descriptors(preset="native-basic")
+site.descriptors(mol, preset="pocket-basic")
+site.plot(mol, show=False)          # pocket residues plus ligand
 ```
+
+The same residue table is available from the command line:
+
+```bash
+molscope binding-site examples/data/3ptb.pdb --out site.csv --cutoff 4.5
+```
+
+Add `--descriptors-out pocket.csv` to also write the one-row
+`pocket-basic` descriptor table.
 
 When a structure has several ligands, select one by residue name or location:
 
@@ -41,6 +50,8 @@ When a structure has several ligands, select one by residue name or location:
 mol.binding_site(ligand="BEN")
 mol.binding_site(ligand=("A", 1))
 ```
+
+The CLI accepts the same choices as `--ligand BEN` or `--ligand A:1`.
 
 A runnable version lives in
 [`examples/binding_site.py`](https://github.com/roshan2004/molscope/blob/main/examples/binding_site.py).

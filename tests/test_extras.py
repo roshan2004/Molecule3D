@@ -25,5 +25,6 @@ def test_optional_extras_are_declared_for_supported_backends():
 
 def test_public_feature_name_helpers_are_available():
     assert "n_atoms" in ms.descriptor_feature_names("native-basic")
+    assert "pocket_n_atoms" in ms.pocket_descriptor_feature_names("pocket-basic")
     assert "element_C" in ms.node_feature_names("ml")
     assert ms.edge_feature_names("ml") == ["distance", "bond_order", "aromatic"]

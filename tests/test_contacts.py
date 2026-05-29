@@ -115,6 +115,29 @@ def test_binding_site_can_select_full_site_residues():
     assert len(bs.to_molecule(mol, include_ligand=True)) == 3
 
 
+def test_binding_site_pocket_basic_descriptors_are_fixed_size():
+    mol = protein_with_ligand()
+    bs = mol.binding_site(cutoff=4.5)
+    desc = bs.descriptors(mol)
+    assert set(desc) == set(ms.pocket_descriptor_feature_names("pocket-basic"))
+    assert desc["pocket_n_atoms"] == 1.0
+    assert desc["pocket_n_residues"] == 1.0
+    assert desc["ligand_n_atoms"] == 1.0
+    assert desc["pocket_atom_contact_count"] == 1.0
+    assert desc["pocket_residue_count_ALA"] == 1.0
+    assert desc["ligand_distance_min"] == pytest.approx(2.0)
+    assert desc["ligand_contact_distance_mean"] == pytest.approx(2.0)
+
+
+def test_binding_site_plot_shortcut_returns_axes():
+    import matplotlib
+
+    matplotlib.use("Agg")
+    mol = protein_with_ligand()
+    ax = mol.binding_site(cutoff=4.5).plot(mol, show=False)
+    assert ax is not None
+
+
 def test_binding_site_ambiguous_requires_explicit_ligand():
     mol = Molecule(
         np.array([[0.0, 0, 0], [2.0, 0, 0], [3.0, 0, 0]]),

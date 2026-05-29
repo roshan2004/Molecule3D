@@ -14,6 +14,7 @@ metadata and the ``hetero`` (ATOM vs HETATM) flag that ``Molecule`` carries:
 
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -27,6 +28,11 @@ ION_RESNAMES = frozenset({
     "NA", "K", "CL", "MG", "CA", "ZN", "FE", "MN", "CU", "NI", "CO", "CD",
     "HG", "BR", "IOD", "LI", "RB", "CS", "SR", "BA",
 })
+AMINO_ACID_RESNAMES = (
+    "ALA", "ARG", "ASN", "ASP", "CYS", "GLN", "GLU", "GLY", "HIS", "ILE",
+    "LEU", "LYS", "MET", "PHE", "PRO", "SER", "THR", "TRP", "TYR", "VAL",
+)
+POCKET_DESCRIPTOR_PRESETS = ("pocket-basic",)
 
 
 @dataclass(frozen=True)
@@ -173,6 +179,28 @@ class BindingSite:
             return molecule.take(np.array([], dtype=int))
         return molecule.take(indices)
 
+    def descriptors(self, molecule: Molecule, preset: str = "pocket-basic") -> dict[str, float]:
+        """Return fixed-size binding-pocket descriptors.
+
+        The ``"pocket-basic"`` preset records pocket size, amino-acid
+        composition, protein-ligand contact counts, binding-site residue
+        dimensions, radius of gyration, and ligand-distance summaries.
+        """
+        preset = _validate_pocket_preset(preset)
+        if preset == "pocket-basic":
+            return _pocket_basic_descriptors(molecule, self)
+        raise AssertionError("unreachable")
+
+    def plot(self, molecule: Molecule, include_ligand: bool = True, **kwargs):
+        """Plot the binding-site residue subset.
+
+        ``include_ligand`` defaults to ``True`` so ``site.plot(mol)`` shows the
+        ligand context. Keyword arguments are forwarded to
+        :meth:`molscope.Molecule.plot`.
+        """
+        kwargs.setdefault("color_by", "residue")
+        return self.to_molecule(molecule, include_ligand=include_ligand).plot(**kwargs)
+
     def __repr__(self) -> str:
         return (
             f"BindingSite({self.ligand.resname}{self.ligand.resid}: "
@@ -186,6 +214,107 @@ class BindingSite:
 def _cross_distances(a: np.ndarray, b: np.ndarray) -> np.ndarray:
     """Dense ``(len(a), len(b))`` Euclidean distances between two atom sets."""
     return np.linalg.norm(a[:, None, :] - b[None, :, :], axis=-1)
+
+
+def pocket_descriptor_feature_names(preset: str = "pocket-basic") -> list[str]:
+    """Return stable feature names for a binding-pocket descriptor preset."""
+    preset = _validate_pocket_preset(preset)
+    if preset == "pocket-basic":
+        return [
+            "pocket_n_atoms",
+            "pocket_n_residues",
+            "ligand_n_atoms",
+            "pocket_radius_of_gyration",
+            "pocket_dim_x",
+            "pocket_dim_y",
+            "pocket_dim_z",
+            "pocket_bbox_volume",
+            "pocket_atom_contact_count",
+            "pocket_contact_atom_count",
+            "pocket_contact_residue_count",
+            "pocket_contact_density",
+            "ligand_distance_min",
+            "ligand_distance_mean",
+            "ligand_distance_std",
+            "ligand_distance_max",
+            "ligand_contact_distance_min",
+            "ligand_contact_distance_mean",
+            "ligand_contact_distance_std",
+            "ligand_contact_distance_max",
+            *[f"pocket_residue_count_{name}" for name in AMINO_ACID_RESNAMES],
+            "pocket_residue_count_OTHER",
+        ]
+    raise AssertionError("unreachable")
+
+
+def _validate_pocket_preset(preset: str) -> str:
+    if preset not in POCKET_DESCRIPTOR_PRESETS:
+        choices = "', '".join(POCKET_DESCRIPTOR_PRESETS)
+        raise ValueError(f"unknown pocket descriptor preset {preset!r}; expected '{choices}'")
+    return preset
+
+
+def _pocket_basic_descriptors(molecule: Molecule, site: BindingSite) -> dict[str, float]:
+    pocket = site.to_molecule(molecule)
+    n_atoms = len(pocket)
+    n_ligand_atoms = len(site.ligand)
+    dims = pocket.dimensions if n_atoms else np.zeros(3, dtype=float)
+    possible_contacts = n_atoms * n_ligand_atoms
+    contact_distances = _contact_distances(molecule, site.contacts)
+    residue_min_distances = np.asarray(site.min_distances, dtype=float)
+    contact_counts = site.residue_contact_counts
+
+    desc = {
+        "pocket_n_atoms": float(n_atoms),
+        "pocket_n_residues": float(len(site.residues)),
+        "ligand_n_atoms": float(n_ligand_atoms),
+        "pocket_radius_of_gyration": float(pocket.radius_of_gyration) if n_atoms else 0.0,
+        "pocket_dim_x": float(dims[0]),
+        "pocket_dim_y": float(dims[1]),
+        "pocket_dim_z": float(dims[2]),
+        "pocket_bbox_volume": float(np.prod(dims)) if n_atoms else 0.0,
+        "pocket_atom_contact_count": float(site.n_atom_contacts),
+        "pocket_contact_atom_count": float(len(site.contact_atom_indices)),
+        "pocket_contact_residue_count": float(sum(count > 0 for count in contact_counts)),
+        "pocket_contact_density": (
+            float(site.n_atom_contacts / possible_contacts) if possible_contacts else 0.0
+        ),
+    }
+    desc.update(_summary_stats("ligand_distance", residue_min_distances))
+    desc.update(_summary_stats("ligand_contact_distance", contact_distances))
+
+    counts = Counter(res.resname.upper() for res in site.residues)
+    known = 0
+    for name in AMINO_ACID_RESNAMES:
+        value = counts.get(name, 0)
+        desc[f"pocket_residue_count_{name}"] = float(value)
+        known += value
+    desc["pocket_residue_count_OTHER"] = float(max(0, len(site.residues) - known))
+    return desc
+
+
+def _summary_stats(prefix: str, values) -> dict[str, float]:
+    values = np.asarray(values, dtype=float)
+    if len(values) == 0:
+        return {
+            f"{prefix}_min": 0.0,
+            f"{prefix}_mean": 0.0,
+            f"{prefix}_std": 0.0,
+            f"{prefix}_max": 0.0,
+        }
+    return {
+        f"{prefix}_min": float(values.min()),
+        f"{prefix}_mean": float(values.mean()),
+        f"{prefix}_std": float(values.std()),
+        f"{prefix}_max": float(values.max()),
+    }
+
+
+def _contact_distances(molecule: Molecule, contacts: list[tuple[int, int]]) -> np.ndarray:
+    if not contacts:
+        return np.empty(0, dtype=float)
+    pairs = np.asarray(contacts, dtype=int).reshape(-1, 2)
+    return np.linalg.norm(molecule.coords[pairs[:, 0]] - molecule.coords[pairs[:, 1]], axis=1)
 
 
 def _require_residue_metadata(molecule: Molecule) -> None:

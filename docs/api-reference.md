@@ -9,11 +9,16 @@
 - `molscope.write_pdb(molecule, path)`, `write_xyz(molecule, path)`.
 - `molscope.featurize_many(paths, return_names=False)`: build an ML feature matrix.
 - `molscope.descriptor_feature_names(preset)`: stable flattened descriptor columns.
+- `molscope.pocket_descriptor_feature_names("pocket-basic")`: stable binding-pocket descriptor columns.
 - `molscope.node_feature_names(preset)`, `edge_feature_names(preset)`: atom/bond graph preset columns.
 - `molscope.residue_node_feature_names(preset)`, `residue_edge_feature_names(preset)`: residue contact graph preset columns.
 - `molscope.interface_residues(mol, chain_a, chain_b, cutoff=5.0)`, `chain_contact_matrix(mol, cutoff=5.0)`: chain interfaces.
 - `molscope.ligands(mol, ...)`, `binding_site(mol, ligand=None, cutoff=4.5)`: ligand detection and binding-site residues.
 - `molscope.backbone_torsions(mol)`: per-residue phi/psi/omega.
+
+`BindingSite` results expose `to_records()`, `to_molecule(mol)`,
+`descriptors(mol, preset="pocket-basic")`, and `plot(mol)` for residue tables,
+pocket descriptor extraction, and quick figures.
 
 ## Molecule
 

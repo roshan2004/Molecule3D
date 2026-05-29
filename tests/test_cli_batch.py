@@ -52,3 +52,31 @@ def test_export_nx_parallel(tmp_path):
     rc = main(["export", *PDBS, "--to", "nx", "--out-dir", str(out_dir), "--jobs", "2"])
     assert rc == 0
     assert sorted(p.name for p in out_dir.glob("*.json")) == ["1fqy.json", "3ptb.json"]
+
+
+def test_binding_site_writes_residue_csv_and_descriptors(tmp_path):
+    out = tmp_path / "site.csv"
+    descriptors_out = tmp_path / "pocket.csv"
+    rc = main([
+        "binding-site",
+        os.path.join(DATA, "3ptb.pdb"),
+        "--out",
+        str(out),
+        "--cutoff",
+        "4.5",
+        "--descriptors-out",
+        str(descriptors_out),
+    ])
+    assert rc == 0
+
+    rows = _read_csv(out)
+    assert len(rows) == 13
+    assert rows[0]["ligand_resname"] == "BEN"
+    assert {"ASP", "SER", "TRP"} <= {row["resname"] for row in rows}
+    assert any(row["resid"] == "189" and row["resname"] == "ASP" for row in rows)
+    assert all(float(row["min_distance"]) <= 4.5 for row in rows)
+
+    desc_rows = _read_csv(descriptors_out)
+    assert len(desc_rows) == 1
+    assert float(desc_rows[0]["pocket_n_residues"]) == 13.0
+    assert float(desc_rows[0]["pocket_atom_contact_count"]) == 107.0

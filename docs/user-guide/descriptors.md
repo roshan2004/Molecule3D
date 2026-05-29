@@ -57,6 +57,20 @@ Preset options:
 - `native-3d`: `native-basic` plus centres, inertia, principal axes/moments, and distance histograms.
 - `rdkit-basic`: `native-basic` plus a stable subset of RDKit scalar descriptors.
 
+Ligand binding sites have their own fixed-size preset because they need a
+ligand context:
+
+```python
+mol = ms.read("examples/data/3ptb.pdb")
+site = mol.binding_site(cutoff=4.5)
+pocket = site.descriptors(mol, preset="pocket-basic")
+names = ms.pocket_descriptor_feature_names("pocket-basic")
+```
+
+`pocket-basic` includes pocket atom and residue counts, amino-acid composition,
+protein-ligand contact counts, radius of gyration, bounding-box dimensions, and
+ligand-distance summaries.
+
 ## RDKit descriptors
 
 Install the optional chemical backend to access RDKit's scalar descriptor set:
