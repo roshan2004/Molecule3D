@@ -36,6 +36,10 @@ graph = ["networkx>=2.6"]      # NetworkX exporter
 chem = ["rdkit>=2023.9"]       # optional chemical perception backend
 cif = ["gemmi>=0.7"]           # robust mmCIF parsing and validation helpers
 gpu = ["torch>=2.0"]           # optional dense distance/contact-map backend
+# MCP server exposing MolScope to AI assistants. The reference `mcp` SDK needs
+# Python >= 3.10, so the marker keeps the 3.9 dependency resolution solvable;
+# the server raises a clear install hint if invoked without `mcp` present.
+mcp = ["mcp>=1.2; python_version >= '3.10'"]
 # Reference tools for the Tier-2 validation suite (tests/validation). The DSSP
 # cross-check additionally needs a system `mkdssp`/`dssp` binary.
 validation = ["mdanalysis>=2.7", "rdkit>=2023.9"]
@@ -56,11 +60,12 @@ Issues = "https://github.com/roshan2004/molscope/issues"
 
 [project.scripts]
 molscope = "molscope.cli:main"
+molscope-mcp = "molscope.mcp_server:main"
 
 # Dev tooling for `uv sync` (installed by default; PEP 735 dependency group).
 # scipy is included so the KD-tree bond path is exercised by the test suite.
 [dependency-groups]
-dev = ["pytest>=7", "pytest-cov>=4", "scipy>=1.7", "ruff>=0.6", "py3Dmol>=2.0", "networkx>=2.6"]
+dev = ["pytest>=7", "pytest-cov>=4", "scipy>=1.7", "ruff>=0.6", "py3Dmol>=2.0", "networkx>=2.6", "mcp>=1.2; python_version >= '3.10'"]
 docs = ["mkdocs-material>=9.5"]
 # Tooling to open and re-execute notebooks/molscope_tour.ipynb.
 notebook = ["jupyterlab>=4", "ipykernel>=6", "nbconvert>=7"]
