@@ -11,6 +11,12 @@ API changes; these are called out under **Changed** where they occur.
 
 ### Added
 
+- Molecule-table workflow: `molscope select` and the `molscope.library` module
+  read a CSV/XLSX of molecules and pick a diverse subset by MaxMin
+  (farthest-first) selection over descriptors. Select on existing numeric columns
+  (e.g. `MW`, `ALogP`) or compute RDKit descriptors from a SMILES column with
+  `--compute-descriptors --smiles-col`. Adds an `xlsx` extra (`openpyxl`) for
+  spreadsheet I/O; CSV input and selection need no optional backend.
 - Optional MCP (Model Context Protocol) server, `molscope.mcp_server`, exposing
   MolScope's analyses as tools for AI assistants such as Claude Code and Claude
   Desktop. Adds a `molscope-mcp` console script, an `mcp` extra

@@ -112,6 +112,39 @@ def main(argv=None) -> int:
 
     export_parser.add_argument("--jobs", "-j", type=int, default=1, help="parallel jobs")
 
+    # -- SELECT subcommand -------------------------------------------------
+    select_parser = subparsers.add_parser(
+        "select", help="pick a diverse subset from a molecule table (CSV/XLSX)"
+    )
+    select_parser.add_argument("file", help="input table (.csv, .tsv or .xlsx)")
+    select_parser.add_argument(
+        "--num", "-n", type=int, required=True, help="number of molecules to select"
+    )
+    select_parser.add_argument(
+        "--out", "-o", help="write the selection to this .csv/.xlsx (default: print a summary)"
+    )
+    select_parser.add_argument(
+        "--descriptor-cols", nargs="+", metavar="COL",
+        help="existing numeric columns to select on, e.g. --descriptor-cols MW ALogP",
+    )
+    select_parser.add_argument(
+        "--smiles-col", metavar="COL",
+        help="column holding SMILES (use with --compute-descriptors)",
+    )
+    select_parser.add_argument(
+        "--compute-descriptors", action="store_true",
+        help="compute RDKit descriptors from --smiles-col and select on them",
+    )
+    select_parser.add_argument(
+        "--rdkit-descriptors", nargs="+", metavar="NAME",
+        help="which RDKit descriptors to compute (default: MolWt MolLogP TPSA ...)",
+    )
+    select_parser.add_argument(
+        "--no-standardize", dest="standardize", action="store_false",
+        help="select on raw descriptors instead of z-scored ones",
+    )
+    select_parser.set_defaults(standardize=True)
+
     # Default to 'view' if no subcommand provided
     if argv is None:
         argv = sys.argv[1:]
@@ -127,6 +160,8 @@ def main(argv=None) -> int:
         return _run_binding_site(args)
     if args.command == "export":
         return _run_export(args)
+    if args.command == "select":
+        return _run_select(args)
 
     return 0
 
@@ -172,6 +207,69 @@ def _run_view(args: argparse.Namespace) -> int:
     if args.save:
         ax.figure.savefig(args.save, dpi=150, bbox_inches="tight")
         print(f"saved {args.save}")
+    return 0
+
+
+def _run_select(args: argparse.Namespace) -> int:
+    from .library import read_table, select_diverse, smiles_descriptors
+
+    if args.num <= 0:
+        print("--num must be a positive integer", file=sys.stderr)
+        return 2
+    if args.compute_descriptors and not args.smiles_col:
+        print("--compute-descriptors requires --smiles-col", file=sys.stderr)
+        return 2
+    if not args.compute_descriptors and not args.descriptor_cols:
+        print(
+            "provide --descriptor-cols COL [COL ...], or "
+            "--compute-descriptors --smiles-col COL",
+            file=sys.stderr,
+        )
+        return 2
+
+    try:
+        table = read_table(args.file)
+    except (OSError, ValueError, ImportError) as exc:
+        print(f"could not read {args.file}: {exc}", file=sys.stderr)
+        return 2
+
+    try:
+        if args.compute_descriptors:
+            smiles = table.column(args.smiles_col)
+            matrix, names = smiles_descriptors(smiles, names=args.rdkit_descriptors)
+            table = table.with_columns(names, matrix)
+        else:
+            names = list(args.descriptor_cols)
+            matrix = table.numeric_matrix(names)
+    except (KeyError, ValueError, ImportError) as exc:
+        print(f"descriptor error: {exc}", file=sys.stderr)
+        return 2
+
+    try:
+        indices = select_diverse(matrix, args.num, standardize=args.standardize)
+    except ValueError as exc:
+        print(f"selection error: {exc}", file=sys.stderr)
+        return 2
+
+    selection = table.select_rows(indices)
+    print(
+        f"selected {len(selection)} of {len(table)} molecules "
+        f"on {', '.join(names)} (diverse MaxMin)"
+    )
+    if len(selection) < args.num:
+        print(
+            f"note: only {len(selection)} rows had complete descriptors, "
+            f"fewer than the requested {args.num}",
+            file=sys.stderr,
+        )
+
+    if args.out:
+        try:
+            selection.write(args.out)
+        except (OSError, ValueError, ImportError) as exc:
+            print(f"could not write {args.out}: {exc}", file=sys.stderr)
+            return 2
+        print(f"wrote {args.out}")
     return 0
 
 
