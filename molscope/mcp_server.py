@@ -315,7 +315,7 @@ def main() -> None:
     """Console-script entry point: build the server and serve over stdio."""
     try:
         server = build_server()
-    except ImportError as exc:  # pragma: no cover - exercised via the error path test
+    except ImportError as exc:
         raise SystemExit(
             "The MolScope MCP server needs the 'mcp' package. "
             "Install it with: pip install 'molscope[mcp]'"
