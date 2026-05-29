@@ -294,6 +294,51 @@ def test_valid_v2000_sdf_still_parses():
     np.testing.assert_array_equal(np.sort(mol.bonds(), axis=0), [[0, 1], [0, 2]])
 
 
+def test_pdb_preserves_rich_residue_ids_and_insertion_codes(tmp_path):
+    mol = ms.read(_fixture("ugly_residue_ids.pdb"))
+    assert len(mol) == 9                         # altLoc B ligand atom is skipped
+    assert mol.icodes == ["", "", "A", "A", "B", "B", "", "", ""]
+    assert mol.resids.tolist()[:6] == [-1, 0, 100, 100, 100, 100]
+
+    groups = list(mol.residue_groups())
+    assert [group.residue_id.label() for group in groups] == [
+        "A:GLY-1",
+        "A:ALA0",
+        "A:SER100A",
+        "A:THR100B",
+        "A:LIG10",
+        "B:LIG10",
+    ]
+
+    atom_idx, resname, resid, chain = groups[2]   # legacy unpacking still works
+    assert atom_idx == [2, 3]
+    assert (resname, resid, chain) == ("SER", 100, "A")
+
+    assert len(mol.select(resid=100)) == 4
+    assert mol.select(resid=100, icode="A").resnames == ["SER", "SER"]
+    assert len(mol.select(residue_id=ms.ResidueId("A", 100, "B"))) == 2
+
+    out = str(tmp_path / "roundtrip.pdb")
+    write_pdb(mol, out)
+    back = read_pdb(out)
+    assert back.icodes == mol.icodes
+
+
+def test_cif_preserves_atom_site_insertion_codes():
+    mol = ms.read(_fixture("insertion_codes.cif"))
+    assert mol.icodes == ["A", "B", ""]
+    assert [rid.label() for rid in mol.residue_ids] == [
+        "A:SER100A",
+        "A:THR100B",
+        "B:ALA0",
+    ]
+    assert [group.residue_id.label() for group in mol.residue_groups()] == [
+        "A:SER100A",
+        "A:THR100B",
+        "B:ALA0",
+    ]
+
+
 def test_fetch_unknown_pdb_id_raises_value_error(monkeypatch, tmp_path):
     from urllib.error import HTTPError
 

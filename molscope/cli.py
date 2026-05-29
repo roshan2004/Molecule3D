@@ -13,7 +13,9 @@ import sys
 
 from .io import fetch, read
 
-_SELECTION_KEYS = {"element", "chain", "resname", "atom_name", "resid", "hetero"}
+_SELECTION_KEYS = {
+    "element", "chain", "resname", "atom_name", "resid", "icode", "residue_id", "hetero",
+}
 
 
 def main(argv=None) -> int:
@@ -85,7 +87,7 @@ def main(argv=None) -> int:
     )
     binding_parser.add_argument(
         "--ligand",
-        help="ligand residue name, or chain:resid for a specific HETATM group",
+        help="ligand residue name, or chain:resid[:icode] for a specific HETATM group",
     )
     binding_parser.add_argument(
         "--descriptors-out",
@@ -222,6 +224,16 @@ def _parse_selection_value(key: str, value: str):
                 "resid expects an integer or inclusive range like 10-20"
             ) from exc
 
+    if key == "residue_id":
+        parts = value.split(":")
+        if len(parts) not in (2, 3, 4):
+            raise ValueError("residue_id expects chain:resid[:icode[:resname]]")
+        try:
+            resid = int(parts[1])
+        except ValueError as exc:
+            raise ValueError("residue_id selectors need an integer resid") from exc
+        return tuple([parts[0], resid, *parts[2:]])
+
     if key == "hetero":
         lowered = value.lower()
         if lowered in {"1", "true", "yes", "hetatm", "hetero"}:
@@ -238,9 +250,11 @@ def _parse_ligand(value: str | None):
     if value is None:
         return None
     if ":" in value:
-        chain, resid = value.split(":", 1)
+        parts = value.split(":")
+        if len(parts) not in (2, 3, 4):
+            raise ValueError("ligand selectors expect chain:resid[:icode[:resname]]")
         try:
-            return (chain, int(resid))
+            return tuple([parts[0], int(parts[1]), *parts[2:]])
         except ValueError as exc:
             raise ValueError("chain:resid ligand selectors need an integer resid") from exc
     return value
@@ -308,6 +322,7 @@ def _run_binding_site(args: argparse.Namespace) -> int:
             "file": source,
             "ligand_chain": site.ligand.chain,
             "ligand_resid": site.ligand.resid,
+            "ligand_insertion_code": site.ligand.insertion_code,
             "ligand_resname": site.ligand.resname,
             "cutoff": site.cutoff,
             **record,
@@ -334,10 +349,13 @@ def _write_binding_site_csv(path: str, rows: list[dict]) -> None:
         "file",
         "ligand_chain",
         "ligand_resid",
+        "ligand_insertion_code",
         "ligand_resname",
         "cutoff",
+        "residue_id",
         "chain",
         "resid",
+        "insertion_code",
         "resname",
         "min_distance",
         "n_atom_contacts",

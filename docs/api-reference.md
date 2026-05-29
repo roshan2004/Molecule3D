@@ -16,6 +16,11 @@
 - `molscope.ligands(mol, ...)`, `binding_site(mol, ligand=None, cutoff=4.5)`: ligand detection and binding-site residues.
 - `molscope.backbone_torsions(mol)`: per-residue phi/psi/omega.
 
+Residue identity helpers:
+
+- `molscope.ResidueId(chain, resid, insertion_code="", resname="")`: full residue identity used by PDB/mmCIF-aware APIs.
+- `molscope.ResidueGroup`: yielded by `Molecule.residue_groups()`; has `.residue_id` and still unpacks as `(atom_indices, resname, resid, chain)`.
+
 `BindingSite` results expose `to_records()`, `to_molecule(mol)`,
 `descriptors(mol, preset="pocket-basic")`, and `plot(mol)` for residue tables,
 pocket descriptor extraction, and quick figures.

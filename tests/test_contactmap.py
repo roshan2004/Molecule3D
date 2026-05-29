@@ -9,6 +9,7 @@ import molscope as ms
 from molscope import ContactMap, Molecule
 
 DATA = os.path.join(os.path.dirname(os.path.dirname(__file__)), "examples", "data")
+FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
 
 
 def ca_chain():
@@ -45,6 +46,22 @@ def test_residue_ca_contact_map():
     assert np.array_equal(cm.matrix, cm.matrix.T)
     assert cm.labels == ["A:ALA1", "A:ALA2", "A:ALA3"]
     assert not cm.is_frequency
+
+
+def test_residue_contact_map_keeps_insertion_code_residues_separate():
+    mol = ms.read(os.path.join(FIXTURES, "ugly_residue_ids.pdb"))
+    cm = mol.contact_map(cutoff=2.0, level="residue", method="ca")
+    assert cm.labels == [
+        "A:GLY-1",
+        "A:ALA0",
+        "A:SER100A",
+        "A:THR100B",
+        "A:LIG10",
+        "B:LIG10",
+    ]
+    assert cm.resids.tolist() == [-1, 0, 100, 100, 10, 10]
+    assert cm.icodes == ["", "", "A", "B", "", ""]
+    assert [rid.insertion_code for rid in cm.residue_ids[2:4]] == ["A", "B"]
 
 
 def test_residue_methods_all_run():

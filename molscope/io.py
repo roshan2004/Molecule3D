@@ -262,25 +262,28 @@ def _read_cif_builtin(path: str) -> Molecule:
     def col(row, *names, default=""):
         for nm in names:
             if nm in idx and idx[nm] < len(row):
-                return row[idx[nm]]
+                value = row[idx[nm]]
+                if value not in {".", "?"}:
+                    return value
         return default
 
     _require_cif_coord_columns(idx, path)
-    coords, els, anames, rnames, rids, chains, heteros = [], [], [], [], [], [], []
+    coords, els, anames, rnames, rids, icodes, chains, heteros = [], [], [], [], [], [], [], []
     for r, row in enumerate(rows, 1):
         coords.append(_cif_coords(row, idx, path, r))
-        els.append(col(row, "type_symbol"))
-        anames.append(col(row, "label_atom_id", "auth_atom_id"))
-        rnames.append(col(row, "label_comp_id", "auth_comp_id"))
-        chains.append(col(row, "auth_asym_id", "label_asym_id"))
-        rid = col(row, "auth_seq_id", "label_seq_id", default="0")
+        els.append(_clean_cif_value(col(row, "type_symbol")))
+        anames.append(_clean_cif_value(col(row, "label_atom_id", "auth_atom_id")))
+        rnames.append(_clean_cif_value(col(row, "label_comp_id", "auth_comp_id")))
+        chains.append(_clean_cif_value(col(row, "auth_asym_id", "label_asym_id")))
+        rid = _clean_cif_value(col(row, "auth_seq_id", "label_seq_id", default="0"))
         rids.append(int(rid) if rid.lstrip("-").isdigit() else 0)
-        heteros.append(col(row, "group_PDB", default="ATOM").upper() == "HETATM")
+        icodes.append(_clean_cif_value(col(row, "pdbx_PDB_ins_code")))
+        heteros.append(_clean_cif_value(col(row, "group_PDB", default="ATOM")).upper() == "HETATM")
 
     return Molecule(
         np.array(coords, dtype=float), els, name=_stem(path),
         atom_names=anames, resnames=rnames, resids=np.array(rids, dtype=int),
-        chains=chains, hetero=heteros, unit_cell=unit_cell,
+        icodes=icodes, chains=chains, hetero=heteros, unit_cell=unit_cell,
     )
 
 
@@ -345,25 +348,28 @@ def _molecule_from_cif_rows(columns: list[str], rows: list[list[str]], name: str
     def col(row, *names, default=""):
         for nm in names:
             if nm in idx and idx[nm] < len(row):
-                return row[idx[nm]]
+                value = row[idx[nm]]
+                if value not in {".", "?"}:
+                    return value
         return default
 
     _require_cif_coord_columns(idx, name)
-    coords, els, anames, rnames, rids, chains, heteros = [], [], [], [], [], [], []
+    coords, els, anames, rnames, rids, icodes, chains, heteros = [], [], [], [], [], [], [], []
     for r, row in enumerate(rows, 1):
         coords.append(_cif_coords(row, idx, name, r))
-        els.append(col(row, "type_symbol"))
-        anames.append(col(row, "label_atom_id", "auth_atom_id"))
-        rnames.append(col(row, "label_comp_id", "auth_comp_id"))
-        chains.append(col(row, "auth_asym_id", "label_asym_id"))
-        rid = col(row, "auth_seq_id", "label_seq_id", default="0")
+        els.append(_clean_cif_value(col(row, "type_symbol")))
+        anames.append(_clean_cif_value(col(row, "label_atom_id", "auth_atom_id")))
+        rnames.append(_clean_cif_value(col(row, "label_comp_id", "auth_comp_id")))
+        chains.append(_clean_cif_value(col(row, "auth_asym_id", "label_asym_id")))
+        rid = _clean_cif_value(col(row, "auth_seq_id", "label_seq_id", default="0"))
         rids.append(int(rid) if rid.lstrip("-").isdigit() else 0)
-        heteros.append(col(row, "group_PDB", default="ATOM").upper() == "HETATM")
+        icodes.append(_clean_cif_value(col(row, "pdbx_PDB_ins_code")))
+        heteros.append(_clean_cif_value(col(row, "group_PDB", default="ATOM")).upper() == "HETATM")
 
     return Molecule(
         np.array(coords, dtype=float), els, name=name,
         atom_names=anames, resnames=rnames, resids=np.array(rids, dtype=int),
-        chains=chains, hetero=heteros,
+        icodes=icodes, chains=chains, hetero=heteros,
     )
 
 
@@ -462,12 +468,13 @@ def _molecule_to_pdb_string(molecule: Molecule) -> str:
     resnames = molecule.resnames or ["MOL"] * n
     chains = molecule.chains or ["A"] * n
     resids = molecule.resids if len(molecule.resids) else np.ones(n, dtype=int)
+    icodes = molecule.icodes or [""] * n
     heteros = molecule.hetero if len(molecule.hetero) else [False] * n
     lines = [
         _pdb_atom_line(
             serial + 1, names[serial], resnames[serial], chains[serial] or "A",
             int(resids[serial]), molecule.elements[serial], *molecule.coords[serial],
-            hetero=heteros[serial],
+            icode=icodes[serial], hetero=heteros[serial],
         )
         for serial in range(n)
     ]
@@ -570,6 +577,11 @@ def _gemmi_loop_rows(loop) -> list[list[str]]:
 def _cif_control_token(token: str) -> bool:
     lower = token.lower()
     return lower == "loop_" or lower.startswith(("data_", "save_")) or token.startswith("_")
+
+
+def _clean_cif_value(value: str) -> str:
+    """Normalize CIF null placeholders to MolScope's empty-string metadata."""
+    return "" if value in {".", "?"} else value
 
 
 def _sdf_bond_order(code: int) -> float:
@@ -708,6 +720,7 @@ def _record_from_atoms(atoms: list[dict], conect: list[tuple[int, int]], altloc:
         "resnames": [atom["resname"] for atom in selected],
         "chains": [atom["chain"] for atom in selected],
         "resids": [atom["resid"] for atom in selected],
+        "icodes": [atom["icode"] for atom in selected],
         "serials": [atom["serial"] for atom in selected],
         "heteros": [atom.get("hetero", False) for atom in selected],
         "conect": list(conect),
@@ -773,7 +786,8 @@ def _molecule_from_record(rec: dict, name: str) -> Molecule:
     return Molecule(
         np.array(rec["coords"], dtype=float), rec["elements"], name=name,
         atom_names=rec["atom_names"], resnames=rec["resnames"],
-        resids=np.array(rec["resids"], dtype=int), chains=rec["chains"],
+        resids=np.array(rec["resids"], dtype=int), icodes=rec.get("icodes", []),
+        chains=rec["chains"],
         hetero=rec.get("heteros", []),
         bond_index=bond_index if len(bond_index) else None,
     )
@@ -819,7 +833,9 @@ def _pdb_conect_bonds(rec: dict) -> np.ndarray:
     return np.array(bonds, dtype=int).reshape(-1, 2)
 
 
-def _pdb_atom_line(serial, atom_name, resname, chain, resid, element, x, y, z, hetero=False):
+def _pdb_atom_line(
+    serial, atom_name, resname, chain, resid, element, x, y, z, icode="", hetero=False
+):
     """Build a single fixed-column ``ATOM``/``HETATM`` record (80 columns)."""
     line = list(" " * 80)
 
@@ -832,6 +848,7 @@ def _pdb_atom_line(serial, atom_name, resname, chain, resid, element, x, y, z, h
     put(f"{(resname or 'MOL')[:3]:>3}", 18)
     put((chain or "A")[0], 22)
     put(f"{resid:>4}", 23)
+    put((icode or " ")[0], 27)
     put(f"{x:8.3f}", 31)
     put(f"{y:8.3f}", 39)
     put(f"{z:8.3f}", 47)

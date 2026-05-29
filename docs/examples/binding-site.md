@@ -12,7 +12,7 @@ mol = ms.read("examples/data/3ptb.pdb")
 print(mol.ligands())                 # [LigandResidue(A:BEN1, 9 atoms)]
 
 site = mol.binding_site(cutoff=4.5)  # single ligand auto-detected
-print(site)                          # BindingSite(BEN1: 13 residues < 4.5 A)
+print(site)                          # BindingSite(A:BEN1: 13 residues < 4.5 A)
 
 for res, dist in zip(site.residues, site.min_distances):
     print(f"{res!s:<10} {dist:.2f} A")
@@ -28,7 +28,8 @@ records and extract descriptors for only the site residues:
 
 ```python
 site.to_records()[0]
-# {'chain': 'A', 'resid': 219, 'resname': 'GLY',
+# {'residue_id': 'A:GLY219', 'chain': 'A', 'resid': 219,
+#  'insertion_code': '', 'resname': 'GLY',
 #  'min_distance': 2.815..., 'n_atom_contacts': 5}
 
 site.descriptors(mol, preset="pocket-basic")
@@ -49,9 +50,11 @@ When a structure has several ligands, select one by residue name or location:
 ```python
 mol.binding_site(ligand="BEN")
 mol.binding_site(ligand=("A", 1))
+mol.binding_site(ligand=("A", 100, "A"))  # with insertion code
 ```
 
-The CLI accepts the same choices as `--ligand BEN` or `--ligand A:1`.
+The CLI accepts the same choices as `--ligand BEN`, `--ligand A:1`, or
+`--ligand A:100:A`.
 
 A runnable version lives in
 [`examples/binding_site.py`](https://github.com/roshan2004/molscope/blob/main/examples/binding_site.py).

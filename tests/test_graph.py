@@ -15,6 +15,7 @@ from molscope.graph import (
 )
 
 DATA = os.path.join(os.path.dirname(os.path.dirname(__file__)), "examples", "data")
+FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
 
 
 def water():
@@ -229,6 +230,16 @@ def test_residue_contact_graph_nodes_edges_and_features():
     assert e.shape == (1, len(edge_names))
     assert x[0, node_names.index("residue_ALA")] == 1.0
     assert e[0, edge_names.index("contact_ca")] == 1.0
+
+
+def test_residue_contact_graph_carries_rich_residue_ids():
+    g = ms.read(os.path.join(FIXTURES, "ugly_residue_ids.pdb")).to_residue_contact_graph(
+        cutoff=2.0,
+        method="ca",
+    )
+    assert g.labels[2:4] == ["A:SER100A", "A:THR100B"]
+    assert g.icodes[2:4] == ["A", "B"]
+    assert [rid.label() for rid in g.residue_ids[2:4]] == ["A:SER100A", "A:THR100B"]
 
 
 def test_residue_contact_graph_filters_sequence_local_contacts():

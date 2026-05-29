@@ -33,7 +33,7 @@ def main():
     # 3. A table-friendly view for quick figures or reports.
     print("\nPer-residue contact table:")
     for row in site.to_records():
-        label = f"{row['chain']}:{row['resname']}{row['resid']}"
+        label = row["residue_id"]
         print(
             f"  {label:<10} {row['min_distance']:.2f} A  "
             f"{row['n_atom_contacts']:>3} atom contacts"

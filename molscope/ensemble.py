@@ -59,8 +59,15 @@ def contact_frequency(
     ]
     freq = np.mean([cm.matrix for cm in maps], axis=0)
     first = maps[0]
-    return ContactMap(freq, level=level, cutoff=cutoff,
-                      labels=first.labels, resids=first.resids)
+    return ContactMap(
+        freq,
+        level=level,
+        cutoff=cutoff,
+        labels=first.labels,
+        resids=first.resids,
+        icodes=first.icodes,
+        residue_ids=first.residue_ids,
+    )
 
 
 def rmsd_matrix(models: list[Molecule], align: bool = True) -> np.ndarray:

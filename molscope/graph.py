@@ -21,6 +21,7 @@ from typing import Optional
 import numpy as np
 
 from . import elements
+from .molecule import ResidueId
 
 DEFAULT_GRAPH_ELEMENTS = (
     "H", "C", "N", "O", "S", "P", "F", "CL", "BR", "I", "NA", "MG", "CA", "FE", "ZN",
@@ -55,6 +56,7 @@ class MolecularGraph:
     atom_names: list[str] = field(default_factory=list)
     resnames: list[str] = field(default_factory=list)
     resids: np.ndarray = field(default_factory=lambda: np.empty(0, dtype=int))
+    icodes: list[str] = field(default_factory=list)
     chains: list[str] = field(default_factory=list)
     name: str = ""
     formal_charges: np.ndarray = field(default_factory=lambda: np.empty(0, dtype=int))
@@ -230,8 +232,17 @@ class MolecularGraph:
                 attrs["resname"] = self.resnames[i]
             if len(self.resids):
                 attrs["resid"] = int(self.resids[i])
+            if self.icodes:
+                attrs["insertion_code"] = self.icodes[i]
             if self.chains:
                 attrs["chain"] = self.chains[i]
+            if len(self.resids):
+                chain = self.chains[i] if self.chains else ""
+                resname = self.resnames[i] if self.resnames else ""
+                icode = self.icodes[i] if self.icodes else ""
+                attrs["residue_id"] = ResidueId(
+                    chain, int(self.resids[i]), icode, resname
+                ).label()
             if len(self.formal_charges):
                 attrs["formal_charge"] = int(self.formal_charges[i])
             if len(self.aromatic_atoms):
@@ -492,9 +503,11 @@ class ResidueContactGraph:
     edge_types: list[str]           # contact method per edge
     resnames: list[str]
     resids: np.ndarray
+    icodes: list[str]
     chains: list[str]
     residue_sizes: np.ndarray
     labels: list[str] = field(default_factory=list)
+    residue_ids: list[ResidueId] = field(default_factory=list)
     cutoff: float = 8.0
     method: str = "ca"
     name: str = ""
@@ -631,8 +644,8 @@ class ResidueContactGraph:
         g = nx.Graph(name=self.name, cutoff=float(self.cutoff), method=self.method)
         chains = self.chains or [""] * self.n_residues
         labels = self.labels or [
-            _residue_label(chain, resname, int(resid))
-            for chain, resname, resid in zip(chains, self.resnames, self.resids)
+            _residue_label(chain, resname, int(resid), icode)
+            for chain, resname, resid, icode in zip(chains, self.resnames, self.resids, self.icodes)
         ]
         for i in range(self.n_residues):
             g.add_node(
@@ -640,7 +653,9 @@ class ResidueContactGraph:
                 label=labels[i],
                 resname=self.resnames[i],
                 resid=int(self.resids[i]),
+                insertion_code=self.icodes[i] if self.icodes else "",
                 chain=chains[i],
+                residue_id=labels[i],
                 residue_size=int(self.residue_sizes[i]),
                 pos=tuple(float(c) for c in self.coords[i]),
             )
@@ -919,14 +934,13 @@ def residue_contact_graph(
         raise ValueError("residue contact graph needs residue information")
 
     atom_groups = [idx for idx, *_ in groups]
-    resnames = [resname for _, resname, _, _ in groups]
-    resids = np.array([resid for _, _, resid, _ in groups], dtype=int)
-    chains = [chain for _, _, _, chain in groups]
+    residue_ids = [group.residue_id for group in groups]
+    resnames = [residue_id.resname for residue_id in residue_ids]
+    resids = np.array([residue_id.resid for residue_id in residue_ids], dtype=int)
+    icodes = [residue_id.insertion_code for residue_id in residue_ids]
+    chains = [residue_id.chain for residue_id in residue_ids]
     residue_sizes = np.array([len(idx) for idx in atom_groups], dtype=int)
-    labels = [
-        _residue_label(chain, resname, int(resid))
-        for resname, resid, chain in zip(resnames, resids, chains)
-    ]
+    labels = [residue_id.label() for residue_id in residue_ids]
 
     if method in ("ca", "com"):
         coords = np.array([
@@ -959,9 +973,11 @@ def residue_contact_graph(
         edge_types=[method] * len(edges),
         resnames=resnames,
         resids=resids,
+        icodes=icodes,
         chains=chains,
         residue_sizes=residue_sizes,
         labels=labels,
+        residue_ids=residue_ids,
         cutoff=cutoff,
         method=method,
         name=molecule.name,
@@ -988,9 +1004,8 @@ def _residue_min_distance_matrix(molecule, groups, backend: str, device: Optiona
     return np.minimum.reduceat(row_min, starts, axis=1)
 
 
-def _residue_label(chain: str, resname: str, resid: int) -> str:
-    base = f"{resname or 'RES'}{resid}"
-    return f"{chain}:{base}" if chain else base
+def _residue_label(chain: str, resname: str, resid: int, icode: str = "") -> str:
+    return ResidueId(chain, int(resid), icode, resname).label()
 
 
 def _normalize_preset(preset: str, allowed: tuple[str, ...], label: str) -> str:

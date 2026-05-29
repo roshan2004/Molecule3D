@@ -215,10 +215,16 @@ mol.select(chain="A")               # one chain
 mol.select(element="C")             # all carbons
 mol.select(resname="HOH")           # waters
 mol.select(resid=(10, 20))          # an inclusive residue range
+mol.select(resid=100, icode="A")    # PDB/mmCIF insertion code
+mol.residue_ids                     # full ResidueId(chain, resid, icode, resname)
 mol.alpha_carbons()                 # CA atoms (the usual basis for protein RMSD)
 mol.backbone()                      # N, CA, C, O
 mol[mask_or_indices]                # subset by numpy mask / index array
 ```
+
+Residue grouping, contact maps, binding sites and residue graphs use full
+residue identity internally, so residues like `100A` and `100B` stay separate
+while integer `resids` remain available for older code.
 
 ### Analysis and measurements
 

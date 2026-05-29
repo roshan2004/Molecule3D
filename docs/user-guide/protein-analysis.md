@@ -22,6 +22,11 @@ mol.backbone()                      # N, CA, C, O atoms
 mol.alpha_carbons()                 # one CA per residue for this protein
 ```
 
+Residues are identified internally by chain, integer residue number, insertion
+code, and residue name. The old integer `resids` array remains available, while
+`mol.icodes`, `mol.residue_ids`, contact-map `residue_ids`, and binding-site
+records keep insertion-code distinctions such as `A:SER100A` vs `A:THR100B`.
+
 For structures with HETATM records, MolScope separates polymer atoms from
 ligands, waters and ions:
 
@@ -144,6 +149,7 @@ When several ligands are present, name one explicitly:
 ```python
 mol.binding_site(ligand="BEN")               # by residue name
 mol.binding_site(ligand=("A", 1))            # by (chain, resid)
+mol.binding_site(ligand=("A", 100, "A"))     # by (chain, resid, insertion code)
 ```
 
 Water and common ions are excluded from `ligands()` by default

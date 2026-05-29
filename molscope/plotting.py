@@ -338,7 +338,7 @@ def _colors(molecule, color_by: str):
     if color_by == "chain":
         keys = molecule.chains
     elif color_by == "residue":
-        keys = [str(r) for r in molecule.resids] if len(molecule.resids) else []
+        keys = [rid.label() for rid in molecule.residue_ids] if len(molecule.resids) else []
     else:
         raise ValueError(f"unknown color_by {color_by!r}")
     if not keys:

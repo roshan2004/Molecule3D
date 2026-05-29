@@ -69,6 +69,80 @@ class UnitCell:
         )
 
 
+@dataclass(frozen=True, order=True)
+class ResidueId:
+    """Full residue identity used internally for PDB/mmCIF topology.
+
+    ``resid`` remains the integer author/sequence id exposed by the historical
+    ``Molecule.resids`` array. ``insertion_code`` carries PDB insertion codes
+    and mmCIF ``_atom_site.pdbx_PDB_ins_code`` values.
+    """
+
+    chain: str
+    resid: int
+    insertion_code: str = ""
+    resname: str = ""
+
+    @property
+    def icode(self) -> str:
+        """Short alias for :attr:`insertion_code`."""
+        return self.insertion_code
+
+    def label(self) -> str:
+        """Human-readable label such as ``A:ASP100A``."""
+        residue_number = f"{int(self.resid)}{self.insertion_code}"
+        base = f"{self.resname or 'RES'}{residue_number}"
+        return f"{self.chain}:{base}" if self.chain else base
+
+    def __str__(self) -> str:
+        return self.label()
+
+
+@dataclass(frozen=True)
+class ResidueGroup:
+    """Atoms belonging to one residue, with a rich :class:`ResidueId`.
+
+    Iterating over the group preserves the historical tuple API:
+    ``(atom_indices, resname, resid, chain)``.
+    """
+
+    atom_indices: list[int]
+    residue_id: ResidueId
+
+    @property
+    def resname(self) -> str:
+        return self.residue_id.resname
+
+    @property
+    def resid(self) -> int:
+        return self.residue_id.resid
+
+    @property
+    def chain(self) -> str:
+        return self.residue_id.chain
+
+    @property
+    def insertion_code(self) -> str:
+        return self.residue_id.insertion_code
+
+    @property
+    def icode(self) -> str:
+        return self.insertion_code
+
+    def as_tuple(self) -> tuple[list[int], str, int, str]:
+        """Return the backwards-compatible four-item residue tuple."""
+        return self.atom_indices, self.resname, self.resid, self.chain
+
+    def __iter__(self):
+        return iter(self.as_tuple())
+
+    def __len__(self) -> int:
+        return 4
+
+    def __getitem__(self, item):
+        return self.as_tuple()[item]
+
+
 @dataclass(frozen=True, eq=False)
 class Molecule:
     coords: np.ndarray
@@ -78,6 +152,7 @@ class Molecule:
     atom_names: list[str] = field(default_factory=list)
     resnames: list[str] = field(default_factory=list)
     resids: np.ndarray = field(default_factory=lambda: np.empty(0, dtype=int))
+    icodes: list[str] = field(default_factory=list)
     chains: list[str] = field(default_factory=list)
     # Per-atom flag: True for atoms from PDB HETATM / mmCIF group_PDB=HETATM
     # records (ligands, water, ions). Empty when the source carries no record
@@ -118,7 +193,7 @@ class Molecule:
             object.__setattr__(self, "bond_orders", orders)
         if not self.elements:
             object.__setattr__(self, "elements", [""] * len(coords))
-        for name in ("elements", "atom_names", "resnames", "chains", "hetero"):
+        for name in ("elements", "atom_names", "resnames", "icodes", "chains", "hetero"):
             seq = getattr(self, name)
             if seq and len(seq) != len(coords):
                 raise ValueError(f"{len(seq)} {name} for {len(coords)} coordinates")
@@ -211,6 +286,7 @@ class Molecule:
             atom_names=sub(self.atom_names),
             resnames=sub(self.resnames),
             resids=self.resids[idx] if len(self.resids) else self.resids,
+            icodes=sub(self.icodes),
             chains=sub(self.chains),
             hetero=sub(self.hetero),
             formal_charges=(
@@ -252,15 +328,19 @@ class Molecule:
         resname=None,
         atom_name=None,
         resid=None,
+        icode=None,
+        residue_id=None,
         hetero=None,
     ) -> Molecule:
         """Return the atoms matching every supplied criterion.
 
         Each of ``element``/``chain``/``resname``/``atom_name`` accepts a single
         value or a collection. ``resid`` accepts an int, a collection of ints,
-        or a ``(low, high)`` inclusive range. ``hetero`` accepts a bool to keep
-        only HETATM (``True``) or only ATOM (``False``) atoms. Selecting on
-        metadata the molecule lacks raises ``ValueError``.
+        or a ``(low, high)`` inclusive range. ``icode`` filters by insertion
+        code and ``residue_id`` accepts a :class:`ResidueId` or
+        ``(chain, resid[, icode[, resname]])`` selector. ``hetero`` accepts a
+        bool to keep only HETATM (``True``) or only ATOM (``False``) atoms.
+        Selecting on metadata the molecule lacks raises ``ValueError``.
         """
         mask = np.ones(len(self), dtype=bool)
         mask &= self._field_mask(self.elements, element, "element", upper=True)
@@ -269,6 +349,10 @@ class Molecule:
         mask &= self._field_mask(self.atom_names, atom_name, "atom name", upper=True)
         if resid is not None:
             mask &= self._resid_mask(resid)
+        if icode is not None:
+            mask &= self._icode_mask(icode)
+        if residue_id is not None:
+            mask &= self._residue_id_mask(residue_id)
         if hetero is not None:
             if not self.hetero:
                 raise ValueError("no ATOM/HETATM record information in this molecule")
@@ -330,25 +414,73 @@ class Molecule:
         wanted = [resid] if isinstance(resid, int) else list(resid)
         return np.isin(self.resids, wanted)
 
-    def residue_groups(self):
-        """Yield ``(atom_indices, resname, resid, chain)`` per residue, in order.
+    def _icode_mask(self, icode):
+        wanted = {icode} if isinstance(icode, str) else set(icode)
+        if not self.icodes:
+            if wanted == {""}:
+                return np.ones(len(self), dtype=bool)
+            raise ValueError("no insertion-code information in this molecule")
+        return np.array([code in wanted for code in self.icodes], dtype=bool)
 
-        Residues are runs of atoms sharing ``(chain, resid)``. Yields nothing if
-        the molecule has no residue information.
+    def _residue_id_mask(self, residue_id):
+        if len(self.resids) == 0:
+            raise ValueError("no residue-id information in this molecule")
+        selectors = _normalise_residue_id_selectors(residue_id)
+        ids = self.residue_ids
+        return np.array([
+            any(_residue_id_matches(rid, selector) for selector in selectors)
+            for rid in ids
+        ], dtype=bool)
+
+    @property
+    def residue_ids(self) -> list[ResidueId]:
+        """Per-atom rich residue identities, aligned with ``coords``.
+
+        Returns an empty list when the molecule has no residue-id metadata.
+        """
+        if len(self.resids) == 0:
+            return []
+        chains = self.chains or [""] * len(self)
+        resnames = self.resnames or [""] * len(self)
+        icodes = self.icodes or [""] * len(self)
+        return [
+            ResidueId(chains[i], int(self.resids[i]), icodes[i], resnames[i])
+            for i in range(len(self))
+        ]
+
+    def residue_id(self, atom_index: int) -> ResidueId:
+        """Return the rich residue identity for one atom."""
+        if len(self.resids) == 0:
+            raise ValueError("no residue-id information in this molecule")
+        i = int(atom_index)
+        chains = self.chains or [""] * len(self)
+        resnames = self.resnames or [""] * len(self)
+        icodes = self.icodes or [""] * len(self)
+        return ResidueId(chains[i], int(self.resids[i]), icodes[i], resnames[i])
+
+    def residue_groups(self):
+        """Yield :class:`ResidueGroup` objects per residue, in order.
+
+        Groups still unpack as ``(atom_indices, resname, resid, chain)`` for
+        backwards compatibility. Internally, residues are runs of atoms sharing
+        ``(chain, resid, insertion_code, resname)``. Yields nothing if the
+        molecule has no residue information.
         """
         n = len(self)
         if len(self.resids) == 0 or n == 0:
             return
         chains = self.chains or [""] * n
         resnames = self.resnames or [""] * n
+        icodes = self.icodes or [""] * n
         resids = self.resids
+
+        def rid(i: int) -> ResidueId:
+            return ResidueId(chains[i], int(resids[i]), icodes[i], resnames[i])
+
         start = 0
         for i in range(1, n + 1):
-            if i == n or chains[i] != chains[i - 1] or resids[i] != resids[i - 1]:
-                yield (
-                    list(range(start, i)), resnames[start],
-                    int(resids[start]), chains[start],
-                )
+            if i == n or rid(i) != rid(i - 1):
+                yield ResidueGroup(list(range(start, i)), rid(start))
                 start = i
 
     # -- geometry -----------------------------------------------------------
@@ -955,7 +1087,7 @@ class Molecule:
             coords=self.coords, elements=self.elements, edges=edges,
             edge_distances=dist, edge_types=edge_types,
             atom_names=self.atom_names, resnames=self.resnames,
-            resids=self.resids, chains=self.chains,
+            resids=self.resids, icodes=self.icodes, chains=self.chains,
             formal_charges=self.formal_charges, aromatic_atoms=aromatic_atoms,
             aromatic_bonds=aromatic_bonds, virtual_sites=self.virtual_sites,
             name=self.name,
@@ -1027,6 +1159,72 @@ class Molecule:
         from .plotting import view
 
         return view(self, **kwargs)
+
+
+def _normalise_residue_id_selectors(criteria) -> list[tuple[str, int, str | None, str | None]]:
+    if _is_single_residue_id_selector(criteria):
+        return [_residue_id_selector(criteria)]
+    try:
+        return [_residue_id_selector(item) for item in criteria]
+    except TypeError:
+        return [_residue_id_selector(criteria)]
+
+
+def _is_single_residue_id_selector(value) -> bool:
+    if isinstance(value, ResidueId) or isinstance(value, dict):
+        return True
+    if hasattr(value, "residue_id"):
+        return True
+    if isinstance(value, tuple) and 2 <= len(value) <= 4:
+        return True
+    return False
+
+
+def _residue_id_selector(value) -> tuple[str, int, str | None, str | None]:
+    if hasattr(value, "residue_id") and not isinstance(value, ResidueId):
+        value = value.residue_id
+    if isinstance(value, ResidueId):
+        return (
+            value.chain,
+            int(value.resid),
+            value.insertion_code,
+            value.resname or None,
+        )
+    if isinstance(value, dict):
+        try:
+            chain = value["chain"]
+            resid = value["resid"]
+        except KeyError as exc:
+            raise ValueError("residue_id dict selectors require 'chain' and 'resid'") from exc
+        icode = value.get("insertion_code", value.get("icode"))
+        resname = value.get("resname")
+        return str(chain), int(resid), None if icode is None else str(icode), (
+            None if not resname else str(resname)
+        )
+    if isinstance(value, tuple) and 2 <= len(value) <= 4:
+        chain, resid = value[0], value[1]
+        icode = value[2] if len(value) >= 3 else None
+        resname = value[3] if len(value) >= 4 else None
+        return str(chain), int(resid), None if icode is None else str(icode), (
+            None if not resname else str(resname)
+        )
+    raise ValueError(
+        "residue_id expects ResidueId, a dict, or (chain, resid[, icode[, resname]])"
+    )
+
+
+def _residue_id_matches(
+    residue_id: ResidueId,
+    selector: tuple[str, int, str | None, str | None],
+) -> bool:
+    chain, resid, icode, resname = selector
+    if residue_id.chain != chain or int(residue_id.resid) != int(resid):
+        return False
+    if icode is not None and residue_id.insertion_code != icode:
+        return False
+    if resname is not None and residue_id.resname.upper() != resname.upper():
+        return False
+    return True
 
 
 def _rotation_matrix(axis: np.ndarray, angle: float) -> np.ndarray:

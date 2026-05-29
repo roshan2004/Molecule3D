@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from . import elements
-from .molecule import Molecule
+from .molecule import Molecule, ResidueId
 
 
 @dataclass
@@ -33,6 +33,8 @@ class ContactMap:
     cutoff: float
     labels: list[str] = field(default_factory=list)
     resids: np.ndarray = field(default_factory=lambda: np.empty(0, dtype=int))
+    icodes: list[str] = field(default_factory=list)
+    residue_ids: list[ResidueId] = field(default_factory=list)
 
     @property
     def is_frequency(self) -> bool:
@@ -104,12 +106,22 @@ def contact_map(
     groups = list(molecule.residue_groups())
     if not groups:
         raise ValueError("residue contact map needs residue information")
-    labels = [_label(chain, resname, resid) for _, resname, resid, chain in groups]
-    resids = np.array([resid for _, _, resid, _ in groups], dtype=int)
-    chains = [chain for _, _, _, chain in groups]
+    residue_ids = [group.residue_id for group in groups]
+    labels = [residue_id.label() for residue_id in residue_ids]
+    resids = np.array([residue_id.resid for residue_id in residue_ids], dtype=int)
+    icodes = [residue_id.insertion_code for residue_id in residue_ids]
+    chains = [residue_id.chain for residue_id in residue_ids]
     mat = _residue_contacts(molecule, groups, cutoff, method, backend, device)
     mat = _apply_contact_filters(mat, chains, min_seq_sep, chain_mode)
-    return ContactMap(mat, level="residue", cutoff=cutoff, labels=labels, resids=resids)
+    return ContactMap(
+        mat,
+        level="residue",
+        cutoff=cutoff,
+        labels=labels,
+        resids=resids,
+        icodes=icodes,
+        residue_ids=residue_ids,
+    )
 
 
 def _apply_contact_filters(mat: np.ndarray, chains, min_seq_sep: int, chain_mode: str):
@@ -177,6 +189,5 @@ def _min_distance_contacts(molecule, groups, cutoff, backend, device) -> np.ndar
     return mat
 
 
-def _label(chain, resname, resid) -> str:
-    base = f"{resname or 'RES'}{resid}"
-    return f"{chain}:{base}" if chain else base
+def _label(chain, resname, resid, icode="") -> str:
+    return ResidueId(chain, int(resid), icode, resname).label()

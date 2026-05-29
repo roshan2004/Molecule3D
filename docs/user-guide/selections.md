@@ -10,6 +10,19 @@ waters = mol.select(resname="HOH")
 region = mol.select(resid=(10, 20))
 ```
 
+`resid` is kept as the integer residue number for compatibility. For real
+PDB/mmCIF files with insertion codes, use `icode` or `ResidueId` selectors:
+
+```python
+mol.icodes                              # per-atom insertion codes
+mol.residue_ids                         # per-atom ResidueId objects
+mol.select(resid=100, icode="A")        # residue 100A
+mol.select(residue_id=ms.ResidueId("A", 100, "B"))
+```
+
+`mol.residue_groups()` yields objects with a `.residue_id` field, but they
+still unpack as `(atom_indices, resname, resid, chain)` for older code.
+
 Protein helpers:
 
 ```python

@@ -15,10 +15,10 @@ Supported formats:
 
 | Format | Notes |
 | --- | --- |
-| PDB | Fixed-column parser for `ATOM`/`HETATM`; preserves `CONECT` bonds. |
+| PDB | Fixed-column parser for `ATOM`/`HETATM`; preserves insertion codes and `CONECT` bonds. |
 | XYZ | Single-frame and multi-frame XYZ files. |
 | SDF/MOL | V2000 atom and bond block reader; preserves bond orders and formal charges. |
-| CIF/mmCIF | Reader for standard `_atom_site` coordinate loops, including quoted values. |
+| CIF/mmCIF | Reader for standard `_atom_site` coordinate loops, including quoted values and `_atom_site.pdbx_PDB_ins_code`. |
 
 For what each format stores, which metadata is reliable, and why PDB and mmCIF
 differ, see [Coordinate formats compared](coordinate-formats.md).
@@ -31,6 +31,10 @@ mol = ms.read_pdb("structure.pdb", altloc="highest_occupancy")
 ```
 
 Supported policies are `primary`, `first`, `highest_occupancy`, and `all`.
+
+Residue numbers remain available as the integer `mol.resids` array. PDB/mmCIF
+insertion codes are available as `mol.icodes`, and full per-atom identities are
+available as `mol.residue_ids`.
 
 The built-in CIF reader handles standard atom-site coordinate loops with quoted
 values and semicolon-delimited text fields. Install `molscope[cif]` to use the

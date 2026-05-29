@@ -54,5 +54,6 @@ def test_3ptb_ligands_waters_binding_site_and_secondary_structure():
     assert site.min_distances == sorted(site.min_distances)
 
     summary = mol.secondary_structure().summary()
-    assert summary["residues"] == 220
+    # 3PTB contains three insertion-code residues (184A, 188A, 221A).
+    assert summary["residues"] == 223
     assert summary["strand"] > summary["helix"]
