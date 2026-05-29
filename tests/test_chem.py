@@ -38,6 +38,27 @@ def test_pdb_template_bonds_returns_aligned_arrays():
     assert set(np.unique(bond_orders)).issubset({1.0, 2.0, 3.0})  # Kekule, no 1.5
 
 
+def test_standard_protonation_assigns_sidechain_charges():
+    pytest.importorskip("rdkit")
+    path = os.path.join(DATA, "1ubq.pdb")
+    neutral = ms.read(path, bond_perception="template")
+    charged = ms.read(path, bond_perception="template", protonation="standard")
+    assert int(neutral.formal_charges.sum()) == 0  # as-modelled, neutral
+    # Ubiquitin is near-neutral at pH 7, but charges are actually assigned:
+    assert int((charged.formal_charges != 0).sum()) > 0
+    # ...and the molecule still sanitises with the assigned charges.
+    assert charged.chemical_features().formal_charges.sum() == charged.formal_charges.sum()
+
+
+def test_pdb_template_bonds_rejects_bad_protonation():
+    pytest.importorskip("rdkit")
+    from molscope.chem import pdb_template_bonds
+
+    path = os.path.join(DATA, "1ubq.pdb")
+    with pytest.raises(ValueError, match="protonation"):
+        pdb_template_bonds(path, ms.read(path), protonation="ph9")
+
+
 def test_chemical_features_require_rdkit():
     pytest.importorskip("rdkit")
     mol = Molecule(

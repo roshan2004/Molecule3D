@@ -227,6 +227,21 @@ def test_chemical_features_geometric_has_no_aromaticity(server):
     assert out["n_aromatic_atoms"] == 0  # geometric single bonds, no perception
 
 
+def test_chemical_features_standard_protonation_is_meaningful(server):
+    pytest.importorskip("rdkit")
+    # Trypsin (3ptb) is basic: standard protonation should give a positive net charge.
+    out = _json(server, "chemical_features", source=TRYPSIN)
+    assert out["total_formal_charge"] > 0
+    assert out["protonation"].startswith("standard")
+
+
+def test_chemical_features_protonation_none_is_neutral_and_labelled(server):
+    pytest.importorskip("rdkit")
+    out = _json(server, "chemical_features", source=TRYPSIN, protonation="none")
+    assert out["total_formal_charge"] == 0
+    assert out["protonation"].startswith("as-modelled")
+
+
 def test_chemical_features_non_pdb_falls_back_from_template(server):
     pytest.importorskip("rdkit")
     # An SDF carries explicit bonds; template perception is PDB-only, so the

@@ -360,3 +360,8 @@ def test_read_template_bond_perception_only_for_pdb():
 def test_read_pdb_rejects_unknown_bond_perception():
     with pytest.raises(ValueError, match="bond_perception"):
         read_pdb(os.path.join(DATA, "1ubq.pdb"), bond_perception="bogus")
+
+
+def test_protonation_requires_template_bonds():
+    with pytest.raises(ValueError, match="protonation requires"):
+        read_pdb(os.path.join(DATA, "1ubq.pdb"), protonation="standard")
