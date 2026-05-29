@@ -9,6 +9,15 @@ API changes; these are called out under **Changed** where they occur.
 
 ## [Unreleased]
 
+### Added
+
+- ``read_smiles``: build a ``Molecule`` from a SMILES string by generating a
+  single 3D conformer with RDKit (``chem`` extra), carrying RDKit's bonds, Kekule
+  bond orders, and formal charges. This makes the descriptor and graph-ML
+  workflows reachable directly from SMILES. The coordinates are a generated
+  conformer, not an experimental or minimised structure (labelled as such), so it
+  is best for topology-based work, not geometry-dependent analysis.
+
 ### Changed
 
 - Sharpened the project framing: a single identity line ("a lightweight bridge

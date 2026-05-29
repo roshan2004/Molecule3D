@@ -59,7 +59,24 @@ Download a structure from RCSB:
 mol = ms.fetch("1fqy")
 ```
 
-Write structures:
+## From a SMILES string
+
+`ms.read_smiles()` builds a `Molecule` from a SMILES by generating one 3D
+conformer with RDKit (needs the `chem` extra):
+
+```python
+mol = ms.read_smiles("CC(=O)O")                          # acetic acid
+mol = ms.read_smiles("c1ccccc1", add_hs=False, seed=7)   # heavy atoms only, reproducible
+```
+
+Bonds, Kekule bond orders, and formal charges come from RDKit. The coordinates
+are a **generated conformer, not an experimental or energy-minimised structure**:
+ideal as input for descriptors and graph-ML (where topology matters), but treat
+geometry-dependent results (contact maps, RMSD against experiment, precise
+distances) with care. An invalid SMILES, or one RDKit cannot embed, raises
+`ValueError`. For an experimental geometry, read a PDB/mmCIF/SDF instead.
+
+## Writing
 
 ```python
 ms.write_xyz(mol, "out.xyz")
