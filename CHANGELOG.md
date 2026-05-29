@@ -9,6 +9,16 @@ API changes; these are called out under **Changed** where they occur.
 
 ## [Unreleased]
 
+### Changed
+
+- Sharpened the project framing: a single identity line ("a lightweight bridge
+  from molecular structures to descriptors, contact maps, graph-ML inputs, and
+  educational coarse-grained representations") now leads the README, package
+  description, and docs landing page. The README was restructured as a landing
+  page (problem, install, three-line example, docs link) with the long API
+  walkthrough moved to per-capability user-guide pages, and gained a per-feature
+  "what is and isn't validated" table.
+
 ## [0.10.0] - 2026-05-29
 
 ### Added

@@ -1,7 +1,9 @@
 # MolScope documentation
 
-MolScope is a lightweight Python toolkit for molecular coordinate analysis,
-graph-based molecular representations, and coarse-graining prototypes.
+MolScope is **a lightweight bridge from molecular structure files to
+descriptors, contact maps, graph-ML inputs, and educational coarse-grained
+representations.** The core depends only on NumPy and Matplotlib; heavier
+backends (RDKit, PyTorch Geometric, DGL, Gemmi) are opt-in extras.
 
 It is designed around three core workflows for teaching, exploratory research,
 and early-stage molecular machine learning:
