@@ -80,3 +80,18 @@ def test_binding_site_writes_residue_csv_and_descriptors(tmp_path):
     assert len(desc_rows) == 1
     assert float(desc_rows[0]["pocket_n_residues"]) == 13.0
     assert float(desc_rows[0]["pocket_atom_contact_count"]) == 107.0
+
+
+def test_binding_site_unknown_ligand_reports_error(tmp_path, capsys):
+    out = tmp_path / "site.csv"
+    rc = main([
+        "binding-site",
+        os.path.join(DATA, "3ptb.pdb"),
+        "--out",
+        str(out),
+        "--ligand",
+        "ZZZ",
+    ])
+    assert rc == 2
+    assert not out.exists()
+    assert "Binding-site analysis failed" in capsys.readouterr().err

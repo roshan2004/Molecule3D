@@ -138,6 +138,35 @@ def test_binding_site_plot_shortcut_returns_axes():
     assert ax is not None
 
 
+def test_pocket_descriptors_reject_unknown_preset():
+    mol = protein_with_ligand()
+    bs = mol.binding_site(cutoff=4.5)
+    with pytest.raises(ValueError, match="unknown pocket descriptor preset"):
+        bs.descriptors(mol, preset="bogus")
+    with pytest.raises(ValueError, match="unknown pocket descriptor preset"):
+        ms.pocket_descriptor_feature_names("bogus")
+
+
+def test_pocket_descriptors_handle_empty_site():
+    mol = protein_with_ligand()
+    bs = mol.binding_site(cutoff=0.01)          # nothing this close to the ligand
+    assert bs.residues == []
+    assert bs.contacts == []
+
+    desc = bs.descriptors(mol)
+    # still a fixed-size vector, all zeros for the empty pocket
+    assert set(desc) == set(ms.pocket_descriptor_feature_names("pocket-basic"))
+    assert desc["pocket_n_atoms"] == 0.0
+    assert desc["pocket_n_residues"] == 0.0
+    assert desc["pocket_radius_of_gyration"] == 0.0
+    assert desc["pocket_dim_x"] == 0.0
+    assert desc["pocket_bbox_volume"] == 0.0
+    assert desc["pocket_contact_density"] == 0.0
+    assert desc["ligand_distance_mean"] == 0.0
+    assert desc["ligand_contact_distance_max"] == 0.0
+    assert desc["pocket_residue_count_OTHER"] == 0.0
+
+
 def test_binding_site_ambiguous_requires_explicit_ligand():
     mol = Molecule(
         np.array([[0.0, 0, 0], [2.0, 0, 0], [3.0, 0, 0]]),
