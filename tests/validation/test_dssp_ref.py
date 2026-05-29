@@ -5,6 +5,16 @@ is not byte-for-byte equality with the reference but a per-residue *agreement
 fraction* on the reduced 3-state alphabet (helix / strand / coil). The test
 prints that fraction so a regression is visible, and asserts a defensible floor.
 
+The cross-check runs over a small but deliberately fold-diverse set so the
+agreement is reported as a *range across fold classes*, not a single best-case
+number on a helical structure:
+
+- ``1fqy`` (aquaporin-1): helix-dominated, the easy case for a hydrogen-bond
+  assignment.
+- ``1ubq`` (ubiquitin): mixed alpha/beta (beta-grasp fold).
+- ``1shg`` (alpha-spectrin SH3 domain): almost entirely beta-strand, the
+  stress case where simplified DSSP is most likely to disagree.
+
 We invoke ``mkdssp`` directly and parse its classic (``--output-format dssp``)
 output rather than going through Biopython's wrapper, which does not drive
 mkdssp v4 (the version shipped by current Linux distros). Skips cleanly when no
@@ -14,6 +24,7 @@ mkdssp v4 (the version shipped by current Linux distros). Skips cleanly when no
 import shutil
 import subprocess
 import tempfile
+from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
@@ -23,7 +34,31 @@ import molscope as ms
 pytestmark = pytest.mark.validation
 
 DATA = Path(__file__).resolve().parents[2] / "examples" / "data"
-PROTEIN = str(DATA / "1fqy.pdb")
+
+
+@dataclass(frozen=True)
+class Case:
+    """One reference structure and the agreement floor expected for its fold."""
+
+    pdb_id: str
+    fold: str
+    # Per-fold floor on the 3-state agreement fraction, set a few points below
+    # the observed value (mkdssp 4.5.8) to leave headroom for the older mkdssp
+    # the Linux CI job installs from apt, whose boundary assignments differ by a
+    # residue or two. Observed: 1fqy 99.1%, 1ubq 100%, 1shg 98.2%. The test
+    # prints the live fraction so a real regression is visible immediately.
+    min_agreement: float
+
+    @property
+    def path(self) -> str:
+        return str(DATA / f"{self.pdb_id}.pdb")
+
+
+CASES = [
+    Case("1fqy", "helix-dominated", 0.95),
+    Case("1ubq", "mixed alpha/beta", 0.90),
+    Case("1shg", "all-beta", 0.90),
+]
 
 # Reduce DSSP's 8-state alphabet to 3 states. molscope emits 'S' for bend (not
 # strand) and 'T' for turn; both reduce to coil, matching the reference.
@@ -96,27 +131,34 @@ def _molscope_codes(pdb_path: str) -> dict:
     return {(c, int(r)): code for c, r, code in zip(ss.chains, ss.resids, ss.codes.tolist())}
 
 
-def test_dssp_three_state_agreement_with_reference():
-    ref = _reference_codes(PROTEIN)
-    mine = _molscope_codes(PROTEIN)
+@pytest.mark.parametrize("case", CASES, ids=[c.pdb_id for c in CASES])
+def test_dssp_three_state_agreement_with_reference(case):
+    ref = _reference_codes(case.path)
+    mine = _molscope_codes(case.path)
 
     shared = sorted(ref.keys() & mine.keys())
-    assert len(shared) > 50, "too few residues matched between molscope and reference"
+    assert len(shared) > 50, (
+        f"{case.pdb_id}: too few residues matched between molscope and reference"
+    )
 
     agree = sum(_to3(mine[k]) == _to3(ref[k]) for k in shared)
     fraction = agree / len(shared)
-    print(f"\n3-state DSSP agreement: {fraction:.1%} over {len(shared)} residues")
+    print(
+        f"\n3-state DSSP agreement [{case.pdb_id}, {case.fold}]: "
+        f"{fraction:.1%} over {len(shared)} residues (floor {case.min_agreement:.0%})"
+    )
 
-    # Observed 99.1% vs mkdssp 4.2.2 on 1fqy (mostly helical). Floor set below
-    # that with headroom for boundary residues, tight enough to catch a real
-    # regression in the assignment.
-    assert fraction >= 0.95
+    assert fraction >= case.min_agreement, (
+        f"{case.pdb_id} ({case.fold}): 3-state agreement {fraction:.1%} "
+        f"fell below floor {case.min_agreement:.0%}"
+    )
 
 
-def test_helix_and_strand_fractions_are_in_the_right_ballpark():
-    """Aggregate composition should track the reference within a loose band."""
-    ref = _reference_codes(PROTEIN)
-    mine = _molscope_codes(PROTEIN)
+@pytest.mark.parametrize("case", CASES, ids=[c.pdb_id for c in CASES])
+def test_helix_fraction_is_in_the_right_ballpark(case):
+    """Aggregate helix composition should track the reference within a loose band."""
+    ref = _reference_codes(case.path)
+    mine = _molscope_codes(case.path)
     shared = sorted(ref.keys() & mine.keys())
 
     def helix_frac(codes):

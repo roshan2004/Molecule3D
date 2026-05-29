@@ -74,13 +74,13 @@ end in the project's tutorials:
 1. **PDB to descriptors.** Geometry, contacts, contact maps, residue-level
    analyses, a dependency-free DSSP-style secondary structure assignment,
    and optional `RDKit`-backed scalar descriptors when the `chem` extra is
-   installed. The DSSP-style implementation reaches roughly 99% agreement
-   with reference `mkdssp` [@kabsch1983dssp] on the helical reference
-   protein (Aquaporin-1) included in the validation suite, after
-   collapsing assignments to helix, strand, and coil. This is a
-   targeted regression check rather than a full benchmark panel, and
-   strand-rich folds may disagree more strongly; the package's
-   per-workflow limitations page records this explicitly.
+   installed. After collapsing assignments to helix, strand, and coil, the
+   DSSP-style implementation reaches 98 to 99% per-residue agreement with
+   reference `mkdssp` [@kabsch1983dssp] across three fold classes in the
+   validation suite: helix-dominated Aquaporin-1 (99.1%), mixed alpha/beta
+   ubiquitin (100%), and the all-beta SH3 domain (98.2%). This is a targeted
+   regression check rather than an exhaustive benchmark panel; the package's
+   per-workflow limitations page records its scope explicitly.
 
 2. **PDB to graph or GNN.** Atom-and-bond graphs and residue contact graphs
    with named node and edge feature presets, Laplacian and random-walk

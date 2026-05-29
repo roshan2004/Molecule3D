@@ -310,10 +310,11 @@ Codes follow DSSP notation: `H`/`G`/`I` helices, `E`/`B` strands, `T` turn, `S`
 bend, `-` coil. This is a simplified **educational** implementation of the
 Kabsch-Sander hydrogen-bond model: not bit-identical to the reference `mkdssp`
 on every edge case, but validated against it. A CI cross-check
-(`tests/validation`) puts it at **~99% per-residue 3-state agreement**
-(helix/strand/coil) with `mkdssp` 4.2.2 on the bundled aquaporin (`1fqy`);
-strand-rich folds, where reference DSSP is hardest to match, will agree less
-closely. It needs backbone N/CA/C/O atoms, so use PDB/mmCIF input (not a bare
+(`tests/validation`) spans three fold classes and reports **~98 to 99%
+per-residue 3-state agreement** (helix/strand/coil) with `mkdssp`: 99.1% on the
+helical aquaporin (`1fqy`), 100% on mixed alpha/beta ubiquitin (`1ubq`), and
+98.2% on the all-beta SH3 domain (`1shg`). It needs backbone N/CA/C/O atoms, so
+use PDB/mmCIF input (not a bare
 `.xyz`). The secondary-structure render in the showcase above (helices red,
 turns cyan, coil grey) is produced this way.
 
@@ -548,6 +549,11 @@ physical invariants (rigid-body algebra, geometry, coarse-grain conservation)
 that run everywhere, plus cross-checks against reference scientific tools (the
 simplified DSSP vs `mkdssp`) that turn "the tests pass" into a measured
 agreement number.
+
+## Changelog
+
+Notable changes for each release are recorded in [`CHANGELOG.md`](CHANGELOG.md),
+following the [Keep a Changelog](https://keepachangelog.com/) format.
 
 ## How to cite
 
