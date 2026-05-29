@@ -2,13 +2,17 @@
 
 import pytest
 
-from molscope.cli import _default_to_view, _parse_selection
+from molscope.cli import _default_to_view, _parse_ligand, _parse_selection
 
 
 def test_default_to_view_keeps_subcommands_and_top_level_help():
-    subcommands = {"view", "analyze", "export"}
+    subcommands = {"view", "analyze", "binding-site", "export"}
 
     assert _default_to_view(["analyze", "a.pdb"], subcommands) == ["analyze", "a.pdb"]
+    assert _default_to_view(["binding-site", "a.pdb"], subcommands) == [
+        "binding-site",
+        "a.pdb",
+    ]
     assert _default_to_view(["--help"], subcommands) == ["--help"]
 
 
@@ -46,3 +50,14 @@ def test_parse_selection_coerces_resid_and_hetero_values():
 def test_parse_selection_rejects_unknown_fields():
     with pytest.raises(ValueError, match="unsupported field"):
         _parse_selection("name=CA")
+
+
+def test_parse_ligand_accepts_resname_and_location():
+    assert _parse_ligand(None) is None
+    assert _parse_ligand("BEN") == "BEN"
+    assert _parse_ligand("A:1") == ("A", 1)
+
+
+def test_parse_ligand_rejects_bad_location():
+    with pytest.raises(ValueError, match="integer resid"):
+        _parse_ligand("A:BEN")

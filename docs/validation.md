@@ -21,6 +21,12 @@ Run the full validation layer locally:
 uv run pytest tests/validation -v -rs -s
 ```
 
+The binding-site panel includes opt-in RCSB downloads. Run it explicitly with:
+
+```bash
+MOLSCOPE_RUN_REMOTE_PDB=1 uv run pytest tests/validation/test_binding_sites_ref.py
+```
+
 Install optional Python references with:
 
 ```bash
@@ -34,9 +40,12 @@ The secondary-structure reference additionally needs a system `mkdssp` or
 
 The current reference checks are deliberately small. They are best read as
 targeted scientific smoke tests: `1fqy` exercises a mostly helical protein for
-DSSP-style secondary structure, `1aml` exercises a compact NMR ensemble, and
-the RDKit checks cover a handful of embedded small molecules. That is useful
-for catching regressions, but it is not yet a benchmark panel.
+DSSP-style secondary structure, `1aml` exercises a compact NMR ensemble, `3ptb`
+exercises the bundled binding-site path, and the RDKit checks cover a handful
+of embedded small molecules. The opt-in remote binding-site panel adds `1stp`,
+`1iep`, `3ert`, `1hsg`, `4hvp`, and `2br1` to catch ligand ambiguity,
+multi-chain complexes, cofactors and larger inhibitors. That is useful for
+catching regressions, but it is not yet a benchmark panel.
 
 Future validation should expand these examples into a curated mini-panel:
 helix-rich, beta-rich and mixed alpha/beta proteins for DSSP; several NMR
@@ -56,6 +65,7 @@ and known cases where distance-only bond perception should fail.
 | Chemical features | RDKit atom/bond APIs | `tests/validation/test_chem_ref.py` | Aromatic, heteroatom and charged small molecules | formal charges and aromatic flags exact; bond orders exact within `1e-12` | MolScope delegates optional chemical perception to RDKit, so direct RDKit arrays are the reference. |
 | RDKit descriptors | RDKit descriptor APIs | `tests/validation/test_chem_ref.py` | Same chemistry panel | selected scalar descriptors relative/absolute `1e-12` | Descriptor wrappers should not alter RDKit descriptor values. |
 | Secondary structure | `mkdssp` / `dssp` | `tests/validation/test_dssp_ref.py` | `1fqy.pdb` | 3-state helix/strand/coil agreement `>= 0.95`; helix fraction within `0.15` | MolScope's DSSP is simplified and educational, so reduced-state agreement is the honest target rather than byte-for-byte 8-state equality. |
+| Binding sites | RCSB structures with HETATM ligands | `tests/validation/test_binding_sites_ref.py` | `3ptb`; opt-in remote panel `1stp`, `1iep`, `3ert`, `1hsg`, `4hvp`, `2br1` | residue records and `pocket-basic` descriptors finite and internally consistent | Real protein-ligand files expose ambiguity, multi-chain sites, cofactors, ions and larger inhibitors better than synthetic fixtures. |
 
 ## Invariant checks
 

@@ -71,6 +71,27 @@ def main(argv=None) -> int:
     )
     analyze_parser.add_argument("--jobs", "-j", type=int, default=1, help="parallel jobs")
 
+    # -- BINDING-SITE subcommand ------------------------------------------
+    binding_parser = subparsers.add_parser(
+        "binding-site", help="write ligand binding-site residue contacts to CSV"
+    )
+    src = binding_parser.add_mutually_exclusive_group(required=True)
+    src.add_argument("file", nargs="?", help="path to a protein-ligand structure file")
+    src.add_argument("--fetch", metavar="PDBID", help="download from RCSB by id")
+    binding_parser.add_argument("--out", "-o", required=True, help="output residue CSV file")
+    binding_parser.add_argument(
+        "--cutoff", type=float, default=4.5,
+        help="protein-ligand atom contact cutoff in angstrom"
+    )
+    binding_parser.add_argument(
+        "--ligand",
+        help="ligand residue name, or chain:resid for a specific HETATM group",
+    )
+    binding_parser.add_argument(
+        "--descriptors-out",
+        help="optional one-row CSV of pocket-basic descriptors",
+    )
+
     # -- EXPORT subcommand -------------------------------------------------
     export_parser = subparsers.add_parser(
         "export", help="batch export molecular graphs for ML"
@@ -100,6 +121,8 @@ def main(argv=None) -> int:
         return _run_view(args)
     if args.command == "analyze":
         return _run_analyze(args)
+    if args.command == "binding-site":
+        return _run_binding_site(args)
     if args.command == "export":
         return _run_export(args)
 
@@ -211,6 +234,18 @@ def _parse_selection_value(key: str, value: str):
 
 
 
+def _parse_ligand(value: str | None):
+    if value is None:
+        return None
+    if ":" in value:
+        chain, resid = value.split(":", 1)
+        try:
+            return (chain, int(resid))
+        except ValueError as exc:
+            raise ValueError("chain:resid ligand selectors need an integer resid") from exc
+    return value
+
+
 def _analyze_one(path: str, preset: str):
     """Compute flattened descriptors for one structure (worker; must be top-level
     so it is picklable under the ``spawn`` start method on macOS/Windows)."""
@@ -254,6 +289,63 @@ def _run_analyze(args: argparse.Namespace) -> int:
 
     print(f"Saved descriptors for {len(results)} structures to {args.out}")
     return 0
+
+
+def _run_binding_site(args: argparse.Namespace) -> int:
+    import csv
+
+    try:
+        ligand = _parse_ligand(args.ligand)
+        mol = fetch(args.fetch) if args.fetch else read(args.file)
+        site = mol.binding_site(ligand=ligand, cutoff=args.cutoff)
+    except ValueError as e:
+        print(f"Binding-site analysis failed: {e}", file=sys.stderr)
+        return 2
+
+    source = args.fetch if args.fetch else args.file
+    rows = [
+        {
+            "file": source,
+            "ligand_chain": site.ligand.chain,
+            "ligand_resid": site.ligand.resid,
+            "ligand_resname": site.ligand.resname,
+            "cutoff": site.cutoff,
+            **record,
+        }
+        for record in site.to_records()
+    ]
+    _write_binding_site_csv(args.out, rows)
+
+    if args.descriptors_out:
+        desc = {"file": source, **site.descriptors(mol, preset="pocket-basic")}
+        with open(args.descriptors_out, "w", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=list(desc))
+            writer.writeheader()
+            writer.writerow(desc)
+
+    print(f"Saved {len(rows)} binding-site residue records to {args.out}")
+    return 0
+
+
+def _write_binding_site_csv(path: str, rows: list[dict]) -> None:
+    import csv
+
+    fieldnames = [
+        "file",
+        "ligand_chain",
+        "ligand_resid",
+        "ligand_resname",
+        "cutoff",
+        "chain",
+        "resid",
+        "resname",
+        "min_distance",
+        "n_atom_contacts",
+    ]
+    with open(path, "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(rows)
 
 
 def _export_one(path: str, to_fmt: str, out_dir: str, kwargs: dict) -> bool:

@@ -60,6 +60,7 @@ from .contacts import (
     chain_contact_matrix,
     interface_residues,
     ligands,
+    pocket_descriptor_feature_names,
 )
 from .descriptors import descriptor_feature_names, descriptors, featurize_many, inertia_tensor
 from .dssp import BackboneTorsions, SecondaryStructure, SSSegment, backbone_torsions
@@ -143,6 +144,7 @@ __all__ = [
     "read_xyz",
     "read_xyz_frames",
     "rdkit_descriptors",
+    "pocket_descriptor_feature_names",
     "residue_contact_graph",
     "residue_edge_feature_names",
     "residue_node_feature_names",

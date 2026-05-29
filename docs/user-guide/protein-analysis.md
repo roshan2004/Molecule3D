@@ -135,9 +135,8 @@ for res, d in zip(site.residues, site.min_distances):
 
 site.n_atom_contacts                         # protein-ligand atom contacts
 site.to_records()                            # table-ready residue rows
-site.to_molecule(mol).descriptors(
-    preset="native-basic"
-)                                            # descriptors for site residues
+site.descriptors(mol, preset="pocket-basic") # pocket descriptors
+site.plot(mol, show=False)                   # residue subset plus ligand
 ```
 
 When several ligands are present, name one explicitly:
@@ -155,6 +154,13 @@ selections:
 mol.protein()        # ATOM atoms only
 mol.hetero_atoms()   # HETATM atoms only
 mol.select(hetero=True)
+```
+
+To export the binding-site residue table without writing Python:
+
+```bash
+molscope binding-site examples/data/3ptb.pdb --out site.csv --cutoff 4.5
+molscope binding-site examples/data/3ptb.pdb --out site.csv --descriptors-out pocket.csv
 ```
 
 [`SecondaryStructure`]: ../api-reference.md

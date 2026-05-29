@@ -464,7 +464,8 @@ inspection and reuse, not a validated simulation topology.
 
 ## Command-line interface
 
-MolScope provides a powerful CLI for visualization, batch analysis, and ML graph export.
+MolScope provides a CLI for visualization, binding-site tables, batch analysis,
+and ML graph export.
 
 ### View (default)
 Visualize a structure, apply transformations, and save images or animations.
@@ -478,6 +479,14 @@ molscope --fetch 1aml --center --gif amyloid.gif
 Batch compute molecular descriptors for many files and save to a CSV table.
 ```bash
 molscope analyze examples/data/*.pdb --out results.csv --preset native-3d --jobs 4
+```
+
+### Binding sites
+Write protein-ligand binding-site residue contacts and optional pocket
+descriptors to CSV.
+```bash
+molscope binding-site examples/data/3ptb.pdb --out site.csv --cutoff 4.5
+molscope binding-site examples/data/3ptb.pdb --out site.csv --descriptors-out pocket.csv
 ```
 
 ### Export
@@ -495,6 +504,7 @@ Supports advanced features like `--self-loops`, `--global-node`, and `--pe` (pos
 | `examples/data/helix_201.xyz` | a helix (bare coordinates) |
 | `examples/data/1fqy.pdb` | Aquaporin-1, single model (1661 atoms) |
 | `examples/data/1aml.pdb` | Alzheimer amyloid A4 peptide, 20-model NMR ensemble |
+| `examples/data/3ptb.pdb` | Trypsin-benzamidine complex, ligand-binding-site example |
 
 ## Notes
 

@@ -39,15 +39,14 @@ def main():
             f"{row['n_atom_contacts']:>3} atom contacts"
         )
 
-    # 4. Descriptor extraction for just the binding-site residues.
-    site_mol = site.to_molecule(mol)
-    site_desc = site_mol.descriptors(preset="native-basic")
+    # 4. Pocket descriptors for the binding-site residues and ligand contacts.
+    site_desc = site.descriptors(mol, preset="pocket-basic")
     print(
         "\nBinding-site descriptors: "
-        f"{int(site_desc['n_atoms'])} atoms, "
-        f"{int(site_desc['n_residues'])} residues, "
-        f"Rg {site_desc['radius_of_gyration']:.2f} A, "
-        f"{int(site_desc['atom_contact_count'])} atom contacts"
+        f"{int(site_desc['pocket_n_atoms'])} atoms, "
+        f"{int(site_desc['pocket_n_residues'])} residues, "
+        f"Rg {site_desc['pocket_radius_of_gyration']:.2f} A, "
+        f"{int(site_desc['pocket_atom_contact_count'])} atom contacts"
     )
 
     # 5. Secondary-structure overview of the protein.
