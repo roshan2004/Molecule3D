@@ -9,6 +9,8 @@ API changes; these are called out under **Changed** where they occur.
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-05-29
+
 ### Added
 
 - Molecule-table workflow: `molscope select` and the `molscope.library` module
@@ -160,7 +162,8 @@ Initial public release under the **MolScope** name, renamed from the earlier
 - `uv` support (lockfile, dev dependency group, `.python-version`), continuous
   integration, and README visual examples.
 
-[Unreleased]: https://github.com/roshan2004/molscope/compare/v0.8.3...HEAD
+[Unreleased]: https://github.com/roshan2004/molscope/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/roshan2004/molscope/compare/v0.8.3...v0.9.0
 [0.8.3]: https://github.com/roshan2004/molscope/compare/v0.8.2...v0.8.3
 [0.8.2]: https://github.com/roshan2004/molscope/compare/v0.8.1...v0.8.2
 [0.8.1]: https://github.com/roshan2004/molscope/compare/v0.8.0...v0.8.1
