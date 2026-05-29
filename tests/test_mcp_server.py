@@ -220,6 +220,7 @@ def test_chemical_features(server):
 
 
 def test_validate_cif(server):
+    pytest.importorskip("gemmi")
     out = _json(server, "validate_cif", source=os.path.join(FIXTURES, "insertion_codes.cif"))
     assert "valid" in out and "n_atom_site_rows" in out
 

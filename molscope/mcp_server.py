@@ -457,7 +457,7 @@ def build_server():  # noqa: C901 - a flat list of small tool adapters reads cle
 
     @server.tool()
     def validate_cif(source: str) -> str:
-        """Validate an mmCIF/CIF file (needs the ``cif`` extra for full checks).
+        """Validate an mmCIF/CIF file (needs the ``cif`` extra / gemmi).
 
         Returns JSON with whether the file is valid, syntax/atom-site status, block
         and atom-row counts, and any errors or warnings.
