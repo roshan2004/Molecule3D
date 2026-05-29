@@ -311,6 +311,7 @@ def test_fetch_uses_downloader(tmp_path, monkeypatch):
 
 
 def test_py3dmol_view_builds():
+    pytest.importorskip("py3Dmol")
     mol = water()
     viewer = mol.view()
     assert viewer is not None
