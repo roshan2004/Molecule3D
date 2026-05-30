@@ -70,6 +70,23 @@ def _num(value) -> Optional[float]:
     return None if (math.isnan(f) or math.isinf(f)) else f
 
 
+def _resolve_count(n: Optional[int], fraction: Optional[float], total: int) -> int:
+    """Resolve an absolute ``n`` or a ``fraction`` of ``total`` to a positive count.
+
+    Exactly one of ``n``/``fraction`` must be given. A fraction rounds up so that
+    e.g. 5% of a small table still selects at least one molecule.
+    """
+    if (n is None) == (fraction is None):
+        raise ValueError("provide exactly one of n or fraction")
+    if fraction is not None:
+        if not 0 < fraction <= 1:
+            raise ValueError("fraction must be in (0, 1]")
+        return max(1, math.ceil(fraction * total))
+    if n <= 0:
+        raise ValueError("n must be a positive integer")
+    return n
+
+
 def _jsonable(value: Any) -> Any:
     """Coerce numpy scalars/arrays into plain, JSON-safe Python values."""
     if isinstance(value, np.generic):
@@ -500,21 +517,25 @@ def build_server():  # noqa: C901 - a flat list of small tool adapters reads cle
 
     @server.tool()
     def select_diverse(
-        table: str, n: int, descriptor_cols: Optional[list[str]] = None,
+        table: str, n: Optional[int] = None, fraction: Optional[float] = None,
+        descriptor_cols: Optional[list[str]] = None,
         smiles_col: Optional[str] = None, compute_descriptors: bool = False,
     ) -> str:
         """Pick a diverse subset of molecules from a CSV/XLSX table.
 
-        ``table`` is a path to a ``.csv`` or ``.xlsx`` file of molecules. Select on
-        existing numeric columns via ``descriptor_cols`` (e.g. ``["MW", "ALogP"]``),
-        or set ``compute_descriptors`` with ``smiles_col`` to compute RDKit
-        descriptors (``MolLogP`` is the ALogP equivalent) and select on those.
-        Returns the chosen rows by MaxMin (farthest-first) diversity selection.
+        ``table`` is a path to a ``.csv`` or ``.xlsx`` file of molecules. Give
+        either an absolute count ``n`` or a ``fraction`` of the table in ``(0, 1]``
+        (e.g. ``fraction=0.05`` for "the most diverse 5%"); pass exactly one.
+        Select on existing numeric columns via ``descriptor_cols`` (e.g.
+        ``["MW", "ALogP"]``), or set ``compute_descriptors`` with ``smiles_col`` to
+        compute RDKit descriptors (``MolLogP`` is the ALogP equivalent) and select
+        on those. Returns the chosen rows by MaxMin (farthest-first) selection.
         """
         from .library import read_table, smiles_descriptors
         from .library import select_diverse as _pick
 
         tab = read_table(table)
+        count = _resolve_count(n, fraction, len(tab))
         if compute_descriptors:
             if not smiles_col:
                 raise ValueError("compute_descriptors needs smiles_col")
@@ -524,10 +545,97 @@ def build_server():  # noqa: C901 - a flat list of small tool adapters reads cle
             names, matrix = list(descriptor_cols), tab.numeric_matrix(descriptor_cols)
         else:
             raise ValueError("provide descriptor_cols, or compute_descriptors with smiles_col")
-        chosen = tab.select_rows(_pick(matrix, n))
+        chosen = tab.select_rows(_pick(matrix, count))
         return json.dumps(
-            {"selected": len(chosen), "of": len(tab), "descriptors": names,
-             "rows": [dict(r) for r in chosen.rows]},
+            {"selected": len(chosen), "of": len(tab), "requested": count,
+             "descriptors": names, "rows": [dict(r) for r in chosen.rows]},
+            indent=2, default=_jsonable,
+        )
+
+    @server.tool()
+    def prepare_dataset(
+        table: str, split: str = "random", test: float = 0.1, val: float = 0.1,
+        seed: int = 0, smiles_col: Optional[str] = None,
+        descriptor_cols: Optional[list[str]] = None, compute_descriptors: bool = False,
+        dedup: str = "none", fingerprints: bool = False, save_dir: Optional[str] = None,
+    ) -> str:
+        """Build train/validation/test splits from a molecule table or SDF.
+
+        ``table`` is a path to a ``.csv``/``.xlsx`` table or a multi-record
+        ``.sdf``. ``split`` is ``"random"``, ``"diversity"`` (needs descriptors,
+        via ``descriptor_cols`` or ``compute_descriptors`` + ``smiles_col``), or
+        ``"scaffold"`` (Bemis-Murcko, needs ``smiles_col``). ``dedup`` is
+        ``"none"``/``"exact"``/``"canonical"``. Returns a JSON summary plus each
+        molecule's split label inline; pass ``save_dir`` to also write
+        ``train.csv``/``validation.csv``/``test.csv``, ``descriptors.csv``,
+        ``report.md`` and ``manifest.json`` to that directory.
+        """
+        from .prepare import prepare_dataset as _prepare
+
+        dataset = _prepare(
+            table, smiles_col=smiles_col, descriptor_cols=descriptor_cols,
+            compute_descriptors=compute_descriptors, split=split, test=test, val=val,
+            seed=seed, dedup=dedup, fingerprints=fingerprints,
+        )
+        label_of = {}
+        for name, indices in (("train", dataset.split.train),
+                              ("validation", dataset.split.val),
+                              ("test", dataset.split.test)):
+            for i in indices:
+                label_of[i] = name
+        id_col = dataset.table.columns[0] if dataset.table.columns else None
+        assignments = [
+            {"id": (dataset.table.rows[i].get(id_col) if id_col else i),
+             "split": label_of[i]}
+            for i in range(dataset.n_prepared)
+        ]
+        payload = dict(dataset.manifest())
+        payload["assignments"] = assignments[:_MAX_ROWS]
+        if len(assignments) > _MAX_ROWS:
+            payload["assignments_truncated"] = len(assignments) - _MAX_ROWS
+        if save_dir:
+            payload["written"] = dataset.write(
+                os.path.abspath(os.path.expanduser(save_dir)), make_figure=False
+            )
+        return json.dumps(payload, indent=2, default=_jsonable)
+
+    @server.tool()
+    def find_duplicates(
+        table: str, smiles_col: str, method: str = "canonical",
+    ) -> str:
+        """Find redundant compounds in a table: rows that are the same molecule.
+
+        Groups rows of ``table`` by the ``smiles_col`` using ``method``
+        ``"canonical"`` (RDKit canonical SMILES, so different spellings of one
+        molecule collapse) or ``"exact"`` (raw string match). Returns the
+        duplicate groups (each as the list of row indices and ids that share a
+        key) and how many rows would be removed by keeping the first of each.
+        """
+        from .library import read_table
+        from .prepare import canonical_smiles, dedup_keys
+
+        tab = read_table(table)
+        raw = tab.column(smiles_col)
+        keys = canonical_smiles(raw) if method == "canonical" else [
+            "" if k is None else str(k).strip() for k in raw
+        ]
+        id_col = tab.columns[0] if tab.columns else None
+        groups: dict[str, list[int]] = {}
+        for i, key in enumerate(keys):
+            if key:
+                groups.setdefault(key, []).append(i)
+        duplicate_groups = [
+            {"key": key,
+             "rows": members,
+             "ids": [tab.rows[i].get(id_col) if id_col else i for i in members]}
+            for key, members in groups.items() if len(members) > 1
+        ]
+        _, n_removed = dedup_keys(raw, method)
+        return json.dumps(
+            {"n_rows": len(tab), "method": method,
+             "n_duplicate_groups": len(duplicate_groups),
+             "n_redundant_rows": n_removed,
+             "groups": duplicate_groups[:_MAX_ROWS]},
             indent=2, default=_jsonable,
         )
 

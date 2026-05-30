@@ -25,7 +25,7 @@ modules, and three interchangeable front-ends on top.
                  +-------------------------------------------+
    analysis      |  distance  contacts  contactmap  dssp     |
                  |  descriptors  ensemble  coarsegrain  graph |
-                 |  chem        library                       |
+                 |  chem        library     prepare           |
                  +-------------------------------------------+
                                     ^
                  +-------------------------------------------+
@@ -77,6 +77,12 @@ light and lets every external library be quarantined behind an optional extra.
   a *table of molecules* (CSV/XLSX rows with an id, a SMILES string and numeric
   properties) rather than a single 3D structure. Computes descriptors and picks
   a diverse subset via a pure-NumPy MaxMin farthest-first traversal.
+- **`prepare.py`** — dataset preparation on top of `library`. Turns a table or
+  multi-record SDF into ML-ready `train`/`validation`/`test` CSVs plus an
+  optional `descriptors.csv`, a markdown report and a summary figure. Random and
+  diversity splits and exact dedup are pure-NumPy; scaffold splits, canonical
+  dedup, RDKit descriptors, Morgan fingerprints and SDF input are gated behind
+  the `chem` extra. The plumbing for the `molscope prepare` command.
 
 ### Analysis layer
 

@@ -145,6 +145,61 @@ def main(argv=None) -> int:
     )
     select_parser.set_defaults(standardize=True)
 
+    # -- PREPARE subcommand ------------------------------------------------
+    prepare_parser = subparsers.add_parser(
+        "prepare",
+        help="build ML-ready train/validation/test splits from a table or SDF",
+    )
+    prepare_parser.add_argument("file", help="input dataset (.csv, .tsv, .xlsx or .sdf)")
+    prepare_parser.add_argument(
+        "--out-dir", "-o", default="prepared",
+        help="output directory for splits, descriptors and report (default: prepared/)",
+    )
+    prepare_parser.add_argument(
+        "--split", choices=["random", "diversity", "scaffold"], default="random",
+        help="split strategy (scaffold needs RDKit)",
+    )
+    prepare_parser.add_argument(
+        "--test", type=float, default=0.1, help="test fraction (default: 0.1)"
+    )
+    prepare_parser.add_argument(
+        "--val", type=float, default=0.1, help="validation fraction (default: 0.1)"
+    )
+    prepare_parser.add_argument("--seed", type=int, default=0, help="random seed")
+    prepare_parser.add_argument(
+        "--smiles-col", metavar="COL",
+        help="column holding SMILES (required for scaffold/dedup/descriptors on a table)",
+    )
+    prepare_parser.add_argument(
+        "--descriptor-cols", nargs="+", metavar="COL",
+        help="existing numeric columns to use for a diversity split",
+    )
+    prepare_parser.add_argument(
+        "--compute-descriptors", action="store_true",
+        help="compute RDKit descriptors from --smiles-col (needs RDKit)",
+    )
+    prepare_parser.add_argument(
+        "--rdkit-descriptors", nargs="+", metavar="NAME",
+        help="which RDKit descriptors to compute (default: MolWt MolLogP TPSA ...)",
+    )
+    prepare_parser.add_argument(
+        "--dedup", choices=["none", "exact", "canonical"], default="none",
+        help="drop duplicate molecules (canonical needs RDKit)",
+    )
+    prepare_parser.add_argument(
+        "--fingerprints", action="store_true",
+        help="add a Morgan fingerprint column (needs RDKit)",
+    )
+    prepare_parser.add_argument(
+        "--no-standardize", dest="standardize", action="store_false",
+        help="diversity split on raw descriptors instead of z-scored ones",
+    )
+    prepare_parser.add_argument(
+        "--no-figure", dest="figure", action="store_false",
+        help="skip writing report.png",
+    )
+    prepare_parser.set_defaults(standardize=True, figure=True)
+
     # Default to 'view' if no subcommand provided
     if argv is None:
         argv = sys.argv[1:]
@@ -162,6 +217,8 @@ def main(argv=None) -> int:
         return _run_export(args)
     if args.command == "select":
         return _run_select(args)
+    if args.command == "prepare":
+        return _run_prepare(args)
 
     return 0
 
@@ -270,6 +327,50 @@ def _run_select(args: argparse.Namespace) -> int:
             print(f"could not write {args.out}: {exc}", file=sys.stderr)
             return 2
         print(f"wrote {args.out}")
+    return 0
+
+
+def _run_prepare(args: argparse.Namespace) -> int:
+    from .prepare import prepare_dataset
+
+    if not 0 <= args.test < 1 or not 0 <= args.val < 1 or args.test + args.val >= 1:
+        print("--test and --val must be in [0, 1) and sum to < 1", file=sys.stderr)
+        return 2
+
+    try:
+        dataset = prepare_dataset(
+            args.file,
+            smiles_col=args.smiles_col,
+            descriptor_cols=args.descriptor_cols,
+            compute_descriptors=args.compute_descriptors,
+            rdkit_descriptors=args.rdkit_descriptors,
+            split=args.split,
+            test=args.test,
+            val=args.val,
+            seed=args.seed,
+            standardize=args.standardize,
+            dedup=args.dedup,
+            fingerprints=args.fingerprints,
+        )
+    except (OSError, ValueError, KeyError, ImportError) as exc:
+        print(f"prepare failed: {exc}", file=sys.stderr)
+        return 2
+
+    try:
+        written = dataset.write(args.out_dir, make_figure=args.figure)
+    except (OSError, ValueError, ImportError) as exc:
+        print(f"could not write to {args.out_dir}: {exc}", file=sys.stderr)
+        return 2
+
+    sizes = dataset.split.sizes
+    print(
+        f"prepared {dataset.n_prepared} of {dataset.n_input} molecules "
+        f"({args.split} split): "
+        f"train={sizes['train']} validation={sizes['validation']} test={sizes['test']}"
+    )
+    if dataset.n_duplicates:
+        print(f"removed {dataset.n_duplicates} duplicate(s) ({args.dedup})")
+    print(f"wrote {len(written)} files to {args.out_dir}/")
     return 0
 
 
