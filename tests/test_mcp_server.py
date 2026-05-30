@@ -67,6 +67,8 @@ EXPECTED_TOOLS = {
     "chemical_features",
     "validate_cif",
     "select_diverse",
+    "prepare_dataset",
+    "find_duplicates",
     "render_structure",
     "render_contact_map",
     "render_distance_matrix",
@@ -309,6 +311,67 @@ def test_select_diverse_compute_without_smiles_col_errors(server, tmp_path):
         writer.writerow({"ID": "m0", "MW": 100})
     with pytest.raises(Exception):  # noqa: B017 - compute_descriptors set but no smiles_col
         _text(server, "select_diverse", table=str(path), n=1, compute_descriptors=True)
+
+
+def _write_lib(path, n=20):
+    import csv
+
+    with open(path, "w", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=["ID", "MW", "ALogP"])
+        writer.writeheader()
+        for i in range(n):
+            writer.writerow({"ID": f"m{i}", "MW": 100 + i * 40, "ALogP": i * 0.3})
+    return str(path)
+
+
+def test_select_diverse_by_fraction(server, tmp_path):
+    path = _write_lib(tmp_path / "lib.csv", n=20)
+    out = _json(server, "select_diverse", table=path, fraction=0.05,
+                descriptor_cols=["MW", "ALogP"])
+    assert out["selected"] == 1 and out["requested"] == 1  # ceil(0.05 * 20)
+
+
+def test_select_diverse_rejects_both_n_and_fraction(server, tmp_path):
+    path = _write_lib(tmp_path / "lib.csv", n=5)
+    with pytest.raises(Exception):  # noqa: B017 - exactly one of n/fraction
+        _text(server, "select_diverse", table=path, n=2, fraction=0.5,
+              descriptor_cols=["MW", "ALogP"])
+
+
+def test_prepare_dataset_returns_assignments(server, tmp_path):
+    path = _write_lib(tmp_path / "lib.csv", n=20)
+    out = _json(server, "prepare_dataset", table=path, split="diversity",
+                descriptor_cols=["MW", "ALogP"], test=0.2, val=0.2)
+    assert out["split_method"] == "diversity"
+    assert out["split_sizes"]["test"] == 4
+    assert len(out["assignments"]) == 20
+    assert {a["split"] for a in out["assignments"]} == {"train", "validation", "test"}
+    assert "written" not in out  # no save_dir given
+
+
+def test_prepare_dataset_writes_files_with_save_dir(server, tmp_path):
+    path = _write_lib(tmp_path / "lib.csv", n=20)
+    save = tmp_path / "out"
+    out = _json(server, "prepare_dataset", table=path, split="random",
+                save_dir=str(save))
+    assert any(p.endswith("train.csv") for p in out["written"])
+    assert (save / "manifest.json").exists()
+
+
+def test_find_duplicates_canonical(server, tmp_path):
+    pytest.importorskip("rdkit")
+    import csv
+
+    path = tmp_path / "smi.csv"
+    with open(path, "w", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=["ID", "SMILES"])
+        writer.writeheader()
+        for name, smi in [("a", "CCO"), ("b", "OCC"), ("c", "c1ccccc1")]:
+            writer.writerow({"ID": name, "SMILES": smi})
+    out = _json(server, "find_duplicates", table=str(path), smiles_col="SMILES")
+    assert out["n_redundant_rows"] == 1
+    assert out["n_duplicate_groups"] == 1
+    assert sorted(out["groups"][0]["ids"]) == ["a", "b"]  # CCO and OCC are one molecule
 
 
 def test_render_rmsd_heatmap_rejects_single_model(server):
