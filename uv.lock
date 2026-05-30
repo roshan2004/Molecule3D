@@ -3494,6 +3494,7 @@ graph = [
 ]
 mcp = [
     { name = "mcp", marker = "python_full_version >= '3.10'" },
+    { name = "pydantic", marker = "python_full_version >= '3.10'" },
 ]
 pyg = [
     { name = "torch", version = "2.8.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.10'" },
@@ -3527,6 +3528,7 @@ dev = [
     { name = "networkx", version = "3.6.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
     { name = "openpyxl" },
     { name = "py3dmol" },
+    { name = "pydantic", marker = "python_full_version >= '3.10'" },
     { name = "pytest", version = "8.4.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.10'" },
     { name = "pytest", version = "9.0.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.10'" },
     { name = "pytest-cov" },
@@ -3558,6 +3560,7 @@ requires-dist = [
     { name = "numpy", specifier = ">=1.21" },
     { name = "openpyxl", marker = "extra == 'xlsx'", specifier = ">=3.1" },
     { name = "py3dmol", marker = "extra == 'viz'", specifier = ">=2.0" },
+    { name = "pydantic", marker = "python_full_version >= '3.10' and extra == 'mcp'", specifier = ">=2.11" },
     { name = "pytest", marker = "extra == 'test'", specifier = ">=7" },
     { name = "pytest-cov", marker = "extra == 'test'", specifier = ">=4" },
     { name = "rdkit", marker = "extra == 'chem'", specifier = ">=2023.9" },
@@ -3578,6 +3581,7 @@ dev = [
     { name = "networkx", specifier = ">=2.6" },
     { name = "openpyxl", specifier = ">=3.1" },
     { name = "py3dmol", specifier = ">=2.0" },
+    { name = "pydantic", marker = "python_full_version >= '3.10'", specifier = ">=2.11" },
     { name = "pytest", specifier = ">=7" },
     { name = "pytest-cov", specifier = ">=4" },
     { name = "ruff", specifier = ">=0.6" },
