@@ -58,9 +58,14 @@ your shell's `PATH`).
 
 ## Tools
 
-Every tool takes a `source` that is either a path to a local coordinate file
-(`.pdb`, `.cif`, `.xyz`, `.sdf`, optionally gzipped) or a 4-character RCSB PDB id
-that is fetched and cached.
+Every tool takes a `source` that is one of: a path to a local coordinate file
+(`.pdb`, `.cif`, `.xyz`, `.sdf`, optionally gzipped); a 4-character RCSB PDB id
+that is fetched and cached; or a SMILES string written as `smiles:<SMILES>`
+(for example `smiles:CCO`), which builds a molecule from one RDKit-generated 3D
+conformer (needs the `chem` extra). Because the coordinates of a SMILES input
+are *generated* rather than experimental, SMILES suits topology-based tools
+(descriptors, graphs) better than geometry-dependent ones (precise distances,
+RMSD against experiment).
 
 ### Structure and geometry
 

@@ -11,6 +11,14 @@ API changes; these are called out under **Changed** where they occur.
 
 ### Added
 
+- MCP server now accepts SMILES anywhere a structure ``source`` is expected:
+  pass ``"smiles:<SMILES>"`` (e.g. ``"smiles:CCO"``) to any of the 23 tools and it
+  builds the molecule from one RDKit conformer (``chem`` extra). This makes the
+  descriptor and graph tools reachable from SMILES, not just files and PDB ids.
+- Every MCP tool now carries a human-readable title and MCP tool annotations
+  (``readOnlyHint``/``openWorldHint``/``idempotentHint``), so clients can tell the
+  read-only analysis tools from the ones that fetch over the network or write
+  files.
 - ``read_smiles``: build a ``Molecule`` from a SMILES string by generating a
   single 3D conformer with RDKit (``chem`` extra), carrying RDKit's bonds, Kekule
   bond orders, and formal charges. This makes the descriptor and graph-ML
@@ -20,6 +28,9 @@ API changes; these are called out under **Changed** where they occur.
 
 ### Changed
 
+- MCP tools turn a missing optional dependency into actionable install guidance:
+  a bare ``No module named 'rdkit'`` (or ``gemmi``/``networkx``/etc.) is mapped to
+  the ``pip install "molscope[...]"`` extra that provides it.
 - Sharpened the project framing: a single identity line ("a lightweight bridge
   from molecular structures to descriptors, contact maps, graph-ML inputs, and
   educational coarse-grained representations") now leads the README, package
