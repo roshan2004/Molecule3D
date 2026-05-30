@@ -420,6 +420,67 @@ def test_load_accepts_paths_and_rejects_garbage():
         _load("not-a-file-or-id.zzz")
 
 
+def test_load_accepts_smiles_prefix():
+    pytest.importorskip("rdkit")
+    mol = _load("smiles:CCO")  # ethanol
+    assert len(mol) == 9  # C2H6O with explicit hydrogens
+
+
+def test_load_rejects_empty_smiles():
+    with pytest.raises(ValueError, match="empty SMILES"):
+        _load("smiles:")
+
+
+def test_smiles_source_works_through_a_tool(server):
+    pytest.importorskip("rdkit")
+    out = _text(server, "summarize_structure", source="smiles:CCO")
+    assert "C2 H6 O" in out
+
+
+def test_compute_descriptors_accepts_smiles(server):
+    pytest.importorskip("rdkit")
+    out = _json(server, "compute_descriptors", sources=["smiles:CCO", UBQ])
+    assert [row["source"] for row in out["rows"]] == ["smiles:CCO", UBQ]
+
+
+def test_load_rejection_message_mentions_smiles():
+    with pytest.raises(FileNotFoundError, match="smiles:"):
+        _load("definitely not a structure")
+
+
+def test_dependency_error_maps_bare_module_to_extra():
+    from molscope.mcp_server import _dependency_error
+
+    err = _dependency_error(ModuleNotFoundError("No module named 'rdkit'", name="rdkit"))
+    assert 'molscope[chem]' in str(err)
+    err = _dependency_error(ModuleNotFoundError("No module named 'gemmi'", name="gemmi"))
+    assert 'molscope[cif]' in str(err)
+
+
+def test_dependency_error_passes_through_existing_guidance():
+    from molscope.mcp_server import _dependency_error
+
+    original = ImportError('needs RDKit; pip install "molscope[chem]"')
+    # Library messages already name the extra, so they must be returned unchanged.
+    assert _dependency_error(original) is original
+
+
+def test_tools_carry_titles_and_annotations(server):
+    tools = asyncio.run(server.list_tools())
+    for tool in tools:
+        assert tool.title, f"{tool.name} has no title"
+        assert tool.annotations is not None, f"{tool.name} has no annotations"
+    by_name = {t.name: t for t in tools}
+    # Pure analysis tools are read-only; render/prepare tools may write files.
+    assert by_name["summarize_structure"].annotations.readOnlyHint is True
+    assert by_name["render_structure"].annotations.readOnlyHint is False
+    assert by_name["prepare_dataset"].annotations.readOnlyHint is False
+    # Tools that take a structure source may fetch from RCSB (open world);
+    # table-only tools do not.
+    assert by_name["summarize_structure"].annotations.openWorldHint is True
+    assert by_name["select_diverse"].annotations.openWorldHint is False
+
+
 def test_load_dispatches_pdb_id_to_fetch(monkeypatch):
     import molscope.io as mio
 

@@ -2,9 +2,9 @@
 
 This wraps MolScope's existing analysis features as MCP *tools* so an assistant
 such as Claude Code or Claude Desktop can drive them in natural language: load a
-structure (local file or RCSB id), compute descriptor tables, assign secondary
-structure, build contact maps, find binding sites, summarise a molecular graph,
-coarse-grain, and render PNG figures.
+structure (local file, RCSB id, or ``"smiles:<SMILES>"`` string), compute
+descriptor tables, assign secondary structure, build contact maps, find binding
+sites, summarise a molecular graph, coarse-grain, and render PNG figures.
 
 It adds no new science. Every tool is a thin, faithful adapter over the public
 ``molscope`` API documented in the user guide, returning JSON text (so results
@@ -22,11 +22,12 @@ Code that is ``claude mcp add molscope -- molscope-mcp``.
 
 from __future__ import annotations
 
+import functools
 import io
 import json
 import math
 import os
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any, Callable, Optional
 
 import numpy as np
 
@@ -37,26 +38,98 @@ if TYPE_CHECKING:  # pragma: no cover - import only for type checkers
 # structure cannot flood the model's context with thousands of residues/pairs.
 _MAX_ROWS = 2000
 
+# A ``source`` beginning with this (case-insensitive) is treated as a SMILES
+# string rather than a path/PDB id, so every tool can analyse a molecule given
+# only its SMILES. A bare token like "C" would be ambiguous with a filename, so
+# the prefix makes the intent explicit.
+_SMILES_PREFIX = "smiles:"
+
+# Maps an importable top-level module to the MolScope optional extra that ships
+# it, so a bare ``ModuleNotFoundError`` can be turned into install guidance.
+_EXTRA_FOR_MODULE = {
+    "rdkit": "chem",
+    "gemmi": "cif",
+    "networkx": "graph",
+    "torch": "pyg",
+    "torch_geometric": "pyg",
+    "dgl": "dgl",
+    "scipy": "fast",
+    "openpyxl": "xlsx",
+}
+
+
+def _dependency_error(exc: ImportError) -> ImportError:
+    """Rewrite a raw import failure into actionable, model-friendly guidance.
+
+    MolScope's own code already raises messages naming the ``molscope[...]``
+    extra; those are passed through unchanged. A bare ``No module named 'rdkit'``
+    from a deeper import is mapped to the extra that provides it.
+    """
+    message = str(exc)
+    if "molscope[" in message:
+        return exc
+    top = (getattr(exc, "name", None) or "").split(".")[0]
+    extra = _EXTRA_FOR_MODULE.get(top)
+    if extra:
+        return ImportError(
+            f"this tool needs the optional '{top}' backend; "
+            f'install it with: pip install "molscope[{extra}]"'
+        )
+    if top:
+        return ImportError(f"this tool needs the optional package {top!r}, which is not installed")
+    return exc
+
+
+def _friendly_errors(fn: Callable) -> Callable:
+    """Wrap a tool so a missing optional dependency surfaces as install guidance."""
+
+    @functools.wraps(fn)
+    def wrapper(*args, **kwargs):
+        try:
+            return fn(*args, **kwargs)
+        except ImportError as exc:
+            raise _dependency_error(exc) from exc
+
+    return wrapper
+
 
 def _load(source: str, bond_perception: str = "geometric", protonation: str = "none") -> Molecule:
     """Resolve ``source`` to a :class:`~molscope.molecule.Molecule`.
 
-    ``source`` is either a path to a local coordinate file (``.pdb``, ``.cif``,
-    ``.xyz``, ``.sdf``, optionally gzipped) or a 4-character RCSB PDB id, which
-    is fetched and cached. ``bond_perception="template"`` attaches RDKit
-    residue-template bonds (PDB only); ``protonation="standard"`` adds idealised
-    pH-7 side-chain charges (see :func:`molscope.read_pdb`).
+    ``source`` is one of:
+
+    - a path to a local coordinate file (``.pdb``, ``.cif``, ``.xyz``, ``.sdf``,
+      optionally gzipped);
+    - a 4-character RCSB PDB id, which is fetched and cached;
+    - ``"smiles:<SMILES>"`` (e.g. ``"smiles:CCO"``), which builds a molecule from
+      the SMILES with one RDKit-generated 3D conformer (needs the ``chem`` extra).
+      The coordinates are *generated*, not experimental, so SMILES input suits
+      topology-based work (descriptors, graphs) more than geometry-dependent
+      results (precise distances, RMSD against experiment).
+
+    ``bond_perception="template"`` attaches RDKit residue-template bonds (PDB
+    only); ``protonation="standard"`` adds idealised pH-7 side-chain charges (see
+    :func:`molscope.read_pdb`). Both are ignored for SMILES input, which already
+    carries RDKit-perceived bonds and formal charges.
     """
     from .io import fetch, read
 
+    token = source.strip()
+    if token.lower().startswith(_SMILES_PREFIX):
+        from .io import read_smiles
+
+        smiles = token[len(_SMILES_PREFIX):].strip()
+        if not smiles:
+            raise ValueError('empty SMILES; pass e.g. source="smiles:CCO"')
+        return read_smiles(smiles)
     if os.path.exists(source):
         return read(source, bond_perception=bond_perception, protonation=protonation)
-    token = source.strip()
     if len(token) == 4 and token.isalnum():
         return fetch(token, bond_perception=bond_perception, protonation=protonation)
     raise FileNotFoundError(
         f"{source!r} is neither an existing file nor a 4-character PDB id; "
-        "pass a path like 'examples/data/1ubq.pdb' or an id like '1ubq'"
+        "pass a path like 'examples/data/1ubq.pdb', an id like '1ubq', "
+        'or a SMILES like "smiles:CCO"'
     )
 
 
@@ -105,24 +178,51 @@ def build_server():  # noqa: C901 - a flat list of small tool adapters reads cle
     extra is absent; only building/running the server needs it.
     """
     from mcp.server.fastmcp import FastMCP, Image
+    from mcp.types import ToolAnnotations
 
     server = FastMCP("molscope")
 
-    @server.tool()
+    # Annotation presets describing each tool's effect for MCP clients.
+    # "Net" tools accept a PDB id and so may reach out to RCSB (open world);
+    # "local" tools only read a local table. Write tools can emit files.
+    def _read(net: bool) -> ToolAnnotations:
+        return ToolAnnotations(
+            readOnlyHint=True, idempotentHint=True, destructiveHint=False, openWorldHint=net
+        )
+
+    def _write(net: bool) -> ToolAnnotations:
+        return ToolAnnotations(
+            readOnlyHint=False, idempotentHint=True, destructiveHint=False, openWorldHint=net
+        )
+
+    READ_NET = _read(True)  # analysis tools that take a structure source
+    READ_LOCAL = _read(False)  # tools that only read a local table
+    WRITE_NET = _write(True)  # render tools that may save a figure
+    WRITE_LOCAL = ToolAnnotations(  # prepare_dataset: may write files, order matters
+        readOnlyHint=False, idempotentHint=False, destructiveHint=False, openWorldHint=False
+    )
+
+    @server.tool(title="Summarise structure", annotations=READ_NET)
+    @_friendly_errors
     def summarize_structure(source: str) -> str:
         """Load a structure and return a one-line summary.
 
-        ``source`` is a local coordinate-file path or a 4-character PDB id.
-        The summary reports atom count, formula, chains, and bounding-box size.
+        ``source`` is a local coordinate-file path, a 4-character PDB id, or a
+        SMILES string written as ``"smiles:<SMILES>"`` (e.g. ``"smiles:CCO"``;
+        builds one RDKit conformer, needs the ``chem`` extra). The same three
+        forms are accepted by every tool that takes a ``source``. The summary
+        reports atom count, formula, chains, and bounding-box size.
         """
         return _load(source).summary()
 
-    @server.tool()
+    @server.tool(title="Compute descriptors", annotations=READ_NET)
+    @_friendly_errors
     def compute_descriptors(sources: list[str], preset: Optional[str] = None) -> str:
         """Compute MolScope's fixed-width structural descriptors for one or more structures.
 
-        ``sources`` is a list of file paths and/or PDB ids. ``preset`` selects a
-        descriptor preset (omit for the default set). Returns JSON with the
+        ``sources`` is a list of file paths, PDB ids, and/or ``"smiles:<SMILES>"``
+        strings. ``preset`` selects a descriptor preset (omit for the default
+        set). Returns JSON with the
         ordered ``feature_names`` and one ``rows`` entry per source. This is the
         batch tool: pass several structures to get a comparable descriptor table.
         """
@@ -141,7 +241,8 @@ def build_server():  # noqa: C901 - a flat list of small tool adapters reads cle
             indent=2,
         )
 
-    @server.tool()
+    @server.tool(title="Assign secondary structure", annotations=READ_NET)
+    @_friendly_errors
     def secondary_structure(source: str) -> str:
         """Assign protein secondary structure with MolScope's simplified DSSP.
 
@@ -178,7 +279,8 @@ def build_server():  # noqa: C901 - a flat list of small tool adapters reads cle
             indent=2,
         )
 
-    @server.tool()
+    @server.tool(title="Contact map", annotations=READ_NET)
+    @_friendly_errors
     def contact_map(
         source: str,
         cutoff: float = 8.0,
@@ -218,7 +320,8 @@ def build_server():  # noqa: C901 - a flat list of small tool adapters reads cle
             indent=2,
         )
 
-    @server.tool()
+    @server.tool(title="Binding site", annotations=READ_NET)
+    @_friendly_errors
     def binding_site(source: str, ligand: Optional[str] = None, cutoff: float = 4.5) -> str:
         """Find protein residues around a bound ligand.
 
@@ -250,7 +353,8 @@ def build_server():  # noqa: C901 - a flat list of small tool adapters reads cle
             indent=2,
         )
 
-    @server.tool()
+    @server.tool(title="Molecular graph summary", annotations=READ_NET)
+    @_friendly_errors
     def molecular_graph(
         source: str, preset: str = "default", include_chemical_features: bool = False
     ) -> str:
@@ -278,7 +382,8 @@ def build_server():  # noqa: C901 - a flat list of small tool adapters reads cle
             indent=2,
         )
 
-    @server.tool()
+    @server.tool(title="Coarse-grain", annotations=READ_NET)
+    @_friendly_errors
     def coarse_grain(source: str, mapping: str = "residue_com") -> str:
         """Coarse-grain a structure to beads and report the assignment.
 
@@ -299,7 +404,8 @@ def build_server():  # noqa: C901 - a flat list of small tool adapters reads cle
             indent=2,
         )
 
-    @server.tool()
+    @server.tool(title="Geometry", annotations=READ_NET)
+    @_friendly_errors
     def geometry(source: str) -> str:
         """Report whole-structure geometry: size, mass distribution, shape.
 
@@ -320,7 +426,8 @@ def build_server():  # noqa: C901 - a flat list of small tool adapters reads cle
             indent=2,
         )
 
-    @server.tool()
+    @server.tool(title="Measure distance/angle/dihedral", annotations=READ_NET)
+    @_friendly_errors
     def measure(source: str, atoms: list[int]) -> str:
         """Measure a geometric quantity between atoms by 0-based index.
 
@@ -339,7 +446,8 @@ def build_server():  # noqa: C901 - a flat list of small tool adapters reads cle
                                "value": _num(mol.dihedral(*atoms)), "unit": "degrees"})
         raise ValueError("atoms must hold 2 (distance), 3 (angle), or 4 (dihedral) indices")
 
-    @server.tool()
+    @server.tool(title="RMSD between structures", annotations=READ_NET)
+    @_friendly_errors
     def rmsd(source_a: str, source_b: str, align: bool = True) -> str:
         """Root-mean-square deviation between two structures with the same atom count.
 
@@ -351,7 +459,8 @@ def build_server():  # noqa: C901 - a flat list of small tool adapters reads cle
         return json.dumps({"rmsd": _num(a.rmsd(b, align=align)), "aligned": align,
                            "n_atoms": len(a), "unit": "angstrom"})
 
-    @server.tool()
+    @server.tool(title="List ligands", annotations=READ_NET)
+    @_friendly_errors
     def list_ligands(source: str, exclude_water: bool = True, exclude_ions: bool = True) -> str:
         """List the non-polymer (HETATM) groups in a structure.
 
@@ -372,7 +481,8 @@ def build_server():  # noqa: C901 - a flat list of small tool adapters reads cle
             indent=2,
         )
 
-    @server.tool()
+    @server.tool(title="Chain interfaces", annotations=READ_NET)
+    @_friendly_errors
     def chain_interfaces(
         source: str, chain_a: Optional[str] = None, chain_b: Optional[str] = None,
         cutoff: float = 5.0,
@@ -404,7 +514,8 @@ def build_server():  # noqa: C901 - a flat list of small tool adapters reads cle
             indent=2,
         )
 
-    @server.tool()
+    @server.tool(title="Backbone torsions", annotations=READ_NET)
+    @_friendly_errors
     def backbone_torsions(source: str) -> str:
         """Per-residue backbone dihedral angles (Ramachandran phi/psi/omega).
 
@@ -425,7 +536,8 @@ def build_server():  # noqa: C901 - a flat list of small tool adapters reads cle
             indent=2,
         )
 
-    @server.tool()
+    @server.tool(title="Ensemble summary", annotations=READ_NET)
+    @_friendly_errors
     def ensemble_summary(source: str) -> str:
         """Summarise a multi-model (e.g. NMR) ensemble.
 
@@ -455,7 +567,8 @@ def build_server():  # noqa: C901 - a flat list of small tool adapters reads cle
             indent=2,
         )
 
-    @server.tool()
+    @server.tool(title="Chemical features", annotations=READ_NET)
+    @_friendly_errors
     def chemical_features(
         source: str, bond_perception: str = "template", protonation: str = "standard"
     ) -> str:
@@ -494,7 +607,8 @@ def build_server():  # noqa: C901 - a flat list of small tool adapters reads cle
             indent=2,
         )
 
-    @server.tool()
+    @server.tool(title="Validate mmCIF", annotations=READ_LOCAL)
+    @_friendly_errors
     def validate_cif(source: str) -> str:
         """Validate an mmCIF/CIF file (needs the ``cif`` extra / gemmi).
 
@@ -515,7 +629,8 @@ def build_server():  # noqa: C901 - a flat list of small tool adapters reads cle
             indent=2,
         )
 
-    @server.tool()
+    @server.tool(title="Select diverse subset", annotations=READ_LOCAL)
+    @_friendly_errors
     def select_diverse(
         table: str, n: Optional[int] = None, fraction: Optional[float] = None,
         descriptor_cols: Optional[list[str]] = None,
@@ -552,7 +667,8 @@ def build_server():  # noqa: C901 - a flat list of small tool adapters reads cle
             indent=2, default=_jsonable,
         )
 
-    @server.tool()
+    @server.tool(title="Prepare dataset splits", annotations=WRITE_LOCAL)
+    @_friendly_errors
     def prepare_dataset(
         table: str, split: str = "random", test: float = 0.1, val: float = 0.1,
         seed: int = 0, smiles_col: Optional[str] = None,
@@ -599,7 +715,8 @@ def build_server():  # noqa: C901 - a flat list of small tool adapters reads cle
             )
         return json.dumps(payload, indent=2, default=_jsonable)
 
-    @server.tool()
+    @server.tool(title="Find duplicate molecules", annotations=READ_LOCAL)
+    @_friendly_errors
     def find_duplicates(
         table: str, smiles_col: str, method: str = "canonical",
     ) -> str:
@@ -639,7 +756,8 @@ def build_server():  # noqa: C901 - a flat list of small tool adapters reads cle
             indent=2, default=_jsonable,
         )
 
-    @server.tool()
+    @server.tool(title="Render structure", annotations=WRITE_NET)
+    @_friendly_errors
     def render_structure(source: str, color_by: str = "element", save_path: Optional[str] = None):
         """Render the structure in 3D.
 
@@ -656,7 +774,8 @@ def build_server():  # noqa: C901 - a flat list of small tool adapters reads cle
         ax = mol.plot(color_by=color_by, show=False)
         return _figure_result(ax.figure, save_path)
 
-    @server.tool()
+    @server.tool(title="Render contact map", annotations=WRITE_NET)
+    @_friendly_errors
     def render_contact_map(
         source: str, cutoff: float = 8.0, level: str = "residue", method: str = "ca",
         save_path: Optional[str] = None,
@@ -674,7 +793,8 @@ def build_server():  # noqa: C901 - a flat list of small tool adapters reads cle
         ax = cmap.plot(show=False)
         return _figure_result(ax.figure, save_path)
 
-    @server.tool()
+    @server.tool(title="Render distance matrix", annotations=WRITE_NET)
+    @_friendly_errors
     def render_distance_matrix(source: str, save_path: Optional[str] = None):
         """Render the dense pairwise atom-distance matrix as a heatmap.
 
@@ -687,7 +807,8 @@ def build_server():  # noqa: C901 - a flat list of small tool adapters reads cle
         ax = _load(source).plot_distance_matrix(show=False)
         return _figure_result(ax.figure, save_path)
 
-    @server.tool()
+    @server.tool(title="Render RMSD heatmap", annotations=WRITE_NET)
+    @_friendly_errors
     def render_rmsd_heatmap(source: str, save_path: Optional[str] = None):
         """Render a multi-model ensemble's pairwise-RMSD matrix as a heatmap.
 
