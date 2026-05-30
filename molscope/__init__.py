@@ -49,6 +49,7 @@ from .coarsegrain import mapping_to_dict as cg_mapping_to_dict
 from .coarsegrain import read_mapping as read_cg_mapping
 from .coarsegrain import write_index as write_cg_index
 from .coarsegrain import write_mapping as write_cg_mapping
+from .coarsegrain import write_openmm_xml as write_cg_openmm_xml
 from .contactmap import ContactMap
 from .contacts import (
     BindingSite,
@@ -85,6 +86,9 @@ from .io import (
     read_smiles,
     read_xyz,
     read_xyz_frames,
+    stream,
+    stream_pdb_models,
+    stream_xyz_frames,
     write_pdb,
     write_xyz,
 )
@@ -147,6 +151,9 @@ __all__ = [
     "read_smiles",
     "read_xyz",
     "read_xyz_frames",
+    "stream",
+    "stream_pdb_models",
+    "stream_xyz_frames",
     "rdkit_descriptors",
     "pocket_descriptor_feature_names",
     "residue_contact_graph",
@@ -158,6 +165,7 @@ __all__ = [
     "validate_cif",
     "write_cg_index",
     "write_cg_mapping",
+    "write_cg_openmm_xml",
     "write_pdb",
     "write_xyz",
 ]
