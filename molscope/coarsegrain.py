@@ -962,3 +962,97 @@ def _index_group_name(bead: BeadMapping, index: int, used: dict[str, int]) -> st
     count = used.get(base, 0)
     used[base] = count + 1
     return base if count == 0 else f"{base}_{count + 1}"
+
+
+def write_openmm_xml(cg: Molecule, path: str) -> str:
+    """Write the coarse-grained molecule's residue mapping as an OpenMM Residue Template XML file.
+
+    Residues are grouped by name, and internal bonds are written as <Bond atomName1="..." atomName2="..."/>.
+    Bonds connecting different residues are written as <ExternalBond atomName="..."/> for the respective residues.
+    Returns the path to the written XML file.
+    """
+    path = os.fspath(path)
+
+    # Fall back to synthetic bead names if the molecule carries none, so a
+    # nameless CG molecule degrades gracefully instead of raising IndexError.
+    bead_names = cg.atom_names if cg.atom_names else [f"B{i + 1}" for i in range(len(cg))]
+
+    # 1. Map each bead to its residue key (resname, resid, icode, chain)
+    bead_res_keys = []
+    for i in range(len(cg)):
+        resname = cg.resnames[i] if cg.resnames else "MOL"
+        resid = int(cg.resids[i]) if len(cg.resids) else 1
+        icode = cg.icodes[i] if cg.icodes else ""
+        chain = cg.chains[i] if cg.chains else ""
+        bead_res_keys.append((resname, resid, icode, chain))
+
+    # 2. Group bead indices by residue instance
+    res_instances = {}
+    for i, rkey in enumerate(bead_res_keys):
+        res_instances.setdefault(rkey, []).append(i)
+
+    # 3. Identify beads with external bonds
+    external_beads = [set() for _ in range(len(cg))]
+    if cg.bond_index is not None:
+        for u, v in cg.bond_index:
+            if bead_res_keys[u] != bead_res_keys[v]:
+                external_beads[u].add(bead_names[u])
+                external_beads[v].add(bead_names[v])
+
+    # 4. Consolidate templates by unique residue name
+    templates = {}
+    for rkey, bead_indices in res_instances.items():
+        resname, resid, icode, chain = rkey
+        inst_beads = [bead_names[idx] for idx in bead_indices]
+
+
+        inst_bonds = set()
+        if cg.bond_index is not None:
+            idx_set = set(bead_indices)
+            for u, v in cg.bond_index:
+                if u in idx_set and v in idx_set:
+                    b_pair = tuple(sorted((bead_names[u], bead_names[v])))
+                    inst_bonds.add(b_pair)
+
+        inst_external = set()
+        for idx in bead_indices:
+            inst_external.update(external_beads[idx])
+
+        if resname not in templates:
+            templates[resname] = {
+                "beads": inst_beads,
+                "bonds": inst_bonds,
+                "external": inst_external
+            }
+        else:
+            templates[resname]["bonds"].update(inst_bonds)
+            templates[resname]["external"].update(inst_external)
+            for name in inst_beads:
+                if name not in templates[resname]["beads"]:
+                    templates[resname]["beads"].append(name)
+
+    # 5. Build XML content
+    lines = [
+        "<ForceField>",
+        "  <Residues>"
+    ]
+
+    for resname in sorted(templates.keys()):
+        t = templates[resname]
+        lines.append(f'    <Residue name="{resname}">')
+        for bead_name in t["beads"]:
+            lines.append(f'      <Atom name="{bead_name}" type="CG_{resname}_{bead_name}" charge="0.0"/>')
+        for atom1, atom2 in sorted(t["bonds"]):
+            lines.append(f'      <Bond atomName1="{atom1}" atomName2="{atom2}"/>')
+        for atom in sorted(t["external"]):
+            lines.append(f'      <ExternalBond atomName="{atom}"/>')
+        lines.append("    </Residue>")
+
+    lines.extend([
+        "  </Residues>",
+        "</ForceField>"
+    ])
+
+    with open(path, "w") as fh:
+        fh.write("\n".join(lines) + "\n")
+    return path

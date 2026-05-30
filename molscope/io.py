@@ -13,7 +13,7 @@ import gzip
 import os
 import tempfile
 from dataclasses import replace
-from typing import Optional
+from typing import Generator, Optional
 from urllib.error import HTTPError, URLError
 from urllib.request import urlopen
 
@@ -329,7 +329,7 @@ def _read_cif_builtin(path: str) -> Molecule:
                     rows.append(row)
                     i += width
                 continue
-            
+
             # Skip other loops
             while i < len(tokens) and not _cif_control_token(tokens[i]):
                 i += 1
@@ -343,7 +343,7 @@ def _read_cif_builtin(path: str) -> Molecule:
                 if i < len(tokens) and not _cif_control_token(tokens[i]):
                     cell_data[key] = tokens[i]
                     i += 1
-            
+
             try:
                 unit_cell = UnitCell(
                     a=float(cell_data["_cell.length_a"]),
@@ -960,6 +960,131 @@ def _pdb_atom_line(
     put(f"{0.0:6.2f}", 61)
     put(f"{(element or 'X'):>2}", 77)
     return "".join(line).rstrip() + "\n"
+
+
+def stream(path: str, altloc: str = "primary") -> Generator[Molecule, None, None]:
+    """Yield frames/models one by one, picking the stream parser from the file extension.
+
+    Transparently handles gzip-compressed files (``.pdb.gz``, ``.xyz.gz``).
+    """
+    path = os.fspath(path)
+    ext = _data_extension(path)
+    if ext == ".pdb":
+        yield from stream_pdb_models(path, altloc=altloc)
+    elif ext == ".xyz":
+        yield from stream_xyz_frames(path)
+    else:
+        raise ValueError(f"Streaming is not supported for file type {ext!r}; expected .pdb/.xyz")
+
+
+def stream_xyz_frames(path: str) -> Generator[Molecule, None, None]:
+    """Yield every frame of a (possibly multi-frame) ``.xyz`` trajectory."""
+    stem = _stem(path)
+    frame_idx = 0
+    with _open(path) as f:
+        while True:
+            first_line = f.readline()
+            if not first_line:
+                break
+            if not first_line.strip():
+                continue
+            tokens = first_line.split()
+            if tokens and tokens[0].isdigit():
+                count = int(tokens[0])
+                # Skip the comment line
+                _ = f.readline()
+                block = []
+                for _ in range(count):
+                    line = f.readline()
+                    if not line:
+                        break
+                    block.append(line)
+
+                frame_idx += 1
+                yield _xyz_block(
+                    block, name=f"{stem}#{frame_idx}", path=path,
+                    expected=count, first_line=1
+                )
+            else:
+                # Bare coordinate dump: consume the rest as one frame.
+                remaining = [first_line]
+                for line in f:
+                    remaining.append(line)
+                yield _xyz_block(remaining, name=stem, path=path, first_line=1)
+                break
+
+
+def stream_pdb_models(path: str, altloc: str = "primary") -> Generator[Molecule, None, None]:
+    """Yield every model from a ``.pdb`` file as a molecule.
+
+    Only reads and parses one model at a time into memory, keeping the memory
+    footprint O(1) with respect to the number of frames.
+    """
+    _validate_altloc_policy(altloc)
+    stem = _stem(path)
+
+    # Fast pre-scan for CRYST1 and global/trailing CONECT records to avoid two-pass coordinate parsing
+    global_conect = []
+    unit_cell = None
+    in_model = False
+    with _open(path) as f:
+        for line in f:
+            record = line[:6].strip()
+            if record == "CRYST1":
+                try:
+                    from .molecule import UnitCell
+                    unit_cell = UnitCell(
+                        a=float(line[6:15]),
+                        b=float(line[15:24]),
+                        c=float(line[24:33]),
+                        alpha=float(line[33:40]),
+                        beta=float(line[40:47]),
+                        gamma=float(line[47:54]),
+                    )
+                except ValueError:
+                    pass
+            elif record == "MODEL":
+                in_model = True
+            elif record == "ENDMDL":
+                in_model = False
+            elif record == "CONECT" and not in_model:
+                global_conect.extend(_parse_conect(line))
+
+    cur_atoms = []
+    cur_conect = []
+    model_idx = 0
+
+    with _open(path) as f:
+        for lineno, line in enumerate(f, 1):
+            record = line[:6].strip()
+            if record == "MODEL":
+                if cur_atoms:
+                    model_idx += 1
+                    rec = _record_from_atoms(cur_atoms, cur_conect + global_conect, altloc)
+                    mol = _molecule_from_record(rec, f"{stem}#{model_idx}")
+                    yield replace(mol, unit_cell=unit_cell)
+                    cur_atoms = []
+                    cur_conect = []
+            elif record == "ENDMDL":
+                if cur_atoms:
+                    model_idx += 1
+                    rec = _record_from_atoms(cur_atoms, cur_conect + global_conect, altloc)
+                    mol = _molecule_from_record(rec, f"{stem}#{model_idx}")
+                    yield replace(mol, unit_cell=unit_cell)
+                    cur_atoms = []
+                    cur_conect = []
+            elif record in ("ATOM", "HETATM"):
+                atom = _parse_pdb_atom(line, len(cur_atoms) + 1, path, lineno)
+                atom["hetero"] = record == "HETATM"
+                cur_atoms.append(atom)
+            elif record == "CONECT":
+                cur_conect.extend(_parse_conect(line))
+
+        if cur_atoms:
+            model_idx += 1
+            rec = _record_from_atoms(cur_atoms, cur_conect + global_conect, altloc)
+            mol = _molecule_from_record(rec, f"{stem}#{model_idx}")
+            yield replace(mol, unit_cell=unit_cell)
 
 
 def _pdb_conect_line(a: int, b: int) -> str:

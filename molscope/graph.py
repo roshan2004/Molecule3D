@@ -32,10 +32,32 @@ DEFAULT_RESIDUE_TYPES = (
 )
 
 GRAPH_NODE_FEATURE_PRESETS = ("default", "basic", "ml")
-GRAPH_EDGE_FEATURE_PRESETS = ("default", "basic", "ml")
+GRAPH_EDGE_FEATURE_PRESETS = ("default", "basic", "ml", "geom")
 RESIDUE_NODE_FEATURE_PRESETS = ("default", "ml")
 RESIDUE_EDGE_FEATURE_PRESETS = ("default", "ml")
 CONTACT_GRAPH_METHODS = ("ca", "com", "min")
+
+
+def _sign_stabilize(vecs: np.ndarray) -> np.ndarray:
+    """Fix the (arbitrary) sign of each eigenvector column deterministically.
+
+    Eigensolvers return eigenvectors with an arbitrary sign, and that sign can
+    differ between the dense (``numpy.linalg.eigh``) and sparse (``scipy``
+    ``eigsh``) paths. We flip each column so its largest-magnitude entry is
+    positive, making Laplacian PEs reproducible regardless of which backend
+    runs. Note this cannot resolve the rotational ambiguity *within* degenerate
+    eigenspaces, where the two backends may still differ.
+    """
+    if vecs.size == 0:
+        return vecs
+    # Index of the largest-|.| entry in each column; flip so that entry is +ve.
+    # Round the magnitudes first: in symmetric structures several entries share
+    # the same magnitude, and raw float jitter between backends would otherwise
+    # make argmax pick different (tied) pivots and so choose opposite signs.
+    pivot = np.argmax(np.round(np.abs(vecs), 8), axis=0)
+    signs = np.sign(vecs[pivot, np.arange(vecs.shape[1])])
+    signs[signs == 0] = 1.0
+    return vecs * signs
 
 
 @dataclass
@@ -87,37 +109,97 @@ class MolecularGraph:
         """Compute Laplacian Positional Encodings (N, k).
 
         This computes the eigenvectors of the normalized Laplacian matrix
-        L = I - D^-1/2 A D^-1/2. The first k non-trivial eigenvectors are
-        returned.
+        L = I - D^-1/2 A D^-1/2, returning the ``k`` belonging to the smallest
+        eigenvalues (including the trivial constant eigenvector). scipy's sparse
+        solver is used when available; column signs are stabilized so the result
+        is independent of the backend.
         """
         if self.n_atoms <= 1:
             return np.zeros((self.n_atoms, k))
+
+        try:
+            import scipy.sparse as sp
+            from scipy.sparse.linalg import eigsh
+            has_scipy = True
+        except ImportError:
+            has_scipy = False
+
+        if has_scipy and self.n_atoms > k + 1:
+            try:
+                row = np.concatenate([self.edges[:, 0], self.edges[:, 1]])
+                col = np.concatenate([self.edges[:, 1], self.edges[:, 0]])
+                data = np.ones(2 * self.n_bonds, dtype=float)
+                adj_sparse = sp.coo_matrix((data, (row, col)), shape=(self.n_atoms, self.n_atoms)).tocsr()
+                deg = np.array(adj_sparse.sum(axis=1)).flatten()
+                with np.errstate(divide="ignore", invalid="ignore"):
+                    deg_inv_sqrt = np.where(deg > 0, 1.0 / np.sqrt(deg), 0.0)
+                d_inv_sqrt_mat = sp.diags(deg_inv_sqrt)
+                scaled_adj = d_inv_sqrt_mat @ adj_sparse @ d_inv_sqrt_mat
+                l_norm_sparse = sp.eye(self.n_atoms) - scaled_adj
+                # Shift-invert (sigma=0) reliably finds the eigenvalues closest
+                # to zero — i.e. the k smallest of the PSD Laplacian. ARPACK's
+                # which='SM' mode is notoriously unreliable here and can skip the
+                # trivial zero eigenvalue, returning a different set than the
+                # dense path.
+                eigvals, eigvecs = eigsh(l_norm_sparse, k=k, sigma=0, which='LM')
+                idx = np.argsort(eigvals)
+                return _sign_stabilize(eigvecs[:, idx])
+            except Exception:
+                pass
+
         adj = self.adjacency_matrix()
         deg = adj.sum(axis=1)
         # Avoid division by zero for isolated atoms
         with np.errstate(divide="ignore", invalid="ignore"):
             deg_inv_sqrt = np.where(deg > 0, 1.0 / np.sqrt(deg), 0.0)
         l_norm = np.eye(self.n_atoms) - deg_inv_sqrt[:, None] * adj * deg_inv_sqrt[None, :]
-        
-        # eigh returns eigenvalues in ascending order
+        # eigh returns eigenvalues in ascending order; take the k smallest
+        # (including the trivial constant eigenvector).
         eigvals, eigvecs = np.linalg.eigh(l_norm)
-        # Return first k eigenvectors (including the trivial one if requested, 
-        # but usually we want k non-trivial ones. Here we just take the first k).
-        return eigvecs[:, :k]
+        return _sign_stabilize(eigvecs[:, :k])
 
     def random_walk_pe(self, k: int = 16) -> np.ndarray:
         """Compute Random Walk Structural Encodings (N, k).
 
-        The features are the diagonal elements [P_ii, P^2_ii, ..., P^k_ii] of 
+        The features are the diagonal elements [P_ii, P^2_ii, ..., P^k_ii] of
         the transition matrix P = A D^-1.
         """
         if self.n_atoms == 0:
             return np.zeros((0, k))
+
+        try:
+            import scipy.sparse as sp
+            has_scipy = True
+        except ImportError:
+            has_scipy = False
+
+        if has_scipy:
+            try:
+                row = np.concatenate([self.edges[:, 0], self.edges[:, 1]])
+                col = np.concatenate([self.edges[:, 1], self.edges[:, 0]])
+                data = np.ones(2 * self.n_bonds, dtype=float)
+                adj_sparse = sp.coo_matrix((data, (row, col)), shape=(self.n_atoms, self.n_atoms)).tocsr()
+                deg = np.array(adj_sparse.sum(axis=1)).flatten()
+                with np.errstate(divide="ignore", invalid="ignore"):
+                    deg_inv = np.where(deg > 0, 1.0 / deg, 0.0)
+                d_inv_mat = sp.diags(deg_inv)
+                p_sparse = d_inv_mat @ adj_sparse
+
+                pe = np.zeros((self.n_atoms, k))
+                pk = p_sparse.copy()
+                for i in range(k):
+                    pe[:, i] = pk.diagonal()
+                    if i < k - 1:
+                        pk = pk @ p_sparse
+                return pe
+            except Exception:
+                pass
+
         adj = self.adjacency_matrix()
         deg = adj.sum(axis=1)
         with np.errstate(divide="ignore", invalid="ignore"):
             p = np.where(deg[:, None] > 0, adj / deg[:, None], 0.0)
-        
+
         pe = np.zeros((self.n_atoms, k))
         pk = p.copy()
         for i in range(k):
@@ -171,6 +253,62 @@ class MolecularGraph:
         matrix = np.stack(arrays, axis=1).astype(float) if arrays else np.empty((self.n_atoms, 0))
         return (matrix, names) if return_names else matrix
 
+    def _calculate_angle(self, coords, i, j, k) -> float:
+        a = coords[i] - coords[j]
+        b = coords[k] - coords[j]
+        cos = np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
+        return float(np.degrees(np.arccos(np.clip(cos, -1.0, 1.0))))
+
+    def _calculate_dihedral(self, coords, a, b, c, d) -> float:
+        v0 = coords[a] - coords[b]
+        v1 = coords[c] - coords[b]
+        v2 = coords[d] - coords[c]
+        v1 = v1 / np.linalg.norm(v1)
+        v = v0 - np.dot(v0, v1) * v1
+        w = v2 - np.dot(v2, v1) * v1
+        x = np.dot(v, w)
+        y = np.dot(np.cross(v1, v), w)
+        return float(np.degrees(np.arctan2(y, x)))
+
+    def _compute_edge_angles(self) -> np.ndarray:
+        if self.n_bonds == 0:
+            return np.empty(0, dtype=float)
+        from collections import defaultdict
+        neighbors = defaultdict(list)
+        for u, v in self.edges:
+            neighbors[u].append(v)
+            neighbors[v].append(u)
+        angles = []
+        for u, v in self.edges:
+            edge_angles = []
+            for k in neighbors[u]:
+                if k != v:
+                    edge_angles.append(self._calculate_angle(self.coords, k, u, v))
+            for k in neighbors[v]:
+                if k != u:
+                    edge_angles.append(self._calculate_angle(self.coords, u, v, k))
+            angles.append(np.mean(edge_angles) if edge_angles else 0.0)
+        return np.array(angles, dtype=float)
+
+    def _compute_edge_dihedrals(self) -> np.ndarray:
+        if self.n_bonds == 0:
+            return np.empty(0, dtype=float)
+        from collections import defaultdict
+        neighbors = defaultdict(list)
+        for u, v in self.edges:
+            neighbors[u].append(v)
+            neighbors[v].append(u)
+        dihedrals = []
+        for u, v in self.edges:
+            edge_dihedrals = []
+            for a in neighbors[u]:
+                if a != v:
+                    for b in neighbors[v]:
+                        if b != u:
+                            edge_dihedrals.append(self._calculate_dihedral(self.coords, a, u, v, b))
+            dihedrals.append(np.mean(edge_dihedrals) if edge_dihedrals else 0.0)
+        return np.array(dihedrals, dtype=float)
+
     def edge_features(self, preset: str = "default", *, return_names: bool = False):
         """Return an edge feature matrix for a named preset.
 
@@ -188,6 +326,10 @@ class MolecularGraph:
                 arrays.append(np.asarray(self.edge_types, dtype=float))
             elif name == "aromatic":
                 arrays.append(self._aromatic_bonds_or_order().astype(float))
+            elif name == "bond_angle":
+                arrays.append(self._compute_edge_angles())
+            elif name == "dihedral":
+                arrays.append(self._compute_edge_dihedrals())
             else:  # pragma: no cover - protected by edge_feature_names
                 raise ValueError(f"unknown edge feature {name!r}")
         matrix = np.stack(arrays, axis=1).astype(float) if arrays else np.empty((self.n_bonds, 0))
@@ -305,14 +447,14 @@ class MolecularGraph:
             z = np.concatenate([z, [0]])  # 0 for global node
             formal_charge = np.concatenate([formal_charge, [0]])
             virtual_site = np.concatenate([virtual_site, [False]])
-            
+
             # Connect global node to all other nodes (bidirectional)
             others = np.arange(g_idx)
             g_src = np.concatenate([others, np.full(g_idx, g_idx)])
             g_dst = np.concatenate([np.full(g_idx, g_idx), others])
             src = np.concatenate([src, g_src])
             dst = np.concatenate([dst, g_dst])
-            
+
             # Pad edge features for global edges (zeros)
             g_e = np.zeros((len(g_src), e.shape[1]))
             e = np.concatenate([e, g_e], axis=0)
@@ -379,7 +521,7 @@ class MolecularGraph:
         """
         dgl = _require("dgl", "DGL", "pip install dgl")
         torch = _require("torch", "DGL", "pip install dgl torch")
-        
+
         x = self.node_features(node_preset)
         pos = self.coords
         z = self.atomic_numbers
@@ -397,13 +539,13 @@ class MolecularGraph:
             z = np.concatenate([z, [0]])
             formal_charge = np.concatenate([formal_charge, [0]])
             virtual_site = np.concatenate([virtual_site, [False]])
-            
+
             others = np.arange(g_idx)
             g_src = np.concatenate([others, np.full(g_idx, g_idx)])
             g_dst = np.concatenate([np.full(g_idx, g_idx), others])
             src = np.concatenate([src, g_src])
             dst = np.concatenate([dst, g_dst])
-            
+
             g_e = np.zeros((len(g_src), e.shape[1]))
             e = np.concatenate([e, g_e], axis=0)
             dist = np.concatenate([dist, np.zeros(len(g_src))])
@@ -535,23 +677,83 @@ class ResidueContactGraph:
         """Compute Laplacian Positional Encodings (R, k)."""
         if self.n_residues <= 1:
             return np.zeros((self.n_residues, k))
+
+        try:
+            import scipy.sparse as sp
+            from scipy.sparse.linalg import eigsh
+            has_scipy = True
+        except ImportError:
+            has_scipy = False
+
+        if has_scipy and self.n_residues > k + 1:
+            try:
+                row = np.concatenate([self.edges[:, 0], self.edges[:, 1]])
+                col = np.concatenate([self.edges[:, 1], self.edges[:, 0]])
+                data = np.ones(2 * self.n_contacts, dtype=float)
+                adj_sparse = sp.coo_matrix((data, (row, col)), shape=(self.n_residues, self.n_residues)).tocsr()
+                deg = np.array(adj_sparse.sum(axis=1)).flatten()
+                with np.errstate(divide="ignore", invalid="ignore"):
+                    deg_inv_sqrt = np.where(deg > 0, 1.0 / np.sqrt(deg), 0.0)
+                d_inv_sqrt_mat = sp.diags(deg_inv_sqrt)
+                scaled_adj = d_inv_sqrt_mat @ adj_sparse @ d_inv_sqrt_mat
+                l_norm_sparse = sp.eye(self.n_residues) - scaled_adj
+                # Shift-invert (sigma=0) reliably finds the eigenvalues closest
+                # to zero — i.e. the k smallest of the PSD Laplacian. ARPACK's
+                # which='SM' mode is notoriously unreliable here and can skip the
+                # trivial zero eigenvalue, returning a different set than the
+                # dense path.
+                eigvals, eigvecs = eigsh(l_norm_sparse, k=k, sigma=0, which='LM')
+                idx = np.argsort(eigvals)
+                return _sign_stabilize(eigvecs[:, idx])
+            except Exception:
+                pass
+
         adj = self.adjacency_matrix()
         deg = adj.sum(axis=1)
         with np.errstate(divide="ignore", invalid="ignore"):
             deg_inv_sqrt = np.where(deg > 0, 1.0 / np.sqrt(deg), 0.0)
         l_norm = np.eye(self.n_residues) - deg_inv_sqrt[:, None] * adj * deg_inv_sqrt[None, :]
         eigvals, eigvecs = np.linalg.eigh(l_norm)
-        return eigvecs[:, :k]
+        return _sign_stabilize(eigvecs[:, :k])
 
     def random_walk_pe(self, k: int = 16) -> np.ndarray:
         """Compute Random Walk Structural Encodings (R, k)."""
         if self.n_residues == 0:
             return np.zeros((0, k))
+
+        try:
+            import scipy.sparse as sp
+            has_scipy = True
+        except ImportError:
+            has_scipy = False
+
+        if has_scipy:
+            try:
+                row = np.concatenate([self.edges[:, 0], self.edges[:, 1]])
+                col = np.concatenate([self.edges[:, 1], self.edges[:, 0]])
+                data = np.ones(2 * self.n_contacts, dtype=float)
+                adj_sparse = sp.coo_matrix((data, (row, col)), shape=(self.n_residues, self.n_residues)).tocsr()
+                deg = np.array(adj_sparse.sum(axis=1)).flatten()
+                with np.errstate(divide="ignore", invalid="ignore"):
+                    deg_inv = np.where(deg > 0, 1.0 / deg, 0.0)
+                d_inv_mat = sp.diags(deg_inv)
+                p_sparse = d_inv_mat @ adj_sparse
+
+                pe = np.zeros((self.n_residues, k))
+                pk = p_sparse.copy()
+                for i in range(k):
+                    pe[:, i] = pk.diagonal()
+                    if i < k - 1:
+                        pk = pk @ p_sparse
+                return pe
+            except Exception:
+                pass
+
         adj = self.adjacency_matrix()
         deg = adj.sum(axis=1)
         with np.errstate(divide="ignore", invalid="ignore"):
             p = np.where(deg[:, None] > 0, adj / deg[:, None], 0.0)
-        
+
         pe = np.zeros((self.n_residues, k))
         pk = p.copy()
         for i in range(k):
@@ -712,13 +914,13 @@ class ResidueContactGraph:
             resids = np.concatenate([resids, [0]])
             residue_sizes = np.concatenate([residue_sizes, [0]])
             labels.append("GLOBAL")
-            
+
             others = np.arange(g_idx)
             g_src = np.concatenate([others, np.full(g_idx, g_idx)])
             g_dst = np.concatenate([np.full(g_idx, g_idx), others])
             src = np.concatenate([src, g_src])
             dst = np.concatenate([dst, g_dst])
-            
+
             g_e = np.zeros((len(g_src), e.shape[1]))
             e = np.concatenate([e, g_e], axis=0)
             dist = np.concatenate([dist, np.zeros(len(g_src))])
@@ -782,7 +984,7 @@ class ResidueContactGraph:
         """
         dgl = _require("dgl", "DGL", "pip install dgl")
         torch = _require("torch", "DGL", "pip install dgl torch")
-        
+
         x = self.node_features(node_preset)
         pos = self.coords
         resids = self.resids
@@ -798,13 +1000,13 @@ class ResidueContactGraph:
             pos = np.concatenate([pos, pos_g], axis=0)
             resids = np.concatenate([resids, [0]])
             residue_sizes = np.concatenate([residue_sizes, [0]])
-            
+
             others = np.arange(g_idx)
             g_src = np.concatenate([others, np.full(g_idx, g_idx)])
             g_dst = np.concatenate([np.full(g_idx, g_idx), others])
             src = np.concatenate([src, g_src])
             dst = np.concatenate([dst, g_dst])
-            
+
             g_e = np.zeros((len(g_src), e.shape[1]))
             e = np.concatenate([e, g_e], axis=0)
             dist = np.concatenate([dist, np.zeros(len(g_src))])
@@ -883,7 +1085,9 @@ def edge_feature_names(preset: str = "default"):
         return ["distance"]
     if preset == "basic":
         return ["distance", "bond_order"]
-    return ["distance", "bond_order", "aromatic"]
+    if preset == "ml":
+        return ["distance", "bond_order", "aromatic"]
+    return ["distance", "bond_order", "aromatic", "bond_angle", "dihedral"]
 
 
 def residue_node_feature_names(

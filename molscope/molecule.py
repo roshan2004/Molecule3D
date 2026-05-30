@@ -928,18 +928,25 @@ class Molecule:
         keep = dist < cutoff
         return np.stack([i[keep], j[keep]], axis=1)
 
-    def bond_order_array(self, tolerance: float = 1.2) -> np.ndarray:
+    def bond_order_array(self, tolerance: float = 1.2, infer_orders: bool = False) -> np.ndarray:
         """Bond-order values aligned with :meth:`bonds`.
 
         Explicit file/topology bonds preserve their source order values where
         available. Geometrically inferred bonds have unknown order and are
-        reported as ``1.0``.
+        reported as ``1.0`` unless ``infer_orders=True`` is passed, which
+        applies a rule-based valence assignment algorithm.
         """
         if self.bond_index is not None:
             if self.bond_orders is not None:
                 return self.bond_orders
+            if infer_orders:
+                return _guess_bond_orders(self.elements, self.bond_index)
             return np.ones(len(self.bond_index), dtype=float)
-        return np.ones(len(self.bonds(tolerance)), dtype=float)
+
+        inferred_bonds = self.bonds(tolerance)
+        if infer_orders:
+            return _guess_bond_orders(self.elements, inferred_bonds)
+        return np.ones(len(inferred_bonds), dtype=float)
 
     def summary(self) -> str:
         """One-line human-readable description of the molecule."""
@@ -1052,13 +1059,15 @@ class Molecule:
         bonds=None,
         bond_orders=None,
         include_chemical_features: bool = False,
+        infer_orders: bool = False,
     ):
         """Build a :class:`molscope.graph.MolecularGraph` from this molecule.
 
         Bonds are inferred from covalent radii (see :meth:`bonds`) unless an
         explicit ``(E, 2)`` array of index pairs is passed. Explicit bond orders
         from input files are preserved when available; inferred or user-supplied
-        bonds default to order ``1.0`` unless ``bond_orders=`` is passed. Node
+        bonds default to order ``1.0`` unless ``bond_orders=`` is passed or
+        ``infer_orders=True`` is set to run a rule-based valence assignment. Node
         and edge attributes (element, residue, chain, distance, ...) are carried
         along. With ``include_chemical_features=True``, optional RDKit-backed
         aromatic atom/bond flags are attached when the ``chem`` extra is
@@ -1073,7 +1082,7 @@ class Molecule:
             if self.bond_index is not None and self.bond_orders is not None:
                 edge_types = self.bond_orders
             else:
-                edge_types = np.ones(len(edges), dtype=float)
+                edge_types = self.bond_order_array(tolerance, infer_orders=infer_orders)
             if include_chemical_features:
                 features = self.chemical_features()
                 aromatic_atoms = features.aromatic_atoms
@@ -1083,7 +1092,10 @@ class Molecule:
         else:
             edges = np.asarray(bonds, dtype=int)
             if bond_orders is None:
-                edge_types = np.ones(len(edges), dtype=float)
+                if infer_orders:
+                    edge_types = _guess_bond_orders(self.elements, edges.reshape(-1, 2))
+                else:
+                    edge_types = np.ones(len(edges), dtype=float)
             else:
                 edge_types = np.asarray(bond_orders, dtype=float).reshape(-1)
         edges = edges.reshape(-1, 2)
@@ -1262,3 +1274,64 @@ def _align_bond_flags(edges: np.ndarray, source_edges: np.ndarray, flags: np.nda
         flag_by_pair.get(tuple(sorted((int(i), int(j)))), False)
         for i, j in edges
     ], dtype=bool)
+
+
+def _guess_bond_orders(elements: list[str], bonds: np.ndarray) -> np.ndarray:
+    """Guess bond orders (1.0, 2.0, 3.0) using a greedy valence-matching algorithm.
+
+    This is a basic rule-based assigner for structures without connectivity metadata.
+    """
+    n_atoms = len(elements)
+    if len(bonds) == 0:
+        return np.empty(0, dtype=float)
+
+    # 1. Build adjacency list to calculate initial degrees
+    adj = [[] for _ in range(n_atoms)]
+    for idx, (u, v) in enumerate(bonds):
+        adj[u].append((v, idx))
+        adj[v].append((u, idx))
+
+    # 2. Determine expected valence for each atom
+    expected_valence = np.zeros(n_atoms, dtype=int)
+    for i, symbol in enumerate(elements):
+        sym = (symbol or "").upper()
+        deg = len(adj[i])
+        if sym in ("H", "F", "CL", "BR", "I"):
+            expected_valence[i] = 1
+        elif sym in ("O", "SE", "TE"):
+            expected_valence[i] = 2
+        elif sym == "S":
+            expected_valence[i] = 6 if deg >= 4 else 2
+        elif sym == "N":
+            expected_valence[i] = 4 if deg >= 4 else 3
+        elif sym in ("P", "AS", "SB"):
+            expected_valence[i] = 5 if deg >= 4 else 3
+        elif sym in ("C", "SI", "GE", "SN", "PB"):
+            expected_valence[i] = 4
+        else:
+            expected_valence[i] = deg  # Default to current degree for metals/unknowns
+
+    # 3. Initialize bond orders to 1.0
+    bond_orders = np.ones(len(bonds), dtype=float)
+
+    # 4. Calculate current valences (initially equals degree since all orders are 1.0)
+    current_valence = np.array([len(neighbors) for neighbors in adj], dtype=float)
+
+    # 5. Iteratively upgrade bond orders where both atoms are unsaturated
+    # We prioritised double bonds, then triple bonds.
+    for pass_idx in range(2):
+        upgraded = False
+        for idx in range(len(bonds)):
+            u, v = bonds[idx]
+            val_u, val_v = current_valence[u], current_valence[v]
+            exp_u, exp_v = expected_valence[u], expected_valence[v]
+
+            if val_u < exp_u and val_v < exp_v:
+                bond_orders[idx] += 1.0
+                current_valence[u] += 1.0
+                current_valence[v] += 1.0
+                upgraded = True
+        if not upgraded:
+            break
+
+    return bond_orders
