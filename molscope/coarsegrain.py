@@ -967,16 +967,24 @@ def _index_group_name(bead: BeadMapping, index: int, used: dict[str, int]) -> st
 def write_openmm_xml(cg: Molecule, path: str) -> str:
     """Write the CG molecule's residue mapping as an OpenMM residue-template XML.
 
-    Residues are grouped by name, and internal bonds are written as
-    ``<Bond atomName1="..." atomName2="..."/>``. Bonds connecting different
-    residues are written as ``<ExternalBond atomName="..."/>`` for the
-    respective residues. Returns the path to the written XML file.
+    The output is a self-contained ``ForceField`` that OpenMM's
+    :class:`openmm.app.ForceField` can load directly: an ``<AtomTypes>`` block
+    defines one ``CG_<resname>_<bead>`` type per distinct bead (carrying the
+    bead mass; coarse-grained beads have no element), and a ``<Residues>`` block
+    holds one template per residue name. Internal bonds are written as
+    ``<Bond atomName1="..." atomName2="..."/>`` and bonds crossing residues as
+    ``<ExternalBond atomName="..."/>``.
+
+    The file describes topology only (types, masses, connectivity); it carries
+    no force definitions, so it is meant to be combined with bonded/nonbonded
+    parameters before running dynamics. Returns the path to the written file.
     """
     path = os.fspath(path)
 
     # Fall back to synthetic bead names if the molecule carries none, so a
     # nameless CG molecule degrades gracefully instead of raising IndexError.
     bead_names = cg.atom_names if cg.atom_names else [f"B{i + 1}" for i in range(len(cg))]
+    masses = cg.masses
 
     # 1. Map each bead to its residue key (resname, resid, icode, chain)
     bead_res_keys = []
@@ -1005,7 +1013,7 @@ def write_openmm_xml(cg: Molecule, path: str) -> str:
     for rkey, bead_indices in res_instances.items():
         resname, resid, icode, chain = rkey
         inst_beads = [bead_names[idx] for idx in bead_indices]
-
+        inst_masses = {bead_names[idx]: float(masses[idx]) for idx in bead_indices}
 
         inst_bonds = set()
         if cg.bond_index is not None:
@@ -1023,20 +1031,30 @@ def write_openmm_xml(cg: Molecule, path: str) -> str:
             templates[resname] = {
                 "beads": inst_beads,
                 "bonds": inst_bonds,
-                "external": inst_external
+                "external": inst_external,
+                "masses": inst_masses,
             }
         else:
             templates[resname]["bonds"].update(inst_bonds)
             templates[resname]["external"].update(inst_external)
+            templates[resname]["masses"].update(inst_masses)
             for name in inst_beads:
                 if name not in templates[resname]["beads"]:
                     templates[resname]["beads"].append(name)
 
-    # 5. Build XML content
-    lines = [
-        "<ForceField>",
-        "  <Residues>"
-    ]
+    # 5. Build XML content. The <AtomTypes> block defines every type the
+    # residue templates reference, so OpenMM can load the file standalone.
+    lines = ["<ForceField>", "  <AtomTypes>"]
+    for resname in sorted(templates.keys()):
+        t = templates[resname]
+        for bead_name in t["beads"]:
+            type_name = f"CG_{resname}_{bead_name}"
+            lines.append(
+                f'    <Type name="{type_name}" class="{type_name}" '
+                f'mass="{t["masses"][bead_name]:g}"/>'
+            )
+    lines.append("  </AtomTypes>")
+    lines.append("  <Residues>")
 
     for resname in sorted(templates.keys()):
         t = templates[resname]
@@ -1044,7 +1062,7 @@ def write_openmm_xml(cg: Molecule, path: str) -> str:
         for bead_name in t["beads"]:
             lines.append(
                 f'      <Atom name="{bead_name}" '
-                f'type="CG_{resname}_{bead_name}" charge="0.0"/>'
+                f'type="CG_{resname}_{bead_name}"/>'
             )
         for atom1, atom2 in sorted(t["bonds"]):
             lines.append(f'      <Bond atomName1="{atom1}" atomName2="{atom2}"/>')
