@@ -1319,7 +1319,7 @@ def _guess_bond_orders(elements: list[str], bonds: np.ndarray) -> np.ndarray:
 
     # 5. Iteratively upgrade bond orders where both atoms are unsaturated
     # We prioritised double bonds, then triple bonds.
-    for pass_idx in range(2):
+    for _pass in range(2):
         upgraded = False
         for idx in range(len(bonds)):
             u, v = bonds[idx]

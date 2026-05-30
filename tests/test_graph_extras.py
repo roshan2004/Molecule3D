@@ -1,9 +1,14 @@
-import numpy as np
-import pytest
 from unittest.mock import patch
 
-from molscope import Molecule, MolecularGraph
+import numpy as np
+import pytest
+
+from molscope import MolecularGraph, Molecule
 from molscope.graph import ResidueContactGraph
+
+# Patch target that makes the scipy import fail, forcing the dense fallback.
+_NO_SCIPY = {"scipy": None, "scipy.sparse": None, "scipy.sparse.linalg": None}
+
 
 def test_geometric_edge_features_water():
     # Water molecule: oxygen at index 0, hydrogens at 1 and 2
@@ -92,7 +97,7 @@ def test_laplacian_pe_dense_vs_sparse():
     
     # Force dense execution by patching out scipy
     import sys
-    with patch.dict(sys.modules, {"scipy": None, "scipy.sparse": None, "scipy.sparse.linalg": None}):
+    with patch.dict(sys.modules, _NO_SCIPY):
         pe_dense = g.laplacian_pe(k=3)
         
     # Execute normally (using SciPy if available)
@@ -124,7 +129,7 @@ def test_laplacian_pe_dense_vs_sparse_symmetric_molecule():
     )
 
     import sys
-    with patch.dict(sys.modules, {"scipy": None, "scipy.sparse": None, "scipy.sparse.linalg": None}):
+    with patch.dict(sys.modules, _NO_SCIPY):
         pe_dense = g.laplacian_pe(k=5)
     pe_sparse = g.laplacian_pe(k=5)
 
@@ -146,7 +151,7 @@ def test_random_walk_pe_dense_vs_sparse():
     )
     
     import sys
-    with patch.dict(sys.modules, {"scipy": None, "scipy.sparse": None, "scipy.sparse.linalg": None}):
+    with patch.dict(sys.modules, _NO_SCIPY):
         pe_dense = g.random_walk_pe(k=5)
         
     pe_sparse = g.random_walk_pe(k=5)
@@ -169,7 +174,7 @@ def test_residue_contact_graph_pe_dense_vs_sparse():
     )
     
     import sys
-    with patch.dict(sys.modules, {"scipy": None, "scipy.sparse": None, "scipy.sparse.linalg": None}):
+    with patch.dict(sys.modules, _NO_SCIPY):
         lap_dense = g.laplacian_pe(k=3)
         rw_dense = g.random_walk_pe(k=4)
         
@@ -211,4 +216,6 @@ def test_ml_exporters_propagate_geom_features():
     
     # 2 undirected bonds -> 4 directed edges
     assert data.edge_attr.shape == (4, 5)
-    assert data.edge_feature_names == ["distance", "bond_order", "aromatic", "bond_angle", "dihedral"]
+    assert data.edge_feature_names == [
+        "distance", "bond_order", "aromatic", "bond_angle", "dihedral",
+    ]

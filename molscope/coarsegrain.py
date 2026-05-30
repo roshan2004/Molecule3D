@@ -965,11 +965,12 @@ def _index_group_name(bead: BeadMapping, index: int, used: dict[str, int]) -> st
 
 
 def write_openmm_xml(cg: Molecule, path: str) -> str:
-    """Write the coarse-grained molecule's residue mapping as an OpenMM Residue Template XML file.
+    """Write the CG molecule's residue mapping as an OpenMM residue-template XML.
 
-    Residues are grouped by name, and internal bonds are written as <Bond atomName1="..." atomName2="..."/>.
-    Bonds connecting different residues are written as <ExternalBond atomName="..."/> for the respective residues.
-    Returns the path to the written XML file.
+    Residues are grouped by name, and internal bonds are written as
+    ``<Bond atomName1="..." atomName2="..."/>``. Bonds connecting different
+    residues are written as ``<ExternalBond atomName="..."/>`` for the
+    respective residues. Returns the path to the written XML file.
     """
     path = os.fspath(path)
 
@@ -1041,7 +1042,10 @@ def write_openmm_xml(cg: Molecule, path: str) -> str:
         t = templates[resname]
         lines.append(f'    <Residue name="{resname}">')
         for bead_name in t["beads"]:
-            lines.append(f'      <Atom name="{bead_name}" type="CG_{resname}_{bead_name}" charge="0.0"/>')
+            lines.append(
+                f'      <Atom name="{bead_name}" '
+                f'type="CG_{resname}_{bead_name}" charge="0.0"/>'
+            )
         for atom1, atom2 in sorted(t["bonds"]):
             lines.append(f'      <Bond atomName1="{atom1}" atomName2="{atom2}"/>')
         for atom in sorted(t["external"]):

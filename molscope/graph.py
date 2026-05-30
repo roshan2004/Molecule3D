@@ -129,7 +129,9 @@ class MolecularGraph:
                 row = np.concatenate([self.edges[:, 0], self.edges[:, 1]])
                 col = np.concatenate([self.edges[:, 1], self.edges[:, 0]])
                 data = np.ones(2 * self.n_bonds, dtype=float)
-                adj_sparse = sp.coo_matrix((data, (row, col)), shape=(self.n_atoms, self.n_atoms)).tocsr()
+                adj_sparse = sp.coo_matrix(
+                    (data, (row, col)), shape=(self.n_atoms, self.n_atoms)
+                ).tocsr()
                 deg = np.array(adj_sparse.sum(axis=1)).flatten()
                 with np.errstate(divide="ignore", invalid="ignore"):
                     deg_inv_sqrt = np.where(deg > 0, 1.0 / np.sqrt(deg), 0.0)
@@ -178,7 +180,9 @@ class MolecularGraph:
                 row = np.concatenate([self.edges[:, 0], self.edges[:, 1]])
                 col = np.concatenate([self.edges[:, 1], self.edges[:, 0]])
                 data = np.ones(2 * self.n_bonds, dtype=float)
-                adj_sparse = sp.coo_matrix((data, (row, col)), shape=(self.n_atoms, self.n_atoms)).tocsr()
+                adj_sparse = sp.coo_matrix(
+                    (data, (row, col)), shape=(self.n_atoms, self.n_atoms)
+                ).tocsr()
                 deg = np.array(adj_sparse.sum(axis=1)).flatten()
                 with np.errstate(divide="ignore", invalid="ignore"):
                     deg_inv = np.where(deg > 0, 1.0 / deg, 0.0)
@@ -690,7 +694,9 @@ class ResidueContactGraph:
                 row = np.concatenate([self.edges[:, 0], self.edges[:, 1]])
                 col = np.concatenate([self.edges[:, 1], self.edges[:, 0]])
                 data = np.ones(2 * self.n_contacts, dtype=float)
-                adj_sparse = sp.coo_matrix((data, (row, col)), shape=(self.n_residues, self.n_residues)).tocsr()
+                adj_sparse = sp.coo_matrix(
+                    (data, (row, col)), shape=(self.n_residues, self.n_residues)
+                ).tocsr()
                 deg = np.array(adj_sparse.sum(axis=1)).flatten()
                 with np.errstate(divide="ignore", invalid="ignore"):
                     deg_inv_sqrt = np.where(deg > 0, 1.0 / np.sqrt(deg), 0.0)
@@ -732,7 +738,9 @@ class ResidueContactGraph:
                 row = np.concatenate([self.edges[:, 0], self.edges[:, 1]])
                 col = np.concatenate([self.edges[:, 1], self.edges[:, 0]])
                 data = np.ones(2 * self.n_contacts, dtype=float)
-                adj_sparse = sp.coo_matrix((data, (row, col)), shape=(self.n_residues, self.n_residues)).tocsr()
+                adj_sparse = sp.coo_matrix(
+                    (data, (row, col)), shape=(self.n_residues, self.n_residues)
+                ).tocsr()
                 deg = np.array(adj_sparse.sum(axis=1)).flatten()
                 with np.errstate(divide="ignore", invalid="ignore"):
                     deg_inv = np.where(deg > 0, 1.0 / deg, 0.0)

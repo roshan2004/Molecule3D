@@ -1,5 +1,5 @@
 import numpy as np
-import pytest
+
 from molscope import Molecule
 
 
@@ -38,7 +38,7 @@ def test_bond_guessing_ethylene():
     assert c_c_idx != -1
     assert orders_inferred[c_c_idx] == 2.0  # Double bond guessed
     # All C-H bonds should be 1.0
-    for idx, (u, v) in enumerate(bonds):
+    for idx in range(len(bonds)):
         if idx != c_c_idx:
             assert orders_inferred[idx] == 1.0
 
@@ -75,7 +75,7 @@ def test_bond_guessing_acetylene():
     orders = mol.bond_order_array(infer_orders=True)
     assert orders[c_c_idx] == 3.0  # Triple bond guessed
     
-    for idx, (u, v) in enumerate(bonds):
+    for idx in range(len(bonds)):
         if idx != c_c_idx:
             assert orders[idx] == 1.0
 
@@ -97,7 +97,8 @@ def test_bond_guessing_formaldehyde():
     bonds = mol.bonds()
     c_o_idx = -1
     for idx, (u, v) in enumerate(bonds):
-        if (elements[u] == "C" and elements[v] == "O") or (elements[u] == "O" and elements[v] == "C"):
+        pair = {elements[u], elements[v]}
+        if pair == {"C", "O"}:
             c_o_idx = idx
             break
             
@@ -105,7 +106,7 @@ def test_bond_guessing_formaldehyde():
     orders = mol.bond_order_array(infer_orders=True)
     assert orders[c_o_idx] == 2.0  # Double bond guessed
     
-    for idx, (u, v) in enumerate(bonds):
+    for idx in range(len(bonds)):
         if idx != c_o_idx:
             assert orders[idx] == 1.0
 

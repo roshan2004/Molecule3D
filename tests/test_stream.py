@@ -1,9 +1,11 @@
-import os
 import gzip
-import pytest
+import os
+
 import numpy as np
+import pytest
+
 import molscope as ms
-from molscope.io import read_xyz_frames, read_pdb_models
+from molscope.io import read_pdb_models, read_xyz_frames
 
 DATA = os.path.join(os.path.dirname(os.path.dirname(__file__)), "examples", "data")
 

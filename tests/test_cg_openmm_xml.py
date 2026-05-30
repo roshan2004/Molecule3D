@@ -1,9 +1,11 @@
 import os
 import xml.etree.ElementTree as ET
+
 import numpy as np
-import pytest
+
 import molscope as ms
 from molscope import Molecule
+
 
 def two_alanines(second_chain="A"):
     names = ["N", "CA", "C", "O", "CB"] * 2

@@ -12,8 +12,9 @@ from __future__ import annotations
 import gzip
 import os
 import tempfile
+from collections.abc import Generator
 from dataclasses import replace
-from typing import Generator, Optional
+from typing import Optional
 from urllib.error import HTTPError, URLError
 from urllib.request import urlopen
 
@@ -1023,7 +1024,8 @@ def stream_pdb_models(path: str, altloc: str = "primary") -> Generator[Molecule,
     _validate_altloc_policy(altloc)
     stem = _stem(path)
 
-    # Fast pre-scan for CRYST1 and global/trailing CONECT records to avoid two-pass coordinate parsing
+    # Fast pre-scan for CRYST1 and global/trailing CONECT records, so the main
+    # pass does not have to look ahead for them.
     global_conect = []
     unit_cell = None
     in_model = False
